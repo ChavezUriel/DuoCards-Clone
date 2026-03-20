@@ -7,7 +7,20 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import get_connection, initialize_database
-from .schemas import DeckProgress, DeckSummary, HealthResponse, ReviewCard, ReviewResult, ReviewSubmission
+from .practice import PracticeSettings, get_session_snapshot, start_or_resume_session, submit_session_review
+from .schemas import (
+    DeckProgress,
+    DeckSummary,
+    HealthResponse,
+    ReviewCard,
+    ReviewResult,
+    ReviewSubmission,
+    SmartPracticeReviewResult,
+    SmartPracticeReviewSubmission,
+    SmartPracticeSession,
+    SmartPracticeSessionSummary,
+    SmartPracticeStartRequest,
+)
 
 app = FastAPI(title="DuoCards Clone API", version="0.1.0")
 
@@ -86,6 +99,8 @@ def get_review_card(deck_id: int) -> ReviewCard:
         SELECT
             c.id AS card_id,
             c.deck_id,
+            d.title AS deck_title,
+            COALESCE(c.section_name, d.title) AS section_name,
             c.spanish_text,
             c.english_text,
             c.part_of_speech,
@@ -104,6 +119,7 @@ def get_review_card(deck_id: int) -> ReviewCard:
             COALESCE(cp.unknown_count, 0) AS unknown_count,
             cp.last_reviewed_at
         FROM cards c
+        JOIN decks d ON d.id = c.deck_id
         LEFT JOIN card_progress cp ON cp.card_id = c.id
         WHERE c.deck_id = ?
         ORDER BY
@@ -126,8 +142,10 @@ def get_review_card(deck_id: int) -> ReviewCard:
     return ReviewCard(
         card_id=row["card_id"],
         deck_id=row["deck_id"],
+        deck_title=row["deck_title"],
         prompt_es=row["spanish_text"],
         answer_en=row["english_text"],
+        section_name=row["section_name"],
         part_of_speech=row["part_of_speech"],
         definition_en=row["definition_en"],
         main_translations_es=_decode_json_list(row["main_translations_es"]),
@@ -177,7 +195,7 @@ def get_deck_progress(deck_id: int) -> DeckProgress:
 def submit_review(payload: ReviewSubmission) -> ReviewResult:
     now = datetime.now(timezone.utc).isoformat()
     card_query = "SELECT id FROM cards WHERE id = ?"
-    progress_query = "SELECT known_count, unknown_count FROM card_progress WHERE card_id = ?"
+    progress_query = "SELECT known_count, unknown_count, known_streak, initial_mastered_at FROM card_progress WHERE card_id = ?"
 
     with get_connection() as connection:
         card = connection.execute(card_query, (payload.card_id,)).fetchone()
@@ -187,23 +205,39 @@ def submit_review(payload: ReviewSubmission) -> ReviewResult:
         existing = connection.execute(progress_query, (payload.card_id,)).fetchone()
         known_count = existing["known_count"] if existing else 0
         unknown_count = existing["unknown_count"] if existing else 0
+        known_streak = existing["known_streak"] if existing else 0
+        initial_mastered_at = existing["initial_mastered_at"] if existing else None
 
         if payload.result == "known":
             known_count += 1
+            known_streak += 1
+            if known_streak >= 2 and initial_mastered_at is None:
+                initial_mastered_at = now
         else:
             unknown_count += 1
+            known_streak = 0
 
         connection.execute(
             """
-            INSERT INTO card_progress (card_id, known_count, unknown_count, last_result, last_reviewed_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO card_progress (
+                card_id,
+                known_count,
+                unknown_count,
+                known_streak,
+                last_result,
+                last_reviewed_at,
+                initial_mastered_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(card_id) DO UPDATE SET
                 known_count = excluded.known_count,
                 unknown_count = excluded.unknown_count,
+                known_streak = excluded.known_streak,
                 last_result = excluded.last_result,
-                last_reviewed_at = excluded.last_reviewed_at
+                last_reviewed_at = excluded.last_reviewed_at,
+                initial_mastered_at = excluded.initial_mastered_at
             """,
-            (payload.card_id, known_count, unknown_count, payload.result, now),
+            (payload.card_id, known_count, unknown_count, known_streak, payload.result, now, initial_mastered_at),
         )
         connection.commit()
 
@@ -216,6 +250,53 @@ def submit_review(payload: ReviewSubmission) -> ReviewResult:
     )
 
 
+@app.post("/api/practice/sessions", response_model=SmartPracticeSession)
+def start_smart_practice_session(payload: SmartPracticeStartRequest) -> SmartPracticeSession:
+    settings = PracticeSettings(
+        new_block_size=payload.settings.new_block_size,
+        review_batch_size=payload.settings.review_batch_size,
+        interleaving_intensity=payload.settings.interleaving_intensity,
+        focus_mode=payload.settings.focus_mode,
+    )
+    with get_connection() as connection:
+        try:
+            session_id = start_or_resume_session(connection, settings)
+            connection.commit()
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+        snapshot = get_session_snapshot(connection, session_id)
+
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Smart practice session not found")
+    return _build_smart_practice_session(snapshot)
+
+
+@app.get("/api/practice/sessions/{session_id}", response_model=SmartPracticeSession)
+def get_smart_practice_session(session_id: int) -> SmartPracticeSession:
+    with get_connection() as connection:
+        snapshot = get_session_snapshot(connection, session_id)
+
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Smart practice session not found")
+    return _build_smart_practice_session(snapshot)
+
+
+@app.post("/api/practice/sessions/{session_id}/reviews", response_model=SmartPracticeReviewResult)
+def submit_smart_practice_review(session_id: int, payload: SmartPracticeReviewSubmission) -> SmartPracticeReviewResult:
+    with get_connection() as connection:
+        try:
+            submit_session_review(connection, session_id=session_id, card_id=payload.card_id, result=payload.result)
+            snapshot = get_session_snapshot(connection, session_id)
+            connection.commit()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Smart practice session not found")
+    return SmartPracticeReviewResult(session=_build_smart_practice_session(snapshot))
+
+
 def _decode_json_list(value: str | None) -> list[str]:
     if not value:
         return []
@@ -226,3 +307,38 @@ def _decode_json_list(value: str | None) -> list[str]:
         return []
 
     return [item for item in parsed if isinstance(item, str)]
+
+
+def _build_smart_practice_session(snapshot: dict[str, object]) -> SmartPracticeSession:
+    summary = SmartPracticeSessionSummary(
+        session_id=int(snapshot["session_id"]),
+        status=str(snapshot["status"]),
+        mode=str(snapshot["mode"]),
+        focus_mode=str(snapshot["focus_mode"]),
+        total_cards=int(snapshot["total_cards"]),
+        completed_cards=int(snapshot["completed_cards"]),
+        remaining_cards=int(snapshot["remaining_cards"]),
+        new_block_size=int(snapshot["new_block_size"]),
+        review_batch_size=int(snapshot["review_batch_size"]),
+        interleaving_intensity=str(snapshot["interleaving_intensity"]),
+    )
+    current_card_row = snapshot["current_card"]
+    current_card = None
+    if current_card_row is not None:
+        current_card = ReviewCard(
+            card_id=current_card_row["card_id"],
+            deck_id=current_card_row["deck_id"],
+            deck_title=current_card_row["deck_title"],
+            section_name=current_card_row["section_name"],
+            prompt_es=current_card_row["spanish_text"],
+            answer_en=current_card_row["english_text"],
+            part_of_speech=current_card_row["part_of_speech"],
+            definition_en=current_card_row["definition_en"],
+            main_translations_es=_decode_json_list(current_card_row["main_translations_es"]),
+            collocations=_decode_json_list(current_card_row["collocations"]),
+            example_sentence=current_card_row["example_sentence"],
+            example_es=current_card_row["example_es"],
+            example_en=current_card_row["example_en"],
+        )
+
+    return SmartPracticeSession(summary=summary, current_card=current_card)

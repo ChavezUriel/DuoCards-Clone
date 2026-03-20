@@ -36,3 +36,17 @@ export function submitReview(cardId, result) {
 export function fetchDeckProgress(deckId) {
   return request(`/api/decks/${deckId}/progress`);
 }
+
+export function startSmartPracticeSession(settings) {
+  return request('/api/practice/sessions', {
+    method: 'POST',
+    body: JSON.stringify({ settings }),
+  });
+}
+
+export function submitSmartPracticeReview(sessionId, cardId, result) {
+  return request(`/api/practice/sessions/${sessionId}/reviews`, {
+    method: 'POST',
+    body: JSON.stringify({ card_id: cardId, result }),
+  });
+}

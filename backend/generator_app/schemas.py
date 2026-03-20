@@ -124,6 +124,7 @@ class GeneratedCard(BaseModel):
 
     spanish: str
     english: str
+    section_name: str | None = None
     part_of_speech: str | None = None
     definition_en: str | None = None
     main_translations_es: list[str] = Field(default_factory=list)
@@ -134,6 +135,7 @@ class GeneratedCard(BaseModel):
 
     _normalize_spanish = field_validator("spanish", mode="before")(_normalize_text)
     _normalize_english = field_validator("english", mode="before")(_normalize_text)
+    _normalize_section = field_validator("section_name", mode="before")(_normalize_optional_text)
     _normalize_pos = field_validator("part_of_speech", mode="before")(_normalize_optional_text)
     _normalize_definition = field_validator("definition_en", mode="before")(_normalize_optional_text)
     _normalize_translations = field_validator("main_translations_es", mode="before")(_normalize_text_list)

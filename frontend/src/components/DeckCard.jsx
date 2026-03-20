@@ -5,7 +5,7 @@ function percentage(value) {
 }
 
 function DeckCard({ deck }) {
-  const actionLabel = deck.is_completed ? 'Practice again' : 'Start review';
+  const actionLabel = deck.is_completed ? 'Open deck review' : 'Review this deck';
   const statusLabel = deck.is_completed
     ? 'All cards known. You can revisit this deck anytime.'
     : `${percentage(deck.completion_ratio)}% reviewed`;
@@ -30,7 +30,7 @@ function DeckCard({ deck }) {
 
       <div className="deck-card__footer">
         <strong>{statusLabel}</strong>
-        <Link className="button button--primary" to={`/review/${deck.id}`}>
+        <Link className="button button--secondary" to={`/review/${deck.id}`}>
           {actionLabel}
         </Link>
       </div>

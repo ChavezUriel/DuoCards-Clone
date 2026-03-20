@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import sqlite3
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Iterator, Literal
 
 import json
 
@@ -232,6 +233,7 @@ CREATE TABLE IF NOT EXISTS cards (
     deck_id INTEGER NOT NULL,
     spanish_text TEXT NOT NULL,
     english_text TEXT NOT NULL,
+    section_name TEXT,
     part_of_speech TEXT,
     definition_en TEXT,
     main_translations_es TEXT,
@@ -246,24 +248,75 @@ CREATE TABLE IF NOT EXISTS card_progress (
     card_id INTEGER PRIMARY KEY,
     known_count INTEGER NOT NULL DEFAULT 0,
     unknown_count INTEGER NOT NULL DEFAULT 0,
+    known_streak INTEGER NOT NULL DEFAULT 0,
     last_result TEXT CHECK(last_result IN ('known', 'unknown')),
     last_reviewed_at TEXT,
+    initial_mastered_at TEXT,
+    FOREIGN KEY (card_id) REFERENCES cards (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS practice_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'completed', 'abandoned')),
+    scope TEXT NOT NULL DEFAULT 'global' CHECK(scope IN ('global')),
+    mode TEXT NOT NULL CHECK(mode IN ('new_material', 'review')),
+    focus_mode TEXT NOT NULL CHECK(focus_mode IN ('auto', 'new_material', 'review')),
+    new_block_size INTEGER NOT NULL,
+    review_batch_size INTEGER NOT NULL,
+    interleaving_intensity TEXT NOT NULL CHECK(interleaving_intensity IN ('low', 'medium', 'high')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    completed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS practice_session_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    card_id INTEGER NOT NULL,
+    queue_position INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'completed')),
+    times_presented INTEGER NOT NULL DEFAULT 0,
+    last_presented_at TEXT,
+    last_result TEXT CHECK(last_result IN ('known', 'unknown')),
+    FOREIGN KEY (session_id) REFERENCES practice_sessions (id) ON DELETE CASCADE,
+    FOREIGN KEY (card_id) REFERENCES cards (id) ON DELETE CASCADE,
+    UNIQUE(session_id, card_id),
+    UNIQUE(session_id, queue_position)
+);
+
+CREATE TABLE IF NOT EXISTS card_tts_audio (
+    card_id INTEGER PRIMARY KEY,
+    provider TEXT NOT NULL DEFAULT 'gtts',
+    language_code TEXT NOT NULL,
+    source_text TEXT NOT NULL,
+    relative_path TEXT,
+    file_format TEXT NOT NULL DEFAULT 'mp3',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'ready', 'error')),
+    error_message TEXT,
+    generated_at TEXT,
+    last_verified_at TEXT,
     FOREIGN KEY (card_id) REFERENCES cards (id) ON DELETE CASCADE
 );
 """
 
 
-def get_connection() -> sqlite3.Connection:
+@contextmanager
+def get_connection() -> Iterator[sqlite3.Connection]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DATABASE_PATH)
     connection.row_factory = sqlite3.Row
-    return connection
+    try:
+        yield connection
+    finally:
+        connection.close()
 
 
 def initialize_database() -> None:
     with get_connection() as connection:
         connection.executescript(SCHEMA_SQL)
         _migrate_cards_table(connection)
+        _migrate_card_progress_table(connection)
+        _migrate_card_tts_audio_table(connection)
         _seed_database(connection)
         connection.commit()
 
@@ -366,6 +419,7 @@ def upsert_deck(
         parameters = (
             card["spanish"],
             card["english"],
+            card.get("section_name"),
             card.get("part_of_speech"),
             card.get("definition_en"),
             serialized_translations,
@@ -382,6 +436,7 @@ def upsert_deck(
                     deck_id,
                     spanish_text,
                     english_text,
+                    section_name,
                     part_of_speech,
                     definition_en,
                     main_translations_es,
@@ -390,7 +445,7 @@ def upsert_deck(
                     example_es,
                     example_en
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (deck_id, *parameters),
             )
@@ -401,6 +456,7 @@ def upsert_deck(
             """
             UPDATE cards
             SET
+                section_name = ?,
                 part_of_speech = ?,
                 definition_en = ?,
                 main_translations_es = ?,
@@ -411,6 +467,7 @@ def upsert_deck(
             WHERE id = ?
             """,
             (
+                card.get("section_name"),
                 card.get("part_of_speech"),
                 card.get("definition_en"),
                 serialized_translations,
@@ -447,11 +504,11 @@ def _normalize_deck_payload(deck: dict[str, Any]) -> dict[str, Any]:
         "description": description,
         "language_from": _optional_text(deck.get("language_from")) or DEFAULT_LANGUAGE_FROM,
         "language_to": _optional_text(deck.get("language_to")) or DEFAULT_LANGUAGE_TO,
-        "cards": [_normalize_card_payload(card) for card in cards],
+        "cards": [_normalize_card_payload(card, default_section_name=title) for card in cards],
     }
 
 
-def _normalize_card_payload(card: Any) -> dict[str, Any]:
+def _normalize_card_payload(card: Any, *, default_section_name: str | None = None) -> dict[str, Any]:
     if not isinstance(card, dict):
         raise ValueError("Each card must be an object")
 
@@ -461,6 +518,7 @@ def _normalize_card_payload(card: Any) -> dict[str, Any]:
     return {
         "spanish": spanish,
         "english": english,
+        "section_name": _optional_text(card.get("section_name")) or default_section_name,
         "part_of_speech": _optional_text(card.get("part_of_speech")),
         "definition_en": _optional_text(card.get("definition_en")),
         "main_translations_es": _normalize_text_list(card.get("main_translations_es")),
@@ -515,6 +573,7 @@ def _migrate_cards_table(connection: sqlite3.Connection) -> None:
         for row in connection.execute("PRAGMA table_info(cards)").fetchall()
     }
     migrations = {
+        "section_name": "ALTER TABLE cards ADD COLUMN section_name TEXT",
         "part_of_speech": "ALTER TABLE cards ADD COLUMN part_of_speech TEXT",
         "definition_en": "ALTER TABLE cards ADD COLUMN definition_en TEXT",
         "main_translations_es": "ALTER TABLE cards ADD COLUMN main_translations_es TEXT",
@@ -526,3 +585,66 @@ def _migrate_cards_table(connection: sqlite3.Connection) -> None:
     for column_name, statement in migrations.items():
         if column_name not in columns:
             connection.execute(statement)
+
+    connection.execute(
+        "UPDATE cards SET section_name = COALESCE(NULLIF(TRIM(section_name), ''), (SELECT title FROM decks WHERE decks.id = cards.deck_id))"
+    )
+
+
+def _migrate_card_progress_table(connection: sqlite3.Connection) -> None:
+    columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(card_progress)").fetchall()
+    }
+    migrations = {
+        "known_streak": "ALTER TABLE card_progress ADD COLUMN known_streak INTEGER NOT NULL DEFAULT 0",
+        "initial_mastered_at": "ALTER TABLE card_progress ADD COLUMN initial_mastered_at TEXT",
+    }
+    for column_name, statement in migrations.items():
+        if column_name not in columns:
+            connection.execute(statement)
+
+    connection.execute(
+        """
+        UPDATE card_progress
+        SET initial_mastered_at = COALESCE(initial_mastered_at, last_reviewed_at)
+        WHERE known_count >= 2 AND initial_mastered_at IS NULL
+        """
+    )
+
+
+def _migrate_card_tts_audio_table(connection: sqlite3.Connection) -> None:
+    columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(card_tts_audio)").fetchall()
+    }
+    migrations = {
+        "provider": "ALTER TABLE card_tts_audio ADD COLUMN provider TEXT NOT NULL DEFAULT 'gtts'",
+        "language_code": "ALTER TABLE card_tts_audio ADD COLUMN language_code TEXT NOT NULL DEFAULT 'es'",
+        "source_text": "ALTER TABLE card_tts_audio ADD COLUMN source_text TEXT NOT NULL DEFAULT ''",
+        "relative_path": "ALTER TABLE card_tts_audio ADD COLUMN relative_path TEXT",
+        "file_format": "ALTER TABLE card_tts_audio ADD COLUMN file_format TEXT NOT NULL DEFAULT 'mp3'",
+        "status": "ALTER TABLE card_tts_audio ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'",
+        "error_message": "ALTER TABLE card_tts_audio ADD COLUMN error_message TEXT",
+        "generated_at": "ALTER TABLE card_tts_audio ADD COLUMN generated_at TEXT",
+        "last_verified_at": "ALTER TABLE card_tts_audio ADD COLUMN last_verified_at TEXT",
+    }
+    for column_name, statement in migrations.items():
+        if column_name not in columns:
+            connection.execute(statement)
+
+    connection.execute(
+        """
+        UPDATE card_tts_audio
+        SET
+            provider = COALESCE(NULLIF(TRIM(provider), ''), 'gtts'),
+            file_format = COALESCE(NULLIF(TRIM(file_format), ''), 'mp3'),
+            status = CASE
+                WHEN status IN ('pending', 'ready', 'error') THEN status
+                WHEN relative_path IS NOT NULL AND TRIM(relative_path) != '' THEN 'ready'
+                ELSE 'pending'
+            END,
+            source_text = COALESCE(source_text, ''),
+            language_code = COALESCE(NULLIF(TRIM(language_code), ''), 'es')
+        """
+    )

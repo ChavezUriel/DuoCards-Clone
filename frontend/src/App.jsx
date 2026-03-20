@@ -1,10 +1,11 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import HomePage from './pages/HomePage';
+import PracticePage from './pages/PracticePage';
 import ReviewPage from './pages/ReviewPage';
 
 function App() {
   const location = useLocation();
-  const isReviewRoute = location.pathname.startsWith('/review/');
+  const isReviewRoute = location.pathname.startsWith('/review/') || location.pathname === '/practice';
 
   return (
     <div className={`app-shell ${isReviewRoute ? 'app-shell--review' : ''}`}>
@@ -23,6 +24,7 @@ function App() {
       <main className={`page-content ${isReviewRoute ? 'page-content--review' : ''}`}>
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/practice" element={<PracticePage />} />
           <Route path="/review/:deckId" element={<ReviewPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

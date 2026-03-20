@@ -390,6 +390,7 @@ class DeckGeneratorService:
                     )
 
                 for card in accepted_batch:
+                    card = card.model_copy(update={"section_name": section.name})
                     pair = (card.spanish.casefold(), card.english.casefold())
                     if pair in seen_pairs or len(section_cards) >= target:
                         continue

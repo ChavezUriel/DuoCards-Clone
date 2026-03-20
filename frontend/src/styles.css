@@ -93,6 +93,13 @@ a {
   gap: 1.25rem;
 }
 
+.section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
 .panel {
   backdrop-filter: blur(18px);
   background: var(--panel);
@@ -120,6 +127,10 @@ a {
   margin: 0;
 }
 
+.smart-practice-panel h2 {
+  margin: 0;
+}
+
 .deck-card__stats,
 .action-row {
   display: flex;
@@ -139,6 +150,67 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.smart-practice-panel {
+  display: grid;
+  gap: 1.5rem;
+  padding: 1.5rem;
+}
+
+.smart-practice-panel__intro {
+  display: grid;
+  gap: 0.65rem;
+  max-width: 72ch;
+}
+
+.smart-practice-panel__intro p,
+.practice-session-summary__copy {
+  margin: 0;
+  color: #44524a;
+}
+
+.smart-practice-panel__controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.setting-field {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(31, 111, 80, 0.08);
+}
+
+.setting-field span {
+  font-size: 0.9rem;
+  color: #44524a;
+}
+
+.setting-field input,
+.setting-field select {
+  width: 100%;
+}
+
+.setting-field strong {
+  color: var(--primary-dark);
+}
+
+.smart-practice-panel__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.smart-practice-panel__summary {
+  display: grid;
+  gap: 0.4rem;
+  color: #44524a;
 }
 
 .progress-track {
@@ -194,8 +266,7 @@ a {
 
 .review-screen {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 1rem;
+  grid-template-rows: minmax(0, 1fr);
   min-height: calc(100dvh - 2.25rem);
   overflow: hidden;
 }
@@ -206,6 +277,7 @@ a {
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.7rem;
 }
 
 .flashcard {
@@ -224,6 +296,25 @@ a {
   display: grid;
   gap: 0.9rem;
   min-height: 0;
+}
+
+.flashcard__meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.flashcard__meta-pill {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(31, 111, 80, 0.08);
+  color: var(--primary-dark);
+  font-size: 0.84rem;
+}
+
+.flashcard__meta-pill--secondary {
+  background: rgba(255, 182, 94, 0.18);
 }
 
 .flashcard__face--front {
@@ -354,6 +445,49 @@ a {
   min-width: 180px;
 }
 
+.practice-session-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.practice-session-summary {
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.practice-session-summary__mode {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #6b7058;
+}
+
+.practice-session-summary__stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.practice-session-summary__stats span {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(31, 111, 80, 0.06);
+  color: var(--primary-dark);
+  font-size: 0.8rem;
+}
+
+.practice-complete {
+  display: grid;
+  gap: 1rem;
+  align-content: center;
+  text-align: center;
+}
+
 .details-modal {
   position: fixed;
   inset: 0;
@@ -456,7 +590,7 @@ a {
 
 .back-link {
   display: inline-flex;
-  margin-bottom: 0.9rem;
+  align-self: center;
   color: var(--primary-dark);
 }
 
@@ -471,7 +605,8 @@ a {
 }
 
 @media (max-width: 860px) {
-  .deck-card__footer {
+  .deck-card__footer,
+  .smart-practice-panel__footer {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -488,5 +623,22 @@ a {
 
   .flashcard__face--front {
     align-content: center;
+  }
+
+  .smart-practice-panel__controls {
+    grid-template-columns: 1fr;
+  }
+
+  .practice-session-bar {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+
+  .practice-session-summary {
+    justify-items: start;
+  }
+
+  .practice-session-summary__stats {
+    justify-content: flex-start;
   }
 }
