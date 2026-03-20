@@ -1,4 +1,14 @@
+import { useEffect, useState } from 'react';
+
 function Flashcard({ card, isAnswerVisible, onReveal }) {
+  const [isDetailsVisible, setIsDetailsVisible] = useState(false);
+
+  useEffect(() => {
+    if (!isAnswerVisible) {
+      setIsDetailsVisible(false);
+    }
+  }, [isAnswerVisible, card.card_id]);
+
   return (
     <section className="panel flashcard">
       <p className="flashcard__label">Spanish</p>
@@ -9,52 +19,64 @@ function Flashcard({ card, isAnswerVisible, onReveal }) {
         <p className="flashcard__label">English</p>
         {isAnswerVisible ? (
           <>
-            <h3>{card.answer_en}</h3>
-            <div className="flashcard-details">
-              {card.part_of_speech ? (
-                <div>
-                  <span>Part of speech</span>
-                  <p>{card.part_of_speech}</p>
-                </div>
-              ) : null}
-
-              {card.definition_en ? (
-                <div>
-                  <span>Definition in English</span>
-                  <p>{card.definition_en}</p>
-                </div>
-              ) : null}
-
-              {card.main_translations_es?.length ? (
-                <div>
-                  <span>Main translations</span>
-                  <ul>
-                    {card.main_translations_es.map((translation) => (
-                      <li key={translation}>{translation}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {card.collocations?.length ? (
-                <div>
-                  <span>Collocations</span>
-                  <ul>
-                    {card.collocations.map((collocation) => (
-                      <li key={collocation}>{collocation}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {card.example_sentence ? (
-                <div>
-                  <span>Example sentence</span>
-                  <p>{card.example_sentence}</p>
-                </div>
-              ) : null}
+            <div className="answer__header">
+              <h3>{card.answer_en}</h3>
+              <button
+                aria-expanded={isDetailsVisible}
+                aria-label={isDetailsVisible ? 'Hide word details' : 'Show word details'}
+                className="info-button"
+                type="button"
+                onClick={() => setIsDetailsVisible((current) => !current)}
+              >
+                i
+              </button>
             </div>
-            {card.example_en ? <p className="flashcard__example">{card.example_en}</p> : null}
+            {isDetailsVisible ? (
+              <div className="flashcard-details">
+                {card.part_of_speech ? (
+                  <div>
+                    <span>Part of speech</span>
+                    <p>{card.part_of_speech}</p>
+                  </div>
+                ) : null}
+
+                {card.definition_en ? (
+                  <div>
+                    <span>Definition in English</span>
+                    <p>{card.definition_en}</p>
+                  </div>
+                ) : null}
+
+                {card.main_translations_es?.length ? (
+                  <div>
+                    <span>Main translations</span>
+                    <ul>
+                      {card.main_translations_es.map((translation) => (
+                        <li key={translation}>{translation}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {card.collocations?.length ? (
+                  <div>
+                    <span>Collocations</span>
+                    <ul>
+                      {card.collocations.map((collocation) => (
+                        <li key={collocation}>{collocation}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {card.example_sentence ? (
+                  <div>
+                    <span>Example sentence</span>
+                    <p>{card.example_sentence}</p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </>
         ) : (
           <p>Try to remember the English answer before revealing it.</p>

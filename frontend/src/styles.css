@@ -195,9 +195,34 @@ a {
   border: 1px dashed rgba(31, 111, 80, 0.24);
 }
 
+.answer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .answer--visible {
   background: rgba(255, 182, 94, 0.16);
   border-style: solid;
+}
+
+.info-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(31, 111, 80, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--primary-dark);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.info-button:hover {
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .flashcard-details {
