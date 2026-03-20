@@ -440,6 +440,13 @@ a {
   font-size: 0.86rem;
 }
 
+.review-progress__status {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(31, 111, 80, 0.08);
+  color: var(--primary-dark);
+}
+
 .review-shortcuts {
   margin: 0;
   text-align: center;
@@ -461,12 +468,6 @@ a {
 
 .review-actions .action-row {
   justify-content: center;
-}
-
-.review-progress__note {
-  margin: 0;
-  color: #5f6a63;
-  font-size: 0.86rem;
 }
 
 @media (max-width: 860px) {

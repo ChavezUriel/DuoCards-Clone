@@ -1,0 +1,142 @@
+decks:
+  - slug: travel
+    title: Travel Phrases
+    description: Short phrases for transport, directions, and common travel moments.
+    topic: beginner travel English for airports, transport, directions, and accommodation
+    difficulty: beginner
+    desired_card_count: 100
+    batch_size: 10
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: replace
+    learner_profile: Spanish-speaking adults who need practical English for common travel situations.
+    generation_notes: Keep cards concrete, high-frequency, and useful for real travel conversations. Prefer single words and short expressions over long sentences.
+    vocabulary_focus:
+      - airports
+      - train and bus travel
+      - directions
+      - hotels
+      - safety and help
+    excluded_vocabulary:
+      - backpacking slang
+      - luxury travel jargon
+      - legal terminology
+    sections:
+      - name: Airport basics
+        communicative_goal: Understand the most common words and short phrases used at the airport.
+        lexical_focus:
+          - check-in
+          - passport
+          - boarding
+          - gate
+          - luggage
+        target_card_count: 20
+      - name: Train and bus travel
+        communicative_goal: Buy tickets, ask simple questions, and move through stations.
+        lexical_focus:
+          - ticket
+          - platform
+          - schedule
+          - departure
+          - seat
+        target_card_count: 20
+      - name: Directions and navigation
+        communicative_goal: Ask for and understand simple directions in a city.
+        lexical_focus:
+          - left
+          - right
+          - straight
+          - map
+          - near and far
+        target_card_count: 20
+      - name: Hotel and accommodation
+        communicative_goal: Handle basic hotel check-in, room issues, and common requests.
+        lexical_focus:
+          - reservation
+          - room
+          - key
+          - bathroom
+          - towel
+        target_card_count: 20
+      - name: Problems and assistance
+        communicative_goal: Ask for help and respond to common travel problems politely.
+        lexical_focus:
+          - lost
+          - help
+          - police
+          - emergency
+          - broken
+        target_card_count: 20
+
+  - slug: daily-life
+    title: Daily Life
+    description: Useful vocabulary for routines, places, and simple actions.
+    topic: beginner daily life English for routines, home, errands, work, and social interaction
+    difficulty: beginner
+    desired_card_count: 100
+    batch_size: 10
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: replace
+    learner_profile: Spanish-speaking adults who want practical English for everyday life and simple conversations.
+    generation_notes: Keep cards concrete, high-frequency, and easy to review. Prefer daily vocabulary that appears in routines, errands, family life, and work.
+    vocabulary_focus:
+      - routines
+      - home
+      - shopping
+      - work and study
+      - social expressions
+    excluded_vocabulary:
+      - academic jargon
+      - corporate buzzwords
+      - idioms with opaque meanings
+    sections:
+      - name: Morning and daily routine
+        communicative_goal: Talk about waking up, getting ready, and everyday habits.
+        lexical_focus:
+          - wake up
+          - shower
+          - breakfast
+          - get dressed
+          - leave home
+        target_card_count: 20
+      - name: Home and household
+        communicative_goal: Describe common rooms, objects, and chores at home.
+        lexical_focus:
+          - kitchen
+          - bedroom
+          - clean
+          - cook
+          - laundry
+        target_card_count: 20
+      - name: Shopping and errands
+        communicative_goal: Buy everyday items, ask about prices, and handle simple errands.
+        lexical_focus:
+          - store
+          - cash
+          - change
+          - receipt
+          - open and closed
+        target_card_count: 20
+      - name: Work study and schedule
+        communicative_goal: Talk about work, classes, time, and basic plans.
+        lexical_focus:
+          - work
+          - office
+          - meeting
+          - homework
+          - today and tomorrow
+        target_card_count: 20
+      - name: Social and practical phrases
+        communicative_goal: Use polite expressions and simple phrases in common daily interactions.
+        lexical_focus:
+          - excuse me
+          - wait
+          - hurry
+          - need help
+          - see you later
+        target_card_count: 20

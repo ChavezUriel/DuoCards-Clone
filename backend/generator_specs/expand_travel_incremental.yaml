@@ -1,0 +1,155 @@
+decks:
+  - slug: travel
+    title: Travel Phrases
+    description: Short phrases for transport, directions, and common travel moments.
+    topic: airport travel basics
+    difficulty: beginner
+    desired_card_count: 20
+    batch_size: 6
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: append
+    learner_profile: Spanish-speaking adults who need practical English for common travel situations.
+    generation_notes: Generate only high-frequency travel vocabulary as single words or very short expressions. Avoid duplicates of common seed cards.
+    excluded_vocabulary:
+      - Aeropuerto
+      - ¿Dónde está la estación?
+      - Billete
+      - Maleta
+      - Estoy perdido
+    sections:
+      - name: Airport basics
+        communicative_goal: Handle check-in, boarding, and common airport signs.
+        lexical_focus:
+          - passport
+          - boarding pass
+          - gate
+          - delay
+          - luggage
+        target_card_count: 20
+
+  - slug: travel
+    title: Travel Phrases
+    description: Short phrases for transport, directions, and common travel moments.
+    topic: train and bus travel basics
+    difficulty: beginner
+    desired_card_count: 20
+    batch_size: 6
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: append
+    learner_profile: Spanish-speaking adults who need practical English for common travel situations.
+    generation_notes: Generate only high-frequency transport vocabulary as single words or very short expressions. Keep it concrete and useful.
+    excluded_vocabulary:
+      - Aeropuerto
+      - ¿Dónde está la estación?
+      - Billete
+      - Maleta
+      - Estoy perdido
+    sections:
+      - name: Train and bus travel
+        communicative_goal: Buy tickets, ask simple questions, and move through stations.
+        lexical_focus:
+          - platform
+          - departure
+          - arrival
+          - seat
+          - bus stop
+        target_card_count: 20
+
+  - slug: travel
+    title: Travel Phrases
+    description: Short phrases for transport, directions, and common travel moments.
+    topic: directions and city navigation
+    difficulty: beginner
+    desired_card_count: 20
+    batch_size: 6
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: append
+    learner_profile: Spanish-speaking adults who need practical English for common travel situations.
+    generation_notes: Generate only useful direction words and short questions. Avoid long sentences.
+    excluded_vocabulary:
+      - Aeropuerto
+      - ¿Dónde está la estación?
+      - Billete
+      - Maleta
+      - Estoy perdido
+    sections:
+      - name: Directions and navigation
+        communicative_goal: Ask for and understand simple directions in a city.
+        lexical_focus:
+          - left
+          - right
+          - straight ahead
+          - corner
+          - map
+        target_card_count: 20
+
+  - slug: travel
+    title: Travel Phrases
+    description: Short phrases for transport, directions, and common travel moments.
+    topic: hotel and accommodation basics
+    difficulty: beginner
+    desired_card_count: 20
+    batch_size: 6
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: append
+    learner_profile: Spanish-speaking adults who need practical English for common travel situations.
+    generation_notes: Generate only high-frequency hotel words and short requests. Keep everything beginner-friendly.
+    excluded_vocabulary:
+      - Aeropuerto
+      - ¿Dónde está la estación?
+      - Billete
+      - Maleta
+      - Estoy perdido
+    sections:
+      - name: Hotel and accommodation
+        communicative_goal: Handle check-in, room requests, and simple accommodation issues.
+        lexical_focus:
+          - reservation
+          - room key
+          - towel
+          - bathroom
+          - check out
+        target_card_count: 20
+
+  - slug: travel
+    title: Travel Phrases
+    description: Short phrases for transport, directions, and common travel moments.
+    topic: travel help and emergency basics
+    difficulty: beginner
+    desired_card_count: 20
+    batch_size: 6
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: append
+    learner_profile: Spanish-speaking adults who need practical English for common travel situations.
+    generation_notes: Generate only simple words and phrases for getting help during travel problems.
+    excluded_vocabulary:
+      - Aeropuerto
+      - ¿Dónde está la estación?
+      - Billete
+      - Maleta
+      - Estoy perdido
+    sections:
+      - name: Problems and assistance
+        communicative_goal: Ask for help and respond to common travel problems politely.
+        lexical_focus:
+          - help
+          - police
+          - doctor
+          - emergency
+          - lost passport
+        target_card_count: 20

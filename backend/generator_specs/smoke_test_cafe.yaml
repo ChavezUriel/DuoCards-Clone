@@ -1,0 +1,24 @@
+deck:
+  slug: ai-smoke-test-cafe
+  title: Cafe Basics Smoke Test
+  description: Minimal deck to verify the generator pipeline end to end.
+  topic: cafe interactions
+  difficulty: beginner
+  desired_card_count: 4
+  batch_size: 4
+  model: qwen3.5:latest
+  fallback_models:
+    - gemma3:4b
+    - llama3.1:latest
+  overwrite_mode: replace
+  learner_profile: Spanish-speaking beginners practicing simple cafe English.
+  generation_notes: Keep vocabulary concrete and avoid advanced restaurant terms.
+  sections:
+    - name: Ordering coffee
+      communicative_goal: Handle a short cafe order with basic nouns and polite expressions.
+      lexical_focus:
+        - coffee
+        - milk
+        - bill
+        - please
+      target_card_count: 4

@@ -1,0 +1,38 @@
+deck:
+  slug: ai-beginner-travel-food
+  title: Travel and Food Basics
+  description: Everyday travel and food vocabulary for Spanish speakers starting English.
+  topic: travel and food in everyday situations
+  difficulty: beginner
+  desired_card_count: 12
+  batch_size: 8
+  model: qwen3.5:latest
+  fallback_models:
+    - gemma3:4b
+    - llama3.1:latest
+  overwrite_mode: fail
+  learner_profile: Spanish-speaking adults who want practical survival English.
+  generation_notes: Prioritize short, high-frequency prompts and concrete examples.
+  vocabulary_focus:
+    - ordering food
+    - asking for prices
+    - moving around a city
+    - basic transport nouns
+  excluded_vocabulary:
+    - avión privado
+    - gastronomía molecular
+  sections:
+    - name: Restaurant essentials
+      communicative_goal: Handle simple restaurant interactions and menu basics.
+      lexical_focus:
+        - menu items
+        - polite requests
+        - paying the bill
+      target_card_count: 6
+    - name: City movement
+      communicative_goal: Ask for transport and navigate basic travel moments.
+      lexical_focus:
+        - tickets
+        - stations
+        - directions
+      target_card_count: 6

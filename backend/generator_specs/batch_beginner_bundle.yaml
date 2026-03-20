@@ -1,0 +1,47 @@
+decks:
+  - slug: ai-batch-cafe-basics
+    title: Cafe Counter Basics
+    description: Short English needed for simple cafe orders.
+    topic: cafe counter interactions
+    difficulty: beginner
+    desired_card_count: 4
+    batch_size: 4
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: replace
+    learner_profile: Spanish-speaking beginners ordering drinks and snacks.
+    generation_notes: Keep the deck concrete and useful for quick role-play practice.
+    sections:
+      - name: Ordering at the counter
+        communicative_goal: Order a drink and pay politely.
+        lexical_focus:
+          - coffee
+          - tea
+          - bill
+          - please
+        target_card_count: 4
+  - slug: ai-batch-station-basics
+    title: Station Basics
+    description: Simple English for tickets and train station navigation.
+    topic: train station essentials
+    difficulty: beginner
+    desired_card_count: 4
+    batch_size: 4
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: replace
+    learner_profile: Spanish-speaking beginners traveling by train.
+    generation_notes: Focus on short prompts and survival English.
+    sections:
+      - name: Getting around the station
+        communicative_goal: Ask for tickets and find the right place to wait.
+        lexical_focus:
+          - ticket
+          - platform
+          - station
+          - where
+        target_card_count: 4

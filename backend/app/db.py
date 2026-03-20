@@ -1,14 +1,29 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import json
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 DATABASE_PATH = DATA_DIR / "duocards.db"
+DECK_EXPANSION_PATTERN = "deck_expansions*.json"
+
+DEFAULT_LANGUAGE_FROM = "es"
+DEFAULT_LANGUAGE_TO = "en"
+
+
+@dataclass(slots=True)
+class DeckWriteResult:
+    deck_id: int
+    created_deck: bool
+    inserted_cards: int
+    updated_cards: int
+    deleted_cards: int
+    total_cards: int
 
 SEED_DECKS: list[dict[str, Any]] = [
     {
@@ -255,46 +270,147 @@ def initialize_database() -> None:
 
 def _seed_database(connection: sqlite3.Connection) -> None:
     for deck in SEED_DECKS:
-        deck_row = connection.execute(
-            "SELECT id FROM decks WHERE slug = ?",
-            (deck["slug"],),
+        upsert_deck(connection, deck, on_existing="append")
+
+    for deck in _load_expansion_decks():
+        upsert_deck(connection, deck, on_existing="append")
+
+
+def _load_expansion_decks() -> list[dict[str, Any]]:
+    decks: list[dict[str, Any]] = []
+    for path in sorted(DATA_DIR.glob(DECK_EXPANSION_PATTERN)):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, list):
+            raise ValueError(f"{path.name} must contain a list of deck payloads")
+        if not all(isinstance(deck, dict) for deck in payload):
+            raise ValueError(f"Each deck expansion payload in {path.name} must be an object")
+        decks.extend(payload)
+    return decks
+
+
+def upsert_deck(
+    connection: sqlite3.Connection,
+    deck: dict[str, Any],
+    *,
+    on_existing: Literal["append", "replace", "fail"] = "append",
+) -> DeckWriteResult:
+    normalized_deck = _normalize_deck_payload(deck)
+    deck_row = connection.execute(
+        "SELECT id FROM decks WHERE slug = ?",
+        (normalized_deck["slug"],),
+    ).fetchone()
+
+    created_deck = deck_row is None
+    deleted_cards = 0
+    if created_deck:
+        cursor = connection.execute(
+            """
+            INSERT INTO decks (slug, title, description, language_from, language_to)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                normalized_deck["slug"],
+                normalized_deck["title"],
+                normalized_deck["description"],
+                normalized_deck["language_from"],
+                normalized_deck["language_to"],
+            ),
+        )
+        deck_id = cursor.lastrowid
+    else:
+        if on_existing == "fail":
+            raise ValueError(f"Deck with slug '{normalized_deck['slug']}' already exists")
+
+        deck_id = deck_row["id"]
+        connection.execute(
+            """
+            UPDATE decks
+            SET title = ?, description = ?, language_from = ?, language_to = ?
+            WHERE id = ?
+            """,
+            (
+                normalized_deck["title"],
+                normalized_deck["description"],
+                normalized_deck["language_from"],
+                normalized_deck["language_to"],
+                deck_id,
+            ),
+        )
+        if on_existing == "replace":
+            delete_cursor = connection.execute("DELETE FROM cards WHERE deck_id = ?", (deck_id,))
+            deleted_cards = delete_cursor.rowcount if delete_cursor.rowcount >= 0 else 0
+
+    inserted_cards = 0
+    updated_cards = 0
+    seen_pairs: set[tuple[str, str]] = set()
+
+    for card in normalized_deck["cards"]:
+        pair = (card["spanish"].casefold(), card["english"].casefold())
+        if pair in seen_pairs:
+            raise ValueError(
+                f"Deck '{normalized_deck['slug']}' contains duplicate card pair: {card['spanish']} -> {card['english']}"
+            )
+        seen_pairs.add(pair)
+
+        serialized_translations = json.dumps(card["main_translations_es"], ensure_ascii=False)
+        serialized_collocations = json.dumps(card["collocations"], ensure_ascii=False)
+        existing_card = connection.execute(
+            """
+            SELECT id
+            FROM cards
+            WHERE deck_id = ? AND spanish_text = ? AND english_text = ?
+            """,
+            (deck_id, card["spanish"], card["english"]),
         ).fetchone()
 
-        if deck_row is None:
-            cursor = connection.execute(
-                """
-                INSERT INTO decks (slug, title, description, language_from, language_to)
-                VALUES (?, ?, ?, 'es', 'en')
-                """,
-                (deck["slug"], deck["title"], deck["description"]),
-            )
-            deck_id = cursor.lastrowid
-        else:
-            deck_id = deck_row["id"]
+        parameters = (
+            card["spanish"],
+            card["english"],
+            card.get("part_of_speech"),
+            card.get("definition_en"),
+            serialized_translations,
+            serialized_collocations,
+            card.get("example_sentence"),
+            card.get("example_es"),
+            card.get("example_en"),
+        )
+
+        if existing_card is None:
             connection.execute(
                 """
-                UPDATE decks
-                SET title = ?, description = ?, language_from = 'es', language_to = 'en'
-                WHERE id = ?
+                INSERT INTO cards (
+                    deck_id,
+                    spanish_text,
+                    english_text,
+                    part_of_speech,
+                    definition_en,
+                    main_translations_es,
+                    collocations,
+                    example_sentence,
+                    example_es,
+                    example_en
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (deck["title"], deck["description"], deck_id),
+                (deck_id, *parameters),
             )
+            inserted_cards += 1
+            continue
 
-        for card in deck["cards"]:
-            serialized_translations = json.dumps(card.get("main_translations_es", []), ensure_ascii=False)
-            serialized_collocations = json.dumps(card.get("collocations", []), ensure_ascii=False)
-            existing_card = connection.execute(
-                """
-                SELECT id
-                FROM cards
-                WHERE deck_id = ? AND spanish_text = ? AND english_text = ?
-                """,
-                (deck_id, card["spanish"], card["english"]),
-            ).fetchone()
-
-            parameters = (
-                card["spanish"],
-                card["english"],
+        connection.execute(
+            """
+            UPDATE cards
+            SET
+                part_of_speech = ?,
+                definition_en = ?,
+                main_translations_es = ?,
+                collocations = ?,
+                example_sentence = ?,
+                example_es = ?,
+                example_en = ?
+            WHERE id = ?
+            """,
+            (
                 card.get("part_of_speech"),
                 card.get("definition_en"),
                 serialized_translations,
@@ -302,52 +418,95 @@ def _seed_database(connection: sqlite3.Connection) -> None:
                 card.get("example_sentence"),
                 card.get("example_es"),
                 card.get("example_en"),
-            )
+                existing_card["id"],
+            ),
+        )
+        updated_cards += 1
 
-            if existing_card is None:
-                connection.execute(
-                    """
-                    INSERT INTO cards (
-                        deck_id,
-                        spanish_text,
-                        english_text,
-                        part_of_speech,
-                        definition_en,
-                        main_translations_es,
-                        collocations,
-                        example_sentence,
-                        example_es,
-                        example_en
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (deck_id, *parameters),
-                )
-            else:
-                connection.execute(
-                    """
-                    UPDATE cards
-                    SET
-                        part_of_speech = ?,
-                        definition_en = ?,
-                        main_translations_es = ?,
-                        collocations = ?,
-                        example_sentence = ?,
-                        example_es = ?,
-                        example_en = ?
-                    WHERE id = ?
-                    """,
-                    (
-                        card.get("part_of_speech"),
-                        card.get("definition_en"),
-                        serialized_translations,
-                        serialized_collocations,
-                        card.get("example_sentence"),
-                        card.get("example_es"),
-                        card.get("example_en"),
-                        existing_card["id"],
-                    ),
-                )
+    return DeckWriteResult(
+        deck_id=deck_id,
+        created_deck=created_deck,
+        inserted_cards=inserted_cards,
+        updated_cards=updated_cards,
+        deleted_cards=deleted_cards,
+        total_cards=len(normalized_deck["cards"]),
+    )
+
+
+def _normalize_deck_payload(deck: dict[str, Any]) -> dict[str, Any]:
+    slug = _require_text(deck.get("slug"), "deck.slug")
+    title = _require_text(deck.get("title"), "deck.title")
+    description = _require_text(deck.get("description"), "deck.description")
+    cards = deck.get("cards")
+    if not isinstance(cards, list) or not cards:
+        raise ValueError("deck.cards must be a non-empty list")
+
+    return {
+        "slug": slug,
+        "title": title,
+        "description": description,
+        "language_from": _optional_text(deck.get("language_from")) or DEFAULT_LANGUAGE_FROM,
+        "language_to": _optional_text(deck.get("language_to")) or DEFAULT_LANGUAGE_TO,
+        "cards": [_normalize_card_payload(card) for card in cards],
+    }
+
+
+def _normalize_card_payload(card: Any) -> dict[str, Any]:
+    if not isinstance(card, dict):
+        raise ValueError("Each card must be an object")
+
+    spanish = _require_text(card.get("spanish") or card.get("prompt_es"), "card.spanish")
+    english = _require_text(card.get("english") or card.get("answer_en"), "card.english")
+
+    return {
+        "spanish": spanish,
+        "english": english,
+        "part_of_speech": _optional_text(card.get("part_of_speech")),
+        "definition_en": _optional_text(card.get("definition_en")),
+        "main_translations_es": _normalize_text_list(card.get("main_translations_es")),
+        "collocations": _normalize_text_list(card.get("collocations")),
+        "example_sentence": _optional_text(card.get("example_sentence")),
+        "example_es": _optional_text(card.get("example_es")),
+        "example_en": _optional_text(card.get("example_en")),
+    }
+
+
+def _require_text(value: Any, field_name: str) -> str:
+    normalized = _optional_text(value)
+    if normalized is None:
+        raise ValueError(f"{field_name} must be a non-empty string")
+    return normalized
+
+
+def _optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("Expected a string value")
+    normalized = value.strip()
+    return normalized or None
+
+
+def _normalize_text_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("Expected a list of strings")
+
+    normalized_items: list[str] = []
+    seen_items: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            raise ValueError("Expected a list of strings")
+        normalized_item = item.strip()
+        if not normalized_item:
+            continue
+        key = normalized_item.casefold()
+        if key in seen_items:
+            continue
+        seen_items.add(key)
+        normalized_items.append(normalized_item)
+    return normalized_items
 
 
 def _migrate_cards_table(connection: sqlite3.Connection) -> None:
@@ -361,6 +520,8 @@ def _migrate_cards_table(connection: sqlite3.Connection) -> None:
         "main_translations_es": "ALTER TABLE cards ADD COLUMN main_translations_es TEXT",
         "collocations": "ALTER TABLE cards ADD COLUMN collocations TEXT",
         "example_sentence": "ALTER TABLE cards ADD COLUMN example_sentence TEXT",
+        "example_es": "ALTER TABLE cards ADD COLUMN example_es TEXT",
+        "example_en": "ALTER TABLE cards ADD COLUMN example_en TEXT",
     }
     for column_name, statement in migrations.items():
         if column_name not in columns:

@@ -1,0 +1,155 @@
+decks:
+  - slug: daily-life
+    title: Daily Life
+    description: Useful vocabulary for routines, places, and simple actions.
+    topic: morning routine and everyday habits
+    difficulty: beginner
+    desired_card_count: 20
+    batch_size: 6
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: append
+    learner_profile: Spanish-speaking adults who want practical English for everyday life and simple conversations.
+    generation_notes: Generate only high-frequency daily vocabulary as single words or very short expressions. Avoid duplicates of common seed cards.
+    excluded_vocabulary:
+      - Trabajo
+      - Comida
+      - Casa
+      - Caminar
+      - Necesito ayuda
+    sections:
+      - name: Morning and daily routine
+        communicative_goal: Talk about waking up, getting ready, and everyday habits.
+        lexical_focus:
+          - wake up
+          - shower
+          - breakfast
+          - get dressed
+          - leave home
+        target_card_count: 20
+
+  - slug: daily-life
+    title: Daily Life
+    description: Useful vocabulary for routines, places, and simple actions.
+    topic: home and household vocabulary
+    difficulty: beginner
+    desired_card_count: 20
+    batch_size: 6
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: append
+    learner_profile: Spanish-speaking adults who want practical English for everyday life and simple conversations.
+    generation_notes: Generate only common household words and chores. Keep the cards beginner-friendly and concrete.
+    excluded_vocabulary:
+      - Trabajo
+      - Comida
+      - Casa
+      - Caminar
+      - Necesito ayuda
+    sections:
+      - name: Home and household
+        communicative_goal: Describe common rooms, objects, and chores at home.
+        lexical_focus:
+          - kitchen
+          - bedroom
+          - clean
+          - cook
+          - laundry
+        target_card_count: 20
+
+  - slug: daily-life
+    title: Daily Life
+    description: Useful vocabulary for routines, places, and simple actions.
+    topic: shopping and everyday errands
+    difficulty: beginner
+    desired_card_count: 20
+    batch_size: 6
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: append
+    learner_profile: Spanish-speaking adults who want practical English for everyday life and simple conversations.
+    generation_notes: Generate only useful shopping words and short questions for simple errands.
+    excluded_vocabulary:
+      - Trabajo
+      - Comida
+      - Casa
+      - Caminar
+      - Necesito ayuda
+    sections:
+      - name: Shopping and errands
+        communicative_goal: Buy everyday items, ask about prices, and handle simple errands.
+        lexical_focus:
+          - store
+          - cash
+          - receipt
+          - open
+          - closed
+        target_card_count: 20
+
+  - slug: daily-life
+    title: Daily Life
+    description: Useful vocabulary for routines, places, and simple actions.
+    topic: work study and schedule basics
+    difficulty: beginner
+    desired_card_count: 20
+    batch_size: 6
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: append
+    learner_profile: Spanish-speaking adults who want practical English for everyday life and simple conversations.
+    generation_notes: Generate only high-frequency work, study, and time vocabulary suitable for beginners.
+    excluded_vocabulary:
+      - Trabajo
+      - Comida
+      - Casa
+      - Caminar
+      - Necesito ayuda
+    sections:
+      - name: Work study and schedule
+        communicative_goal: Talk about work, classes, time, and basic plans.
+        lexical_focus:
+          - office
+          - meeting
+          - class
+          - homework
+          - today and tomorrow
+        target_card_count: 20
+
+  - slug: daily-life
+    title: Daily Life
+    description: Useful vocabulary for routines, places, and simple actions.
+    topic: social and practical everyday phrases
+    difficulty: beginner
+    desired_card_count: 20
+    batch_size: 6
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: append
+    learner_profile: Spanish-speaking adults who want practical English for everyday life and simple conversations.
+    generation_notes: Generate only short, useful social and practical phrases used often in daily life.
+    excluded_vocabulary:
+      - Trabajo
+      - Comida
+      - Casa
+      - Caminar
+      - Necesito ayuda
+    sections:
+      - name: Social and practical phrases
+        communicative_goal: Use polite expressions and simple phrases in common daily interactions.
+        lexical_focus:
+          - excuse me
+          - wait a moment
+          - hurry up
+          - see you later
+          - no problem
+        target_card_count: 20

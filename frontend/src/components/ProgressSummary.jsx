@@ -10,10 +10,8 @@ function ProgressSummary({ progress }) {
         <span>{progress.reviewed_cards} of {progress.total_cards} reviewed</span>
         <span>{progress.known_cards} known</span>
         <span>{progress.unknown_cards} to revisit</span>
+        {progress.is_completed ? <span className="review-progress__status">Practice anytime</span> : null}
       </div>
-      {progress.is_completed ? (
-        <p className="review-progress__note">All cards are known. The deck stays open for another round.</p>
-      ) : null}
     </aside>
   );
 }
