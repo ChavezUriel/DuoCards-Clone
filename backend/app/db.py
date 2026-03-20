@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 from dataclasses import dataclass
 import sqlite3
 from pathlib import Path
-from typing import Any, Iterator, Literal
+from typing import Any, Literal
 
 import json
 
@@ -283,32 +282,14 @@ CREATE TABLE IF NOT EXISTS practice_session_cards (
     UNIQUE(session_id, card_id),
     UNIQUE(session_id, queue_position)
 );
-
-CREATE TABLE IF NOT EXISTS card_tts_audio (
-    card_id INTEGER PRIMARY KEY,
-    provider TEXT NOT NULL DEFAULT 'gtts',
-    language_code TEXT NOT NULL,
-    source_text TEXT NOT NULL,
-    relative_path TEXT,
-    file_format TEXT NOT NULL DEFAULT 'mp3',
-    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'ready', 'error')),
-    error_message TEXT,
-    generated_at TEXT,
-    last_verified_at TEXT,
-    FOREIGN KEY (card_id) REFERENCES cards (id) ON DELETE CASCADE
-);
 """
 
 
-@contextmanager
-def get_connection() -> Iterator[sqlite3.Connection]:
+def get_connection() -> sqlite3.Connection:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DATABASE_PATH)
     connection.row_factory = sqlite3.Row
-    try:
-        yield connection
-    finally:
-        connection.close()
+    return connection
 
 
 def initialize_database() -> None:
@@ -316,7 +297,6 @@ def initialize_database() -> None:
         connection.executescript(SCHEMA_SQL)
         _migrate_cards_table(connection)
         _migrate_card_progress_table(connection)
-        _migrate_card_tts_audio_table(connection)
         _seed_database(connection)
         connection.commit()
 
@@ -609,42 +589,5 @@ def _migrate_card_progress_table(connection: sqlite3.Connection) -> None:
         UPDATE card_progress
         SET initial_mastered_at = COALESCE(initial_mastered_at, last_reviewed_at)
         WHERE known_count >= 2 AND initial_mastered_at IS NULL
-        """
-    )
-
-
-def _migrate_card_tts_audio_table(connection: sqlite3.Connection) -> None:
-    columns = {
-        row["name"]
-        for row in connection.execute("PRAGMA table_info(card_tts_audio)").fetchall()
-    }
-    migrations = {
-        "provider": "ALTER TABLE card_tts_audio ADD COLUMN provider TEXT NOT NULL DEFAULT 'gtts'",
-        "language_code": "ALTER TABLE card_tts_audio ADD COLUMN language_code TEXT NOT NULL DEFAULT 'es'",
-        "source_text": "ALTER TABLE card_tts_audio ADD COLUMN source_text TEXT NOT NULL DEFAULT ''",
-        "relative_path": "ALTER TABLE card_tts_audio ADD COLUMN relative_path TEXT",
-        "file_format": "ALTER TABLE card_tts_audio ADD COLUMN file_format TEXT NOT NULL DEFAULT 'mp3'",
-        "status": "ALTER TABLE card_tts_audio ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'",
-        "error_message": "ALTER TABLE card_tts_audio ADD COLUMN error_message TEXT",
-        "generated_at": "ALTER TABLE card_tts_audio ADD COLUMN generated_at TEXT",
-        "last_verified_at": "ALTER TABLE card_tts_audio ADD COLUMN last_verified_at TEXT",
-    }
-    for column_name, statement in migrations.items():
-        if column_name not in columns:
-            connection.execute(statement)
-
-    connection.execute(
-        """
-        UPDATE card_tts_audio
-        SET
-            provider = COALESCE(NULLIF(TRIM(provider), ''), 'gtts'),
-            file_format = COALESCE(NULLIF(TRIM(file_format), ''), 'mp3'),
-            status = CASE
-                WHEN status IN ('pending', 'ready', 'error') THEN status
-                WHEN relative_path IS NOT NULL AND TRIM(relative_path) != '' THEN 'ready'
-                ELSE 'pending'
-            END,
-            source_text = COALESCE(source_text, ''),
-            language_code = COALESCE(NULLIF(TRIM(language_code), ''), 'es')
         """
     )

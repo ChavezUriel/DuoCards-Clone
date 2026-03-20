@@ -139,21 +139,7 @@ def get_review_card(deck_id: int) -> ReviewCard:
     if row is None:
         raise HTTPException(status_code=404, detail="Deck has no cards")
 
-    return ReviewCard(
-        card_id=row["card_id"],
-        deck_id=row["deck_id"],
-        deck_title=row["deck_title"],
-        prompt_es=row["spanish_text"],
-        answer_en=row["english_text"],
-        section_name=row["section_name"],
-        part_of_speech=row["part_of_speech"],
-        definition_en=row["definition_en"],
-        main_translations_es=_decode_json_list(row["main_translations_es"]),
-        collocations=_decode_json_list(row["collocations"]),
-        example_sentence=row["example_sentence"],
-        example_es=row["example_es"],
-        example_en=row["example_en"],
-    )
+    return _build_review_card(row)
 
 
 @app.get("/api/decks/{deck_id}/progress", response_model=DeckProgress)
@@ -283,7 +269,10 @@ def get_smart_practice_session(session_id: int) -> SmartPracticeSession:
 
 
 @app.post("/api/practice/sessions/{session_id}/reviews", response_model=SmartPracticeReviewResult)
-def submit_smart_practice_review(session_id: int, payload: SmartPracticeReviewSubmission) -> SmartPracticeReviewResult:
+def submit_smart_practice_review(
+    session_id: int,
+    payload: SmartPracticeReviewSubmission,
+) -> SmartPracticeReviewResult:
     with get_connection() as connection:
         try:
             submit_session_review(connection, session_id=session_id, card_id=payload.card_id, result=payload.result)
@@ -325,20 +314,24 @@ def _build_smart_practice_session(snapshot: dict[str, object]) -> SmartPracticeS
     current_card_row = snapshot["current_card"]
     current_card = None
     if current_card_row is not None:
-        current_card = ReviewCard(
-            card_id=current_card_row["card_id"],
-            deck_id=current_card_row["deck_id"],
-            deck_title=current_card_row["deck_title"],
-            section_name=current_card_row["section_name"],
-            prompt_es=current_card_row["spanish_text"],
-            answer_en=current_card_row["english_text"],
-            part_of_speech=current_card_row["part_of_speech"],
-            definition_en=current_card_row["definition_en"],
-            main_translations_es=_decode_json_list(current_card_row["main_translations_es"]),
-            collocations=_decode_json_list(current_card_row["collocations"]),
-            example_sentence=current_card_row["example_sentence"],
-            example_es=current_card_row["example_es"],
-            example_en=current_card_row["example_en"],
-        )
+        current_card = _build_review_card(current_card_row)
 
     return SmartPracticeSession(summary=summary, current_card=current_card)
+
+
+def _build_review_card(row: object) -> ReviewCard:
+    return ReviewCard(
+        card_id=row["card_id"],
+        deck_id=row["deck_id"],
+        deck_title=row["deck_title"],
+        section_name=row["section_name"],
+        prompt_es=row["spanish_text"],
+        answer_en=row["english_text"],
+        part_of_speech=row["part_of_speech"],
+        definition_en=row["definition_en"],
+        main_translations_es=_decode_json_list(row["main_translations_es"]),
+        collocations=_decode_json_list(row["collocations"]),
+        example_sentence=row["example_sentence"],
+        example_es=row["example_es"],
+        example_en=row["example_en"],
+    )
