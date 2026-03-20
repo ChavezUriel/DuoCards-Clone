@@ -256,6 +256,13 @@ a {
   color: #44524a;
 }
 
+.review-shortcuts {
+  margin-top: -0.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: rgba(31, 111, 80, 0.07);
+}
+
 .back-link {
   display: inline-flex;
   margin-bottom: 1rem;

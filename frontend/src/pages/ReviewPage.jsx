@@ -44,6 +44,45 @@ function ReviewPage() {
     };
   }, [deckId]);
 
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+        return;
+      }
+
+      if (status !== 'ready' || !card || isSubmitting) {
+        return;
+      }
+
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        setIsAnswerVisible(true);
+        return;
+      }
+
+      if (!isAnswerVisible) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        handleReview('unknown');
+        return;
+      }
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        handleReview('known');
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [card, isAnswerVisible, isSubmitting, status]);
+
   async function handleReview(result) {
     if (!card) {
       return;
@@ -97,6 +136,9 @@ function ReviewPage() {
 
         <div className="review-actions panel">
           <p>After revealing the answer, mark whether you knew it.</p>
+          <p className="review-shortcuts">
+            Shortcuts: <strong>Up</strong> or <strong>Down</strong> reveals the answer, <strong>Left</strong> marks review again, and <strong>Right</strong> marks I knew it.
+          </p>
           <div className="action-row">
             <button
               className="button button--danger"
