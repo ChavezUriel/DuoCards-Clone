@@ -123,22 +123,22 @@ function ReviewPage() {
   }
 
   return (
-    <div className="review-layout">
-      <div>
+    <section className="review-screen">
+      {progress ? <ProgressSummary progress={progress} /> : null}
+
+      <div className="review-stage">
         <Link className="back-link" to="/">
           Back to decks
         </Link>
+
         <Flashcard
           card={card}
           isAnswerVisible={isAnswerVisible}
           onReveal={() => setIsAnswerVisible((current) => !current)}
         />
 
-        <div className="review-actions panel">
-          <p>After revealing the answer, mark whether you knew it.</p>
-          <p className="review-shortcuts">
-            Shortcuts: <strong>Up</strong> or <strong>Down</strong> reveals the answer, <strong>Left</strong> marks review again, and <strong>Right</strong> marks I knew it.
-          </p>
+        <div className="review-actions">
+          <p className="review-shortcuts">Up or down reveals. Left reviews again. Right marks known.</p>
           <div className="action-row">
             <button
               className="button button--danger"
@@ -160,8 +160,7 @@ function ReviewPage() {
         </div>
       </div>
 
-      {progress ? <ProgressSummary progress={progress} /> : null}
-    </div>
+    </section>
   );
 }
 

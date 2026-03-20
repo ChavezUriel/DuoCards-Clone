@@ -21,6 +21,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   background: transparent;
 }
 
@@ -31,12 +32,21 @@ a {
 
 #root {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .app-shell {
   width: min(1180px, calc(100% - 2rem));
   margin: 0 auto;
   padding: 2rem 0 4rem;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.app-shell--review {
+  width: min(960px, calc(100% - 2rem));
+  min-height: 100dvh;
+  padding: 1rem 0 1.25rem;
 }
 
 .hero {
@@ -70,6 +80,11 @@ a {
 .page-content {
   display: grid;
   gap: 1.5rem;
+}
+
+.page-content--review {
+  gap: 0;
+  min-height: 100%;
 }
 
 .deck-grid {
@@ -177,37 +192,98 @@ a {
   color: #fff;
 }
 
-.review-layout {
+.review-screen {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-  gap: 1.5rem;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 1rem;
+  min-height: calc(100dvh - 2.25rem);
+  overflow: hidden;
+}
+
+.review-stage {
+  width: min(640px, 100%);
+  margin: 0 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .flashcard {
   display: grid;
-  gap: 1.1rem;
+  grid-template-rows: minmax(0, 1fr) minmax(210px, 250px) auto;
+  gap: 1rem;
+  padding: 2rem;
+  border-radius: 32px;
+  background: rgba(255, 255, 255, 0.86);
+  height: min(100%, 680px);
+  min-height: 520px;
+  overflow: hidden;
+}
+
+.flashcard__face {
+  display: grid;
+  gap: 0.9rem;
+  min-height: 0;
+}
+
+.flashcard__face--front {
+  justify-items: center;
+  text-align: center;
+  align-content: center;
+  overflow: auto;
+}
+
+.flashcard h2 {
+  font-size: clamp(2.2rem, 5vw, 3.8rem);
+  line-height: 1;
+}
+
+.flashcard h3 {
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
 }
 
 .answer {
-  padding: 1rem;
-  border-radius: 18px;
-  background: rgba(31, 111, 80, 0.06);
-  border: 1px dashed rgba(31, 111, 80, 0.24);
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  justify-items: center;
+  padding: 1.15rem 1.2rem;
+  border-radius: 22px;
+  background: rgba(31, 111, 80, 0.04);
+  border: 1px dashed rgba(31, 111, 80, 0.16);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.answer > .flashcard__label {
+  text-align: center;
+}
+
+.answer__content {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.8rem;
+  min-height: 0;
+  padding: 0 1.75rem 0.2rem;
+  text-align: center;
 }
 
 .answer__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  display: grid;
+  justify-items: center;
+  width: 100%;
 }
 
 .answer--visible {
-  background: rgba(255, 182, 94, 0.16);
+  background: rgba(255, 182, 94, 0.12);
   border-style: solid;
 }
 
 .info-button {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -225,10 +301,28 @@ a {
   background: rgba(255, 255, 255, 0.95);
 }
 
+.flashcard__hint {
+  color: #5f6a63;
+}
+
+.flashcard__placeholder {
+  align-self: center;
+  margin: 0;
+  color: #8a9187;
+}
+
+.flashcard__example--answer {
+  max-width: 34ch;
+  text-align: center;
+}
+
 .flashcard-details {
   display: grid;
   gap: 0.85rem;
   margin-top: 1rem;
+  max-height: min(52vh, 420px);
+  padding-right: 0.35rem;
+  overflow: auto;
 }
 
 .flashcard-details div {
@@ -255,52 +349,143 @@ a {
   padding-left: 1.2rem;
 }
 
-.progress-summary dl {
+.flashcard__reveal {
+  justify-self: center;
+  min-width: 180px;
+}
+
+.details-modal {
+  position: fixed;
+  inset: 0;
   display: grid;
-  gap: 0.85rem;
-  margin: 1rem 0 0;
+  place-items: center;
+  padding: 1.5rem;
+  z-index: 30;
 }
 
-.progress-summary div {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
+.details-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  background: rgba(23, 32, 27, 0.34);
+  cursor: pointer;
 }
 
-.progress-summary dt {
-  color: #5f6a63;
+.details-modal__panel {
+  position: relative;
+  z-index: 1;
+  width: min(560px, 100%);
+  max-height: min(78vh, 720px);
+  padding: 1.5rem;
+  border: 1px solid rgba(47, 79, 56, 0.14);
+  border-radius: 28px;
+  background: rgba(255, 251, 245, 0.96);
+  box-shadow: 0 28px 100px rgba(27, 37, 31, 0.22);
+  overflow: hidden;
 }
 
-.progress-summary dd {
+.details-modal__header {
+  padding-right: 2rem;
+}
+
+.details-modal__header h3 {
   margin: 0;
-  font-weight: 700;
 }
 
-.progress-summary__note {
-  margin: 1rem 0 0;
-  color: #44524a;
+.details-modal__close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(31, 111, 80, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--primary-dark);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.details-modal__close:hover {
+  background: #fff;
+}
+
+.review-progress {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.review-progress__track {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(31, 111, 80, 0.09);
+  overflow: hidden;
+}
+
+.review-progress__fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255, 182, 94, 0.8), rgba(31, 111, 80, 0.85));
+}
+
+.review-progress__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: #5f6a63;
+  font-size: 0.86rem;
 }
 
 .review-shortcuts {
-  margin-top: -0.25rem;
-  padding: 0.85rem 1rem;
-  border-radius: 16px;
-  background: rgba(31, 111, 80, 0.07);
+  margin: 0;
+  text-align: center;
+  color: #5f6a63;
+  font-size: 0.88rem;
 }
 
 .back-link {
   display: inline-flex;
-  margin-bottom: 1rem;
+  margin-bottom: 0.9rem;
   color: var(--primary-dark);
 }
 
-@media (max-width: 860px) {
-  .review-layout {
-    grid-template-columns: 1fr;
-  }
+.review-actions {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
 
+.review-actions .action-row {
+  justify-content: center;
+}
+
+.review-progress__note {
+  margin: 0;
+  color: #5f6a63;
+  font-size: 0.86rem;
+}
+
+@media (max-width: 860px) {
   .deck-card__footer {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .review-progress__meta {
+    justify-content: flex-start;
+  }
+
+  .flashcard {
+    padding: 1.5rem;
+    min-height: 480px;
+    grid-template-rows: minmax(0, 1fr) minmax(200px, 235px) auto;
+  }
+
+  .flashcard__face--front {
+    align-content: center;
   }
 }
