@@ -8,6 +8,16 @@ function uniqueDeckIds(deckIds) {
   return [...new Set(deckIds)];
 }
 
+function sortDecksBySmartPractice(decks) {
+  return [...decks].sort((leftDeck, rightDeck) => {
+    if (leftDeck.is_enabled_in_smart_practice === rightDeck.is_enabled_in_smart_practice) {
+      return 0;
+    }
+
+    return leftDeck.is_enabled_in_smart_practice ? -1 : 1;
+  });
+}
+
 function HomePage() {
   const [decks, setDecks] = useState([]);
   const [status, setStatus] = useState('loading');
@@ -39,7 +49,7 @@ function HomePage() {
       try {
         const nextDecks = await fetchDecks();
         if (!cancelled) {
-          setDecks(nextDecks);
+          setDecks(sortDecksBySmartPractice(nextDecks));
           setStatus('ready');
         }
       } catch (loadError) {
@@ -74,11 +84,11 @@ function HomePage() {
       const failedResults = results.filter((result) => result.status === 'rejected');
 
       if (successfulDeckIds.length > 0) {
-        setDecks((current) => current.map((deck) => (
+        setDecks((current) => sortDecksBySmartPractice(current.map((deck) => (
           successfulDeckIds.includes(deck.id)
             ? { ...deck, is_enabled_in_smart_practice: isEnabledInSmartPractice }
             : deck
-        )));
+        ))));
       }
 
       if (failedResults.length > 0) {

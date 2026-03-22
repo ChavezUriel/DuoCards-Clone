@@ -38,9 +38,29 @@ function DeckCard({ deck, isPending = false, onToggleSmartPractice }) {
       onClick={handleOpenDeck}
       onKeyDown={handleCardKeyDown}
     >
+      <button
+        className={`deck-card__icon-button deck-card__toggle-button ${deck.is_enabled_in_smart_practice ? 'deck-card__icon-button--selected' : 'deck-card__icon-button--inactive'}`}
+        type="button"
+        aria-label={smartPracticeLabel}
+        title={smartPracticeTitle}
+        onClick={handleToggleClick}
+        disabled={isPending}
+      >
+        {deck.is_enabled_in_smart_practice ? (
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.9" />
+            <path d="m8.7 12.15 2.2 2.2 4.45-4.45" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.9" />
+            <path d="m8.7 12.15 2.2 2.2 4.45-4.45" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </button>
+
       <div className="deck-card__content">
         <h2>{deck.title}</h2>
-        <p>{deck.description}</p>
       </div>
 
       <div className="deck-card__bottom">
@@ -63,30 +83,11 @@ function DeckCard({ deck, isPending = false, onToggleSmartPractice }) {
           <div className="progress-track" aria-hidden="true">
             <div className="progress-fill" style={{ width: `${percentage(deck.completion_ratio)}%` }} />
           </div>
-        </div>
 
-        <div className="deck-card__footer">
-          <div className="deck-card__actions">
-            <button
-              className={`deck-card__icon-button ${deck.is_enabled_in_smart_practice ? 'deck-card__icon-button--selected' : 'deck-card__icon-button--inactive'}`}
-              type="button"
-              aria-label={smartPracticeLabel}
-              title={smartPracticeTitle}
-              onClick={handleToggleClick}
-              disabled={isPending}
-            >
-              {deck.is_enabled_in_smart_practice ? (
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <circle cx="12" cy="12" r="8" fill="currentColor" />
-                  <path d="m8.7 12.15 2.2 2.2 4.45-4.45" fill="none" stroke="#ffffff" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.9" />
-                  <path d="m8.7 12.15 2.2 2.2 4.45-4.45" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-            </button>
+          <div className="deck-card__description-overlay" aria-hidden="true">
+            <div className="deck-card__description-surface">
+              <p className="deck-card__description">{deck.description}</p>
+            </div>
           </div>
         </div>
       </div>
