@@ -4,6 +4,10 @@ import { fetchDecks, updateDeckSmartPracticeInclusion } from '../api';
 import DeckCard from '../components/DeckCard';
 import { loadPracticeSettings, savePracticeSettings } from '../practiceSettings';
 
+function uniqueDeckIds(deckIds) {
+  return [...new Set(deckIds)];
+}
+
 function HomePage() {
   const [decks, setDecks] = useState([]);
   const [status, setStatus] = useState('loading');
@@ -11,6 +15,11 @@ function HomePage() {
   const [settings, setSettings] = useState(() => loadPracticeSettings());
   const [pendingDeckIds, setPendingDeckIds] = useState([]);
   const [actionError, setActionError] = useState('');
+
+  const areAllDecksEnabledInSmartPractice = decks.length > 0
+    && decks.every((deck) => deck.is_enabled_in_smart_practice);
+  const enabledDeckCount = decks.filter((deck) => deck.is_enabled_in_smart_practice).length;
+  const hasPendingDeckUpdates = pendingDeckIds.length > 0;
 
   function updateSettings(partialSettings) {
     setSettings((current) => {
@@ -48,22 +57,56 @@ function HomePage() {
     };
   }, []);
 
-  async function handleToggleSmartPractice(deckId, isEnabledInSmartPractice) {
+  async function updateSmartPracticeInclusion(deckIds, isEnabledInSmartPractice) {
+    if (deckIds.length === 0) {
+      return;
+    }
+
     setActionError('');
-    setPendingDeckIds((current) => [...current, deckId]);
+    setPendingDeckIds((current) => uniqueDeckIds([...current, ...deckIds]));
 
     try {
-      await updateDeckSmartPracticeInclusion(deckId, isEnabledInSmartPractice);
-      setDecks((current) => current.map((deck) => (
-        deck.id === deckId
-          ? { ...deck, is_enabled_in_smart_practice: isEnabledInSmartPractice }
-          : deck
-      )));
+      const results = await Promise.allSettled(
+        deckIds.map((deckId) => updateDeckSmartPracticeInclusion(deckId, isEnabledInSmartPractice))
+      );
+
+      const successfulDeckIds = deckIds.filter((deckId, index) => results[index].status === 'fulfilled');
+      const failedResults = results.filter((result) => result.status === 'rejected');
+
+      if (successfulDeckIds.length > 0) {
+        setDecks((current) => current.map((deck) => (
+          successfulDeckIds.includes(deck.id)
+            ? { ...deck, is_enabled_in_smart_practice: isEnabledInSmartPractice }
+            : deck
+        )));
+      }
+
+      if (failedResults.length > 0) {
+        const firstError = failedResults[0].reason;
+        setActionError(
+          failedResults.length === deckIds.length
+            ? firstError.message
+            : 'Some decks could not be updated. Please try again.'
+        );
+      }
     } catch (requestError) {
       setActionError(requestError.message);
     } finally {
-      setPendingDeckIds((current) => current.filter((pendingDeckId) => pendingDeckId !== deckId));
+      setPendingDeckIds((current) => current.filter((pendingDeckId) => !deckIds.includes(pendingDeckId)));
     }
+  }
+
+  async function handleToggleSmartPractice(deckId, isEnabledInSmartPractice) {
+    await updateSmartPracticeInclusion([deckId], isEnabledInSmartPractice);
+  }
+
+  async function handleToggleAllDecks() {
+    const nextEnabledState = !areAllDecksEnabledInSmartPractice;
+    const targetDeckIds = decks
+      .filter((deck) => deck.is_enabled_in_smart_practice !== nextEnabledState)
+      .map((deck) => deck.id);
+
+    await updateSmartPracticeInclusion(targetDeckIds, nextEnabledState);
   }
 
   if (status === 'loading') {
@@ -153,6 +196,24 @@ function HomePage() {
             <p className="eyebrow">Secondary workflow</p>
             <h2>Deck Review</h2>
           </div>
+
+          <label className="section-toggle" aria-label="Toggle Smart Practice sampling for all decks">
+            <span className="section-toggle__copy">
+              <strong>All decks</strong>
+              <small>{enabledDeckCount} of {decks.length} enabled</small>
+            </span>
+            <button
+              className={`section-toggle__switch ${areAllDecksEnabledInSmartPractice ? 'section-toggle__switch--active' : ''}`}
+              type="button"
+              role="switch"
+              aria-checked={areAllDecksEnabledInSmartPractice}
+              aria-label={areAllDecksEnabledInSmartPractice ? 'Disable all decks for Smart Practice sampling' : 'Enable all decks for Smart Practice sampling'}
+              onClick={handleToggleAllDecks}
+              disabled={hasPendingDeckUpdates || decks.length === 0}
+            >
+              <span className="section-toggle__thumb" aria-hidden="true" />
+            </button>
+          </label>
         </div>
 
         {actionError ? <p className="deck-grid__status deck-grid__status--error">{actionError}</p> : null}
