@@ -70,15 +70,15 @@ function DeckCard({ deck, isPending = false, onToggleSmartPractice }) {
             >
               {deck.is_enabled_in_smart_practice ? (
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M1.5 12s3.9-6.5 10.5-6.5S22.5 12 22.5 12s-3.9 6.5-10.5 6.5S1.5 12 1.5 12Z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-                  <circle cx="12" cy="12" r="3.25" fill="none" stroke="currentColor" strokeWidth="1.7" />
+                  <path d="M2.45 12C3.73 7.95 7.52 5 12 5s8.27 2.95 9.55 7c-1.28 4.05-5.07 7-9.55 7s-8.27-2.95-9.55-7Z" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="12" cy="12" r="3.35" fill="none" stroke="currentColor" strokeWidth="1.9" />
                 </svg>
               ) : (
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M2.5 12s3.3-5.8 9.5-5.8c2.3 0 4.2.8 5.8 1.9" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M21.5 12s-3.3 5.8-9.5 5.8c-2.3 0-4.2-.8-5.8-1.9" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M9.9 9.9A3.2 3.2 0 0 1 15 14.1" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M3 3l18 18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M10.73 5.08C11.14 5.03 11.57 5 12 5c7 0 11 7 11 7a13.6 13.6 0 0 1-1.67 2.68" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M6.61 6.61A13.2 13.2 0 0 0 1 12s4 7 11 7a10.8 10.8 0 0 0 5.39-1.39" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M3 3l18 18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}
             </button>
