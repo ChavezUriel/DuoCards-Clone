@@ -221,11 +221,9 @@ function DeckWordCard({ card, isPending, onToggle, onOpenDetails }) {
 
       <div className="deck-preview__languages">
         <div>
-          <span className="deck-preview__language-label">Spanish</span>
           <strong>{card.prompt_es}</strong>
         </div>
         <div>
-          <span className="deck-preview__language-label">English</span>
           <p>{card.answer_en}</p>
         </div>
       </div>
