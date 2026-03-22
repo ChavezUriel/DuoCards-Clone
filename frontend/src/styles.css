@@ -71,7 +71,6 @@ a {
 }
 
 .eyebrow,
-.deck-card__label,
 .flashcard__label {
   margin: 0 0 0.75rem;
   text-transform: uppercase;
@@ -127,6 +126,17 @@ a {
   flex-direction: column;
   justify-content: space-between;
   gap: 1rem;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.deck-card:hover {
+  transform: translateY(-2px);
+}
+
+.deck-card:focus-visible {
+  outline: 3px solid rgba(31, 111, 80, 0.22);
+  outline-offset: 3px;
 }
 
 .deck-card--inactive {
@@ -135,7 +145,6 @@ a {
 }
 
 .deck-card--inactive .deck-card__content p,
-.deck-card--inactive .deck-card__label,
 .deck-card--inactive .deck-card__progress-label {
   color: #6c746f;
 }
@@ -238,6 +247,17 @@ a {
   cursor: not-allowed;
   opacity: 0.55;
   transform: none;
+}
+
+.deck-card__icon-button--selected {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+  color: #ffffff;
+}
+
+.deck-card__icon-button--selected:hover:not(:disabled) {
+  background: var(--primary);
+  border-color: var(--primary);
 }
 
 .deck-card__icon-button--inactive {
