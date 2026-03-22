@@ -105,7 +105,7 @@ function buildSearchMatchReasons(titleScore, descriptionScore, wordsScore) {
 
 function rankDeckSearchResults(decks, query, deckWordIndexById) {
   if (!query) {
-    return sortDecksBySmartPractice(decks).map((deck) => ({
+    return decks.map((deck) => ({
       deck,
       searchScore: 0,
       searchDidMatch: false,
@@ -136,10 +136,6 @@ function rankDeckSearchResults(decks, query, deckWordIndexById) {
 
       if (leftEntry.searchScore !== rightEntry.searchScore) {
         return rightEntry.searchScore - leftEntry.searchScore;
-      }
-
-      if (leftEntry.deck.is_enabled_in_smart_practice !== rightEntry.deck.is_enabled_in_smart_practice) {
-        return leftEntry.deck.is_enabled_in_smart_practice ? -1 : 1;
       }
 
       return leftEntry.index - rightEntry.index;
@@ -287,11 +283,11 @@ function HomePage() {
       const failedResults = results.filter((result) => result.status === 'rejected');
 
       if (successfulDeckIds.length > 0) {
-        setDecks((current) => sortDecksBySmartPractice(current.map((deck) => (
+        setDecks((current) => current.map((deck) => (
           successfulDeckIds.includes(deck.id)
             ? { ...deck, is_enabled_in_smart_practice: isEnabledInSmartPractice }
             : deck
-        ))));
+        )));
       }
 
       if (failedResults.length > 0) {

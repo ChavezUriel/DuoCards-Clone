@@ -12,12 +12,11 @@ function DeckCard({
   isSearchDimmed = false,
 }) {
   const navigate = useNavigate();
-  const smartPracticeLabel = deck.is_enabled_in_smart_practice
+  const isSelected = deck.is_enabled_in_smart_practice;
+  const selectionLabel = isSelected
     ? `Remove ${deck.title} from Smart Practice sampling`
     : `Add ${deck.title} to Smart Practice sampling`;
-  const smartPracticeTitle = deck.is_enabled_in_smart_practice
-    ? 'Included in Smart Practice sampling'
-    : 'Excluded from Smart Practice sampling';
+  const explorerLabel = `Open ${deck.title} deck explorer`;
 
   function handleOpenDeck() {
     navigate(`/decks/${deck.id}/words`);
@@ -26,47 +25,42 @@ function DeckCard({
   function handleCardKeyDown(event) {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      handleOpenDeck();
+      onToggleSmartPractice(deck.id, !isSelected);
     }
   }
 
-  function handleToggleClick(event) {
+  function handleOpenDeckClick(event) {
     event.stopPropagation();
-    onToggleSmartPractice(deck.id, !deck.is_enabled_in_smart_practice);
+    handleOpenDeck();
   }
 
   return (
     <article
-      className={`panel deck-card ${deck.is_enabled_in_smart_practice ? '' : 'deck-card--inactive'} ${isSearchDimmed ? 'deck-card--search-dimmed' : ''}`}
-      role="link"
+      className={`panel deck-card ${isSelected ? 'deck-card--selected' : 'deck-card--inactive'} ${isSearchDimmed ? 'deck-card--search-dimmed' : ''}`}
+      role="button"
       tabIndex={0}
-      aria-label={`Open ${deck.title} deck`}
-      onClick={handleOpenDeck}
+      aria-label={selectionLabel}
+      aria-pressed={isSelected}
+      onClick={() => onToggleSmartPractice(deck.id, !isSelected)}
       onKeyDown={handleCardKeyDown}
     >
       <button
-        className={`deck-card__icon-button deck-card__toggle-button ${deck.is_enabled_in_smart_practice ? 'deck-card__icon-button--selected' : 'deck-card__icon-button--inactive'}`}
+        className="deck-card__explore-button"
         type="button"
-        aria-label={smartPracticeLabel}
-        title={smartPracticeTitle}
-        onClick={handleToggleClick}
-        disabled={isPending}
+        aria-label={explorerLabel}
+        title="Open deck explorer"
+        onClick={handleOpenDeckClick}
       >
-        {deck.is_enabled_in_smart_practice ? (
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.9" />
-            <path d="m8.7 12.15 2.2 2.2 4.45-4.45" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        ) : (
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.9" />
-            <path d="m8.7 12.15 2.2 2.2 4.45-4.45" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
+        <svg fill="#000000" viewBox="0 0 36 36" version="1.1" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <title>Deck Cards Explorer</title> <path class="clr-i-outline clr-i-outline-path-1" d="M15,17H4a2,2,0,0,1-2-2V8A2,2,0,0,1,4,6H15a2,2,0,0,1,2,2v7A2,2,0,0,1,15,17ZM4,8v7H15V8Z"></path><path class="clr-i-outline clr-i-outline-path-2" d="M32,17H21a2,2,0,0,1-2-2V8a2,2,0,0,1,2-2H32a2,2,0,0,1,2,2v7A2,2,0,0,1,32,17ZM21,8v7H32V8Z"></path><path class="clr-i-outline clr-i-outline-path-3" d="M15,30H4a2,2,0,0,1-2-2V21a2,2,0,0,1,2-2H15a2,2,0,0,1,2,2v7A2,2,0,0,1,15,30ZM4,21v7H15V21Z"></path><path class="clr-i-outline clr-i-outline-path-4" d="M32,30H21a2,2,0,0,1-2-2V21a2,2,0,0,1,2-2H32a2,2,0,0,1,2,2v7A2,2,0,0,1,32,30ZM21,21v7H32V21Z"></path> <rect x="0" y="0" width="36" height="36" fill-opacity="0"></rect> </g></svg>
       </button>
 
       <div className="deck-card__content">
-        <h2>{deck.title}</h2>
+        <h3>{deck.title}</h3>
+        {isPending || isSelected ? (
+          <span className={`deck-card__selection-state ${isSelected ? 'deck-card__selection-state--selected' : 'deck-card__selection-state--inactive'}`}>
+            {isPending ? 'Updating...' : 'Selected for Smart Practice'}
+          </span>
+        ) : null}
       </div>
 
       <div className="deck-card__bottom">
