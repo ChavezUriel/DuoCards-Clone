@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -253,6 +254,48 @@ class SmartPracticeApiTests(unittest.TestCase):
 
         decks_response = self.client.get("/api/decks")
         self.assertEqual(decks_response.json()[0]["total_cards"], 5)
+
+    def test_draft_cards_are_hidden_from_deck_counts_and_practice(self) -> None:
+        with db_module.get_connection() as connection:
+            result = db_module.upsert_deck(
+                connection,
+                {
+                    "slug": "draft-only",
+                    "title": "Draft Only",
+                    "description": "Cards awaiting enrichment.",
+                    "cards": [
+                        {
+                            "spanish": "Borrador uno",
+                            "english": "Draft one",
+                            "section_name": "Draft",
+                            "generation_phase": "draft",
+                            "generation_metadata": json.dumps({"topic": "draft"}, ensure_ascii=False),
+                        },
+                        {
+                            "spanish": "Borrador dos",
+                            "english": "Draft two",
+                            "section_name": "Draft",
+                            "generation_phase": "draft",
+                            "generation_metadata": json.dumps({"topic": "draft"}, ensure_ascii=False),
+                        },
+                    ],
+                },
+                on_existing="append",
+            )
+            connection.commit()
+
+        decks_response = self.client.get("/api/decks")
+        self.assertEqual(decks_response.status_code, 200)
+        payload = decks_response.json()
+        draft_deck = next(deck for deck in payload if deck["id"] == result.deck_id)
+        self.assertEqual(draft_deck["total_cards"], 0)
+
+        preview_response = self.client.get(f"/api/decks/{result.deck_id}/preview")
+        self.assertEqual(preview_response.status_code, 200)
+        self.assertEqual(preview_response.json()["total_cards"], 0)
+
+        review_response = self.client.get(f"/api/decks/{result.deck_id}/review")
+        self.assertEqual(review_response.status_code, 404)
 
     def test_decks_endpoint_exposes_smart_practice_toggle_state(self) -> None:
         response = self.client.get("/api/decks")

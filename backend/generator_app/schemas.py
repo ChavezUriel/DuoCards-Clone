@@ -5,6 +5,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
+GenerationPhase = Literal["draft", "refined"]
+
+
 def _normalize_text(value: Any) -> str:
     if not isinstance(value, str):
         raise ValueError("Expected a string")
@@ -185,6 +188,41 @@ class GenerateDeckRequest(BaseModel):
     max_repair_attempts: int = Field(default=1, ge=0, le=3)
 
 
+class EnrichDeckRequest(BaseModel):
+    deck_id: int = Field(gt=0)
+    max_repair_attempts: int = Field(default=1, ge=0, le=3)
+
+
+class GenerationPhaseSummary(BaseModel):
+    generation_phase: GenerationPhase
+    draft_cards: int = Field(default=0, ge=0)
+    refined_cards: int = Field(default=0, ge=0)
+    total_cards: int = Field(default=0, ge=0)
+
+
+class GenerateWordSetResponse(BaseModel):
+    spec: DeckGenerationSpec
+    blueprint: DeckBlueprint
+    deck_id: int
+    created_deck: bool
+    inserted_cards: int
+    updated_cards: int
+    deleted_cards: int
+    total_cards: int
+    phase_summary: GenerationPhaseSummary
+    warnings: list[str] = Field(default_factory=list)
+    rejected_cards: list[RejectedCard] = Field(default_factory=list)
+
+
+class EnrichDeckResponse(BaseModel):
+    deck_id: int
+    enriched_cards: int
+    remaining_draft_cards: int
+    phase_summary: GenerationPhaseSummary
+    warnings: list[str] = Field(default_factory=list)
+    rejected_cards: list[RejectedCard] = Field(default_factory=list)
+
+
 class GenerateDeckResponse(BaseModel):
     spec: DeckGenerationSpec
     blueprint: DeckBlueprint
@@ -194,6 +232,7 @@ class GenerateDeckResponse(BaseModel):
     updated_cards: int
     deleted_cards: int
     total_cards: int
+    phase_summary: GenerationPhaseSummary
     warnings: list[str] = Field(default_factory=list)
     rejected_cards: list[RejectedCard] = Field(default_factory=list)
 

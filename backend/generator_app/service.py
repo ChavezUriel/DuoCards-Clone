@@ -17,8 +17,11 @@ from .schemas import (
     DeckBlueprintSection,
     DeckGenerationSpec,
     DeckPreview,
+    EnrichDeckRequest,
     GenerateDeckResponse,
+    GenerateWordSetResponse,
     GeneratedCard,
+    GenerationPhaseSummary,
     RejectedCard,
     SpecFileInfo,
 )
@@ -30,6 +33,8 @@ MODEL_ALIASES = {
 }
 OLLAMA_REQUEST_TIMEOUT_SECONDS = 600
 logger = logging.getLogger("generator_app.service")
+WORD_SET_PROMPT_VERSION = "word-set-v1"
+ENRICHMENT_PROMPT_VERSION = "enrichment-v1"
 
 
 class OllamaError(RuntimeError):
@@ -174,11 +179,42 @@ class DeckGeneratorService:
             rejected_cards=rejected_cards,
         )
 
+    def generate_word_set_and_insert(
+        self,
+        spec_path: str,
+        slug: str | None = None,
+        *,
+        max_repair_attempts: int = 1,
+    ) -> dict[str, Any]:
+        spec = self.load_spec(spec_path, slug)
+        return self._generate_word_set_spec_and_insert(spec, max_repair_attempts=max_repair_attempts)
+
     def generate_and_insert(self, spec_path: str, slug: str | None = None, *, max_repair_attempts: int = 1) -> dict[str, Any]:
         spec = self.load_spec(spec_path, slug)
         return self._generate_spec_and_insert(spec, max_repair_attempts=max_repair_attempts)
 
     def _generate_spec_and_insert(self, spec: DeckGenerationSpec, *, max_repair_attempts: int = 1) -> dict[str, Any]:
+        word_set_result = self._generate_word_set_spec_and_insert(spec, max_repair_attempts=max_repair_attempts)
+        enrich_result = self._enrich_generated_deck(
+            deck_id=word_set_result["deck_id"],
+            spec=spec,
+            max_repair_attempts=max_repair_attempts,
+        )
+        return {
+            "spec": word_set_result["spec"],
+            "blueprint": word_set_result["blueprint"],
+            "warnings": [*word_set_result["warnings"], *enrich_result["warnings"]],
+            "rejected_cards": [*word_set_result["rejected_cards"], *enrich_result["rejected_cards"]],
+            "deck_id": word_set_result["deck_id"],
+            "created_deck": word_set_result["created_deck"],
+            "inserted_cards": word_set_result["inserted_cards"],
+            "updated_cards": word_set_result["updated_cards"],
+            "deleted_cards": word_set_result["deleted_cards"],
+            "total_cards": word_set_result["total_cards"],
+            "phase_summary": enrich_result["phase_summary"],
+        }
+
+    def _generate_word_set_spec_and_insert(self, spec: DeckGenerationSpec, *, max_repair_attempts: int = 1) -> dict[str, Any]:
         preview = self._preview_spec(spec, max_repair_attempts=max_repair_attempts)
         if len(preview.cards) < preview.spec.desired_card_count:
             raise SpecError(
@@ -187,7 +223,7 @@ class DeckGeneratorService:
 
         initialize_database()
         logger.info(
-            "Database insert started: slug=%s overwrite_mode=%s cards=%s",
+            "Word-set insert started: slug=%s overwrite_mode=%s cards=%s",
             preview.spec.slug,
             preview.spec.overwrite_mode,
             preview.spec.desired_card_count,
@@ -198,7 +234,10 @@ class DeckGeneratorService:
             "description": preview.spec.description,
             "language_from": preview.spec.language_from,
             "language_to": preview.spec.language_to,
-            "cards": [card.model_dump(mode="json") for card in preview.cards[: preview.spec.desired_card_count]],
+            "cards": [
+                self._build_draft_card_payload(card=card, spec=preview.spec)
+                for card in preview.cards[: preview.spec.desired_card_count]
+            ],
         }
 
         with get_connection() as connection:
@@ -206,7 +245,7 @@ class DeckGeneratorService:
             connection.commit()
 
         logger.info(
-            "Database insert completed: slug=%s deck_id=%s inserted=%s updated=%s deleted=%s",
+            "Word-set insert completed: slug=%s deck_id=%s inserted=%s updated=%s deleted=%s",
             preview.spec.slug,
             result.deck_id,
             result.inserted_cards,
@@ -225,6 +264,98 @@ class DeckGeneratorService:
             "updated_cards": result.updated_cards,
             "deleted_cards": result.deleted_cards,
             "total_cards": result.total_cards,
+            "phase_summary": self._build_phase_summary(draft_cards=result.total_cards, refined_cards=0),
+        }
+
+    def enrich_generated_deck(self, deck_id: int, *, max_repair_attempts: int = 1) -> dict[str, Any]:
+        return self._enrich_generated_deck(deck_id=deck_id, spec=None, max_repair_attempts=max_repair_attempts)
+
+    def _enrich_generated_deck(
+        self,
+        *,
+        deck_id: int,
+        spec: DeckGenerationSpec | None,
+        max_repair_attempts: int,
+    ) -> dict[str, Any]:
+        initialize_database()
+        with get_connection() as connection:
+            deck_row = connection.execute(
+                "SELECT id, slug, title, description FROM decks WHERE id = ?",
+                (deck_id,),
+            ).fetchone()
+            if deck_row is None:
+                raise SpecError(f"Deck {deck_id} not found")
+
+            draft_rows = connection.execute(
+                """
+                SELECT id, spanish_text, english_text, section_name, generation_metadata
+                FROM cards
+                WHERE deck_id = ? AND generation_phase = 'draft'
+                ORDER BY COALESCE(section_name, ''), id ASC
+                """,
+                (deck_id,),
+            ).fetchall()
+
+            if not draft_rows:
+                phase_counts = self._count_generation_phases(connection, deck_id)
+                return {
+                    "deck_id": deck_id,
+                    "enriched_cards": 0,
+                    "remaining_draft_cards": phase_counts["draft_cards"],
+                    "phase_summary": self._build_phase_summary(**phase_counts),
+                    "warnings": [],
+                    "rejected_cards": [],
+                }
+
+            grouped_rows = self._group_draft_rows_by_section(draft_rows)
+            rejected_cards: list[RejectedCard] = []
+            warnings: list[str] = []
+            enriched_cards = 0
+
+            for section_name, rows in grouped_rows.items():
+                context_spec = spec or self._build_spec_from_draft_rows(deck_row=deck_row, rows=rows)
+                batch_size = min(max(context_spec.batch_size, 4), 12)
+                for batch_start in range(0, len(rows), batch_size):
+                    batch_rows = rows[batch_start : batch_start + batch_size]
+                    payload, used_model = self._chat_json_with_fallback(
+                        spec=context_spec,
+                        system_prompt=_enrichment_system_prompt(),
+                        user_prompt=_build_enrichment_prompt(spec=context_spec, section_name=section_name, rows=batch_rows),
+                        temperature=0.1,
+                    )
+                    if used_model != context_spec.model:
+                        warnings.append(
+                            f"Enrichment for section '{section_name or context_spec.title}' fell back from {context_spec.model} to {used_model}"
+                        )
+                    accepted_batch, rejected_batch = self._parse_and_validate_enriched_cards(
+                        payload=payload,
+                        spec=context_spec,
+                        requested_rows=batch_rows,
+                    )
+                    if rejected_batch and max_repair_attempts > 0:
+                        repaired_cards, rejected_batch, repair_warnings = self._repair_enriched_cards(
+                            spec=context_spec,
+                            section_name=section_name,
+                            requested_rows=batch_rows,
+                            rejected_cards=rejected_batch,
+                            max_repair_attempts=max_repair_attempts,
+                            preferred_models=[used_model, *context_spec.fallback_models, context_spec.model],
+                        )
+                        accepted_batch.extend(repaired_cards)
+                        warnings.extend(repair_warnings)
+                    rejected_cards.extend(rejected_batch)
+                    enriched_cards += self._persist_enriched_cards(connection=connection, rows=batch_rows, cards=accepted_batch)
+
+            connection.commit()
+            phase_counts = self._count_generation_phases(connection, deck_id)
+
+        return {
+            "deck_id": deck_id,
+            "enriched_cards": enriched_cards,
+            "remaining_draft_cards": phase_counts["draft_cards"],
+            "phase_summary": self._build_phase_summary(**phase_counts),
+            "warnings": warnings,
+            "rejected_cards": rejected_cards,
         }
 
     def generate_all_and_insert(self, spec_path: str, *, max_repair_attempts: int = 1) -> list[GenerateDeckResponse]:
@@ -425,12 +556,239 @@ class DeckGeneratorService:
 
         return accepted_cards, warnings, rejected_cards
 
+    def _build_draft_card_payload(self, *, card: GeneratedCard, spec: DeckGenerationSpec) -> dict[str, Any]:
+        return {
+            "spanish": card.spanish,
+            "english": card.english,
+            "section_name": card.section_name,
+            "part_of_speech": None,
+            "definition_en": None,
+            "main_translations_es": [],
+            "collocations": [],
+            "example_sentence": None,
+            "example_es": None,
+            "example_en": None,
+            "generation_phase": "draft",
+            "generation_metadata": {
+                "slug": spec.slug,
+                "topic": spec.topic,
+                "difficulty": spec.difficulty,
+                "learner_profile": spec.learner_profile,
+                "generation_notes": spec.generation_notes,
+                "model": spec.model,
+                "fallback_models": spec.fallback_models,
+                "batch_size": spec.batch_size,
+                "word_set_prompt_version": WORD_SET_PROMPT_VERSION,
+            },
+        }
+
+    def _parse_and_validate_enriched_cards(
+        self,
+        *,
+        payload: dict[str, Any],
+        spec: DeckGenerationSpec,
+        requested_rows: list[Any],
+    ) -> tuple[list[GeneratedCard], list[RejectedCard]]:
+        accepted_cards, rejected_cards = self._parse_and_validate_cards(
+            payload=payload,
+            spec=spec,
+            seen_pairs=set(),
+            require_details=True,
+        )
+        requested_pairs = {
+            (row["spanish_text"].casefold(), row["english_text"].casefold()): row
+            for row in requested_rows
+        }
+        matched_pairs: set[tuple[str, str]] = set()
+        filtered_cards: list[GeneratedCard] = []
+
+        for card in accepted_cards:
+            pair = (card.spanish.casefold(), card.english.casefold())
+            if pair not in requested_pairs:
+                rejected_cards.append(
+                    RejectedCard(
+                        raw_card=card.model_dump(mode="json"),
+                        issues=["Card pair was not requested for enrichment"],
+                    )
+                )
+                continue
+            if pair in matched_pairs:
+                rejected_cards.append(
+                    RejectedCard(
+                        raw_card=card.model_dump(mode="json"),
+                        issues=["Duplicate enriched card pair in response"],
+                    )
+                )
+                continue
+            matched_pairs.add(pair)
+            filtered_cards.append(card)
+
+        for pair, row in requested_pairs.items():
+            if pair in matched_pairs:
+                continue
+            rejected_cards.append(
+                RejectedCard(
+                    raw_card={
+                        "spanish": row["spanish_text"],
+                        "english": row["english_text"],
+                        "section_name": row["section_name"],
+                    },
+                    issues=["Missing enriched card for requested pair"],
+                )
+            )
+
+        return filtered_cards, rejected_cards
+
+    def _repair_enriched_cards(
+        self,
+        *,
+        spec: DeckGenerationSpec,
+        section_name: str | None,
+        requested_rows: list[Any],
+        rejected_cards: list[RejectedCard],
+        max_repair_attempts: int,
+        preferred_models: list[str] | None = None,
+    ) -> tuple[list[GeneratedCard], list[RejectedCard], list[str]]:
+        current_rejections = rejected_cards
+        accepted_cards: list[GeneratedCard] = []
+        warnings: list[str] = []
+
+        for _ in range(max_repair_attempts):
+            if not current_rejections:
+                break
+            repair_payload, used_model = self._chat_json_with_fallback(
+                spec=spec,
+                system_prompt=_enrichment_repair_system_prompt(),
+                user_prompt=_build_enrichment_repair_prompt(
+                    spec=spec,
+                    section_name=section_name,
+                    requested_rows=requested_rows,
+                    rejected_cards=current_rejections,
+                ),
+                temperature=0.05,
+                preferred_models=preferred_models,
+            )
+            if used_model != spec.model:
+                warnings.append(
+                    f"Enrichment repair for section '{section_name or spec.title}' fell back from {spec.model} to {used_model}"
+                )
+            accepted_batch, current_rejections = self._parse_and_validate_enriched_cards(
+                payload=repair_payload,
+                spec=spec,
+                requested_rows=requested_rows,
+            )
+            accepted_cards.extend(accepted_batch)
+
+        return accepted_cards, current_rejections, warnings
+
+    def _persist_enriched_cards(self, *, connection: Any, rows: list[Any], cards: list[GeneratedCard]) -> int:
+        if not cards:
+            return 0
+        row_by_pair = {
+            (row["spanish_text"].casefold(), row["english_text"].casefold()): row
+            for row in rows
+        }
+        updated_count = 0
+        for card in cards:
+            pair = (card.spanish.casefold(), card.english.casefold())
+            row = row_by_pair.get(pair)
+            if row is None:
+                continue
+            metadata = _decode_generation_metadata(row["generation_metadata"])
+            metadata["enrichment_prompt_version"] = ENRICHMENT_PROMPT_VERSION
+            connection.execute(
+                """
+                UPDATE cards
+                SET
+                    generation_phase = 'refined',
+                    generation_metadata = ?,
+                    part_of_speech = ?,
+                    definition_en = ?,
+                    main_translations_es = ?,
+                    collocations = ?,
+                    example_sentence = ?,
+                    example_es = ?,
+                    example_en = ?
+                WHERE id = ?
+                """,
+                (
+                    json.dumps(metadata, ensure_ascii=False, sort_keys=True),
+                    card.part_of_speech,
+                    card.definition_en,
+                    json.dumps(card.main_translations_es, ensure_ascii=False),
+                    json.dumps(card.collocations, ensure_ascii=False),
+                    card.example_sentence,
+                    card.example_es,
+                    card.example_en,
+                    row["id"],
+                ),
+            )
+            updated_count += 1
+        return updated_count
+
+    def _count_generation_phases(self, connection: Any, deck_id: int) -> dict[str, int]:
+        row = connection.execute(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN generation_phase = 'draft' THEN 1 ELSE 0 END), 0) AS draft_cards,
+                COALESCE(SUM(CASE WHEN generation_phase = 'refined' THEN 1 ELSE 0 END), 0) AS refined_cards,
+                COUNT(*) AS total_cards
+            FROM cards
+            WHERE deck_id = ?
+            """,
+            (deck_id,),
+        ).fetchone()
+        return {
+            "draft_cards": int(row["draft_cards"]),
+            "refined_cards": int(row["refined_cards"]),
+            "total_cards": int(row["total_cards"]),
+        }
+
+    def _build_phase_summary(self, *, draft_cards: int, refined_cards: int, total_cards: int | None = None) -> GenerationPhaseSummary:
+        resolved_total = refined_cards + draft_cards if total_cards is None else total_cards
+        generation_phase = "refined" if resolved_total > 0 and draft_cards == 0 else "draft"
+        return GenerationPhaseSummary(
+            generation_phase=generation_phase,
+            draft_cards=draft_cards,
+            refined_cards=refined_cards,
+            total_cards=resolved_total,
+        )
+
+    def _group_draft_rows_by_section(self, rows: list[Any]) -> dict[str | None, list[Any]]:
+        grouped: dict[str | None, list[Any]] = {}
+        for row in rows:
+            grouped.setdefault(row["section_name"], []).append(row)
+        return grouped
+
+    def _build_spec_from_draft_rows(self, *, deck_row: Any, rows: list[Any]) -> DeckGenerationSpec:
+        metadata = _decode_generation_metadata(rows[0]["generation_metadata"])
+        return DeckGenerationSpec(
+            slug=str(metadata.get("slug") or deck_row["slug"]),
+            title=str(deck_row["title"]),
+            description=str(deck_row["description"]),
+            topic=str(metadata.get("topic") or deck_row["title"]),
+            difficulty=str(metadata.get("difficulty") or "beginner"),
+            desired_card_count=max(len(rows), 4),
+            batch_size=min(max(int(metadata.get("batch_size") or len(rows) or 4), 4), 20),
+            model=str(metadata.get("model") or "qwen3.5:latest"),
+            fallback_models=[str(item) for item in metadata.get("fallback_models", []) if isinstance(item, str)],
+            overwrite_mode="append",
+            language_from="es",
+            language_to="en",
+            learner_profile=metadata.get("learner_profile") if isinstance(metadata.get("learner_profile"), str) else None,
+            generation_notes=metadata.get("generation_notes") if isinstance(metadata.get("generation_notes"), str) else None,
+            vocabulary_focus=[],
+            excluded_vocabulary=[],
+            sections=[],
+        )
+
     def _parse_and_validate_cards(
         self,
         *,
         payload: dict[str, Any],
         spec: DeckGenerationSpec,
         seen_pairs: set[tuple[str, str]],
+        require_details: bool = False,
     ) -> tuple[list[GeneratedCard], list[RejectedCard]]:
         raw_cards = _extract_card_list(payload)
 
@@ -454,7 +812,12 @@ class DeckGeneratorService:
                 )
                 continue
 
-            issues = _validate_card_quality(card, excluded_terms=excluded_terms, seen_pairs=seen_pairs)
+            issues = _validate_card_quality(
+                card,
+                excluded_terms=excluded_terms,
+                seen_pairs=seen_pairs,
+                require_details=require_details,
+            )
             if issues:
                 rejected_cards.append(RejectedCard(raw_card=card.model_dump(mode="json"), issues=issues))
                 continue
@@ -631,11 +994,18 @@ def _extract_card_list(payload: Any) -> list[Any]:
 
 def _card_generation_system_prompt() -> str:
     return (
-        "You generate high-quality Spanish to English flashcards for Spanish-speaking learners. "
-        "Return JSON only. Every card must be practical, natural, and non-duplicative. "
-        "Use beginner-friendly, idiomatic English and realistic examples. "
-        "The 'example_sentence' and 'example_en' fields must be English. "
-        "The 'example_es' field must be Spanish."
+        "You design high-quality Spanish to English flashcard word sets for Spanish-speaking learners. "
+        "Return JSON only. Focus on building a coherent, well-distributed set of card pairs before any metadata is added. "
+        "Avoid duplicate concepts, avoid trivial variants, and keep each pair practical for spaced repetition."
+    )
+
+
+def _enrichment_system_prompt() -> str:
+    return (
+        "You enrich an existing Spanish to English flashcard set with high-quality learning metadata. "
+        "Return JSON only with a top-level 'cards' list. Preserve every Spanish-English pair exactly as requested. "
+        "Add concise, natural linguistic details: part_of_speech, definition_en, 1 to 3 main_translations_es, 2 to 4 collocations, "
+        "and mutually consistent example_sentence, example_es, example_en."
     )
 
 
@@ -644,6 +1014,13 @@ def _repair_system_prompt() -> str:
         "You repair invalid flashcard JSON for Spanish to English learning decks. "
         "Return JSON only with a top-level 'cards' list. Fix the reported issues and keep cards natural and concise. "
         "Preserve the language direction exactly: Spanish prompt, English answer, English example_sentence, Spanish example_es, English example_en."
+    )
+
+
+def _enrichment_repair_system_prompt() -> str:
+    return (
+        "You repair invalid enriched flashcard JSON for Spanish to English learning decks. "
+        "Return JSON only with a top-level 'cards' list. Preserve the requested Spanish-English pairs exactly and fix only the reported issues."
     )
 
 
@@ -675,6 +1052,50 @@ def _build_card_generation_prompt(
                 {
                     "spanish": "string",
                     "english": "string",
+                }
+            ]
+        },
+        "rules": [
+            "Return exactly the requested number of cards if possible.",
+            "Spanish must be the prompt and English must be the answer.",
+            "Do not repeat a Spanish-English pair that already exists.",
+            "Do not output metadata fields in this phase; only output spanish and english.",
+            "Distribute the set across the section's lexical focus instead of clustering around one subtopic.",
+            "Prefer communicatively distinct cards over near-synonyms or inflectional variants.",
+            "Mix useful nouns, verbs, expressions, and questions when natural for the section.",
+            "Keep the English answer short, natural, and learner-friendly.",
+            "Avoid meta commentary, markdown, or explanations outside the JSON.",
+            "Keep cards aligned to the requested section and difficulty.",
+        ],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def _build_enrichment_prompt(*, spec: DeckGenerationSpec, section_name: str | None, rows: list[Any]) -> str:
+    payload = {
+        "task": "Enrich an existing Spanish to English flashcard set",
+        "deck": {
+            "slug": spec.slug,
+            "title": spec.title,
+            "description": spec.description,
+            "topic": spec.topic,
+            "difficulty": spec.difficulty,
+            "learner_profile": spec.learner_profile,
+            "generation_notes": spec.generation_notes,
+        },
+        "section_name": section_name,
+        "cards_to_enrich": [
+            {
+                "spanish": row["spanish_text"],
+                "english": row["english_text"],
+            }
+            for row in rows
+        ],
+        "required_output": {
+            "cards": [
+                {
+                    "spanish": "string",
+                    "english": "string",
                     "part_of_speech": "string",
                     "definition_en": "string",
                     "main_translations_es": ["string"],
@@ -686,16 +1107,14 @@ def _build_card_generation_prompt(
             ]
         },
         "rules": [
-            "Return exactly the requested number of cards if possible.",
-            "Spanish must be the prompt and English must be the answer.",
-            "Do not repeat a Spanish-English pair that already exists.",
+            "Return one enriched card for every requested pair.",
+            "Preserve spanish and english exactly as requested.",
+            "definition_en must be concise and natural.",
             "main_translations_es must contain 1 to 3 short Spanish variants or close equivalents.",
             "collocations must contain 2 to 4 natural English collocations.",
-            "example_sentence must be a natural English sentence that uses the English answer.",
-            "example_es must be Spanish and example_en must be English.",
-            "All three example fields are required and must be mutually consistent.",
-            "Avoid meta commentary, markdown, or explanations outside the JSON.",
-            "Keep cards aligned to the requested section and difficulty.",
+            "example_sentence must be an English sentence that uses the English answer naturally.",
+            "example_es must be Spanish and example_en must be the English counterpart.",
+            "All example fields are required and must be mutually consistent.",
         ],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
@@ -735,11 +1154,54 @@ def _build_repair_prompt(
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
+def _build_enrichment_repair_prompt(
+    *,
+    spec: DeckGenerationSpec,
+    section_name: str | None,
+    requested_rows: list[Any],
+    rejected_cards: list[RejectedCard],
+) -> str:
+    payload = {
+        "task": "Repair invalid enriched flashcards without changing the requested pairs",
+        "deck": {
+            "slug": spec.slug,
+            "topic": spec.topic,
+            "difficulty": spec.difficulty,
+        },
+        "section_name": section_name,
+        "requested_pairs": [
+            {
+                "spanish": row["spanish_text"],
+                "english": row["english_text"],
+            }
+            for row in requested_rows
+        ],
+        "rejected_cards": [card.model_dump(mode="json") for card in rejected_cards],
+        "required_output": {
+            "cards": [
+                {
+                    "spanish": "string",
+                    "english": "string",
+                    "part_of_speech": "string",
+                    "definition_en": "string",
+                    "main_translations_es": ["string"],
+                    "collocations": ["string"],
+                    "example_sentence": "string",
+                    "example_es": "string",
+                    "example_en": "string",
+                }
+            ]
+        },
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
 def _validate_card_quality(
     card: GeneratedCard,
     *,
     excluded_terms: set[str],
     seen_pairs: set[tuple[str, str]],
+    require_details: bool,
 ) -> list[str]:
     issues: list[str] = []
     pair = (card.spanish.casefold(), card.english.casefold())
@@ -747,25 +1209,40 @@ def _validate_card_quality(
         issues.append("Duplicate Spanish-English pair")
     if card.spanish.casefold() == card.english.casefold():
         issues.append("Spanish and English text cannot be identical")
-    if not 1 <= len(card.main_translations_es) <= 3:
-        issues.append("main_translations_es must contain between 1 and 3 items")
-    if not 2 <= len(card.collocations) <= 4:
-        issues.append("collocations must contain between 2 and 4 items")
-    if not card.example_sentence or not card.example_es or not card.example_en:
-        issues.append("example_sentence, example_es, and example_en are all required")
-    if card.example_sentence and _contains_inverted_punctuation(card.example_sentence):
-        issues.append("example_sentence must be in English, not Spanish punctuation")
-    if card.example_en and _contains_inverted_punctuation(card.example_en):
-        issues.append("example_en must be in English, not Spanish punctuation")
-    if card.example_es and _looks_english_like(card.example_es):
-        issues.append("example_es appears to be English instead of Spanish")
-    if card.example_sentence and _looks_spanish_like(card.example_sentence):
-        issues.append("example_sentence appears to be Spanish instead of English")
-    if card.example_en and _looks_spanish_like(card.example_en):
-        issues.append("example_en appears to be Spanish instead of English")
+    if require_details:
+        if not card.part_of_speech:
+            issues.append("part_of_speech is required")
+        if not card.definition_en:
+            issues.append("definition_en is required")
+        if not 1 <= len(card.main_translations_es) <= 3:
+            issues.append("main_translations_es must contain between 1 and 3 items")
+        if not 2 <= len(card.collocations) <= 4:
+            issues.append("collocations must contain between 2 and 4 items")
+        if not card.example_sentence or not card.example_es or not card.example_en:
+            issues.append("example_sentence, example_es, and example_en are all required")
+        if card.example_sentence and _contains_inverted_punctuation(card.example_sentence):
+            issues.append("example_sentence must be in English, not Spanish punctuation")
+        if card.example_en and _contains_inverted_punctuation(card.example_en):
+            issues.append("example_en must be in English, not Spanish punctuation")
+        if card.example_es and _looks_english_like(card.example_es):
+            issues.append("example_es appears to be English instead of Spanish")
+        if card.example_sentence and _looks_spanish_like(card.example_sentence):
+            issues.append("example_sentence appears to be Spanish instead of English")
+        if card.example_en and _looks_spanish_like(card.example_en):
+            issues.append("example_en appears to be Spanish instead of English")
     if excluded_terms and any(term in card.spanish.casefold() for term in excluded_terms):
         issues.append("Card uses excluded vocabulary")
     return issues
+
+
+def _decode_generation_metadata(value: Any) -> dict[str, Any]:
+    if not isinstance(value, str) or not value.strip():
+        return {}
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _contains_inverted_punctuation(value: str) -> bool:

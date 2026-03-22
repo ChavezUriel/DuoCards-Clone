@@ -174,6 +174,8 @@ class DeckGeneratorServiceTests(unittest.TestCase):
         client = ScriptedOllamaClient(
             [
                 ("qwen3.5:latest", build_valid_batch("batch-one")),
+                ("qwen3.5:latest", build_valid_batch("batch-one")),
+                ("qwen3.5:latest", build_valid_batch("batch-two")),
                 ("qwen3.5:latest", build_valid_batch("batch-two")),
             ]
         )
@@ -255,6 +257,7 @@ class DeckGeneratorServiceTests(unittest.TestCase):
         client = ScriptedOllamaClient(
             [
                 ("qwen3.5:latest", build_valid_batch("conflict-one")),
+                ("qwen3.5:latest", build_valid_batch("conflict-one")),
                 ("qwen3.5:latest", build_valid_batch("conflict-two")),
             ]
         )
@@ -267,6 +270,14 @@ class DeckGeneratorServiceTests(unittest.TestCase):
             service.generate_and_insert(spec_path, max_repair_attempts=0)
 
     def test_repair_prefers_last_successful_fallback_model(self) -> None:
+        invalid_word_set_batch = {
+            "cards": [
+                {"spanish": "Billete", "english": "Ticket"},
+                {"spanish": "Billete", "english": "Ticket"},
+                {"spanish": "Station", "english": "Station"},
+                {"spanish": "Andén", "english": "Platform"},
+            ]
+        }
         spec_path = self.write_spec(
             "repair.yaml",
             {
@@ -295,15 +306,17 @@ class DeckGeneratorServiceTests(unittest.TestCase):
         client = ScriptedOllamaClient(
             [
                 ("qwen3.5:latest", OllamaError("empty response")),
-                ("gemma3:4b", build_invalid_station_batch()),
+                ("gemma3:4b", invalid_word_set_batch),
                 ("gemma3:4b", build_valid_batch("repair")),
+                ("qwen3.5:latest", build_valid_batch("repair")),
+                ("qwen3.5:latest", build_valid_batch("repair")),
             ]
         )
         service = DeckGeneratorService(ollama_client=client)
 
         result = service.generate_and_insert(spec_path, max_repair_attempts=1)
 
-        self.assertEqual(client.calls, ["qwen3.5:latest", "gemma3:4b", "gemma3:4b"])
+        self.assertEqual(client.calls, ["qwen3.5:latest", "gemma3:4b", "gemma3:4b", "qwen3.5:latest", "qwen3.5:latest"])
         self.assertEqual(result["total_cards"], 4)
         self.assertTrue(any("fell back from qwen3.5:latest to gemma3:4b" in warning for warning in result["warnings"]))
 
@@ -334,7 +347,10 @@ class DeckGeneratorServiceTests(unittest.TestCase):
             },
         )
         client = ScriptedOllamaClient(
-            [("qwen3.5:latest", {"flashcards": build_valid_batch("flashcards")["cards"]})]
+            [
+                ("qwen3.5:latest", {"flashcards": build_valid_batch("flashcards")["cards"]}),
+                ("qwen3.5:latest", build_valid_batch("flashcards")),
+            ]
         )
         service = DeckGeneratorService(ollama_client=client)
 
@@ -370,7 +386,10 @@ class DeckGeneratorServiceTests(unittest.TestCase):
             },
         )
         client = ScriptedOllamaClient(
-            [("qwen3.5:latest", build_valid_batch("bare-list")["cards"])]
+            [
+                ("qwen3.5:latest", build_valid_batch("bare-list")["cards"]),
+                ("qwen3.5:latest", build_valid_batch("bare-list")),
+            ]
         )
         service = DeckGeneratorService(ollama_client=client)
 
@@ -378,6 +397,98 @@ class DeckGeneratorServiceTests(unittest.TestCase):
 
         self.assertEqual(result["total_cards"], 4)
         self.assertEqual(result["inserted_cards"], 4)
+
+    def test_generate_word_set_and_insert_persists_draft_cards(self) -> None:
+        spec_path = self.write_spec(
+            "word-set.yaml",
+            {
+                "deck": {
+                    "slug": "word-set-deck",
+                    "title": "Word Set Deck",
+                    "description": "Persist the base card set before enrichment.",
+                    "topic": "cafe",
+                    "difficulty": "beginner",
+                    "desired_card_count": 4,
+                    "batch_size": 4,
+                    "model": "qwen3.5:latest",
+                    "fallback_models": [],
+                    "overwrite_mode": "replace",
+                    "sections": [
+                        {
+                            "name": "Cafe",
+                            "communicative_goal": "Order politely.",
+                            "lexical_focus": ["coffee", "bill"],
+                            "target_card_count": 4,
+                        }
+                    ],
+                }
+            },
+        )
+        client = ScriptedOllamaClient([("qwen3.5:latest", build_valid_batch("draft-only"))])
+        service = DeckGeneratorService(ollama_client=client)
+
+        result = service.generate_word_set_and_insert(spec_path, max_repair_attempts=0)
+
+        self.assertEqual(result["phase_summary"].generation_phase, "draft")
+        self.assertEqual(result["phase_summary"].draft_cards, 4)
+        with db_module.get_connection() as connection:
+            rows = connection.execute(
+                "SELECT generation_phase, definition_en, example_sentence FROM cards WHERE deck_id = ? ORDER BY id ASC",
+                (result["deck_id"],),
+            ).fetchall()
+        self.assertEqual(len(rows), 4)
+        self.assertTrue(all(row["generation_phase"] == "draft" for row in rows))
+        self.assertTrue(all(row["definition_en"] is None for row in rows))
+        self.assertTrue(all(row["example_sentence"] is None for row in rows))
+
+    def test_enrich_generated_deck_updates_draft_cards_to_refined(self) -> None:
+        spec_path = self.write_spec(
+            "enrich.yaml",
+            {
+                "deck": {
+                    "slug": "enrich-deck",
+                    "title": "Enrich Deck",
+                    "description": "Enrich draft cards in a second step.",
+                    "topic": "cafe",
+                    "difficulty": "beginner",
+                    "desired_card_count": 4,
+                    "batch_size": 4,
+                    "model": "qwen3.5:latest",
+                    "fallback_models": [],
+                    "overwrite_mode": "replace",
+                    "sections": [
+                        {
+                            "name": "Cafe",
+                            "communicative_goal": "Order politely.",
+                            "lexical_focus": ["coffee", "bill"],
+                            "target_card_count": 4,
+                        }
+                    ],
+                }
+            },
+        )
+        client = ScriptedOllamaClient(
+            [
+                ("qwen3.5:latest", build_valid_batch("draft-stage")),
+                ("qwen3.5:latest", build_valid_batch("draft-stage")),
+            ]
+        )
+        service = DeckGeneratorService(ollama_client=client)
+
+        draft_result = service.generate_word_set_and_insert(spec_path, max_repair_attempts=0)
+        enrich_result = service.enrich_generated_deck(draft_result["deck_id"], max_repair_attempts=0)
+
+        self.assertEqual(enrich_result["enriched_cards"], 4)
+        self.assertEqual(enrich_result["remaining_draft_cards"], 0)
+        self.assertEqual(enrich_result["phase_summary"].generation_phase, "refined")
+        with db_module.get_connection() as connection:
+            rows = connection.execute(
+                "SELECT generation_phase, definition_en, example_sentence FROM cards WHERE deck_id = ? ORDER BY id ASC",
+                (draft_result["deck_id"],),
+            ).fetchall()
+        self.assertTrue(all(row["generation_phase"] == "refined" for row in rows))
+        self.assertTrue(all(isinstance(row["definition_en"], str) and row["definition_en"] for row in rows))
+        self.assertTrue(all(isinstance(row["example_sentence"], str) and row["example_sentence"] for row in rows))
 
 
 if __name__ == "__main__":

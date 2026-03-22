@@ -127,6 +127,7 @@ def get_session_snapshot(connection: sqlite3.Connection, session_id: int) -> dic
         WHERE psc.session_id = ?
             AND psc.status = 'pending'
             AND c.is_enabled = 1
+            AND c.generation_phase = 'refined'
             AND d.is_enabled_in_smart_practice = 1
         ORDER BY psc.queue_position ASC
         LIMIT 1
@@ -233,7 +234,7 @@ def _choose_session_mode(connection: sqlite3.Connection, settings: PracticeSetti
         FROM cards c
         JOIN decks d ON d.id = c.deck_id
         LEFT JOIN card_progress cp ON cp.card_id = c.id
-        WHERE c.is_enabled = 1 AND d.is_enabled_in_smart_practice = 1
+        WHERE c.is_enabled = 1 AND c.generation_phase = 'refined' AND d.is_enabled_in_smart_practice = 1
         """
     ).fetchone()
     unmastered_count = counts["unmastered_count"]
@@ -286,6 +287,7 @@ def _select_new_material_cards(connection: sqlite3.Connection, settings: Practic
         JOIN decks d ON d.id = c.deck_id
         LEFT JOIN card_progress cp ON cp.card_id = c.id
         WHERE c.is_enabled = 1
+            AND c.generation_phase = 'refined'
             AND d.is_enabled_in_smart_practice = 1
             AND (cp.initial_mastered_at IS NULL OR cp.card_id IS NULL)
         ORDER BY c.id ASC
@@ -310,6 +312,7 @@ def _select_review_cards(connection: sqlite3.Connection, settings: PracticeSetti
         JOIN decks d ON d.id = c.deck_id
         JOIN card_progress cp ON cp.card_id = c.id
         WHERE c.is_enabled = 1
+            AND c.generation_phase = 'refined'
             AND d.is_enabled_in_smart_practice = 1
             AND cp.initial_mastered_at IS NOT NULL
         ORDER BY c.id ASC

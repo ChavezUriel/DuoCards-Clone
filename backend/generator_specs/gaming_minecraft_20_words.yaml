@@ -1,0 +1,104 @@
+decks:
+  - slug: videojuegos-esenciales-20
+    title: Videojuegos Esenciales
+    description: Vocabulario base para hablar de partidas, objetivos y acciones comunes en videojuegos.
+    topic: videojuegos
+    difficulty: elementary
+    desired_card_count: 20
+    batch_size: 8
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: replace
+    learner_profile: Estudiantes hispanohablantes que quieren entender y usar ingles comun en videojuegos.
+    generation_notes: Prioriza terminos utiles y frecuentes. Evita nombres propios de franquicias y evita sinonimos demasiado cercanos.
+    sections:
+      - name: Acciones de partida
+        communicative_goal: Comprender y decir acciones basicas que ocurren durante una partida.
+        lexical_focus:
+          - jump
+          - run
+          - attack
+          - defend
+          - aim
+        target_card_count: 5
+      - name: Objetivos y progreso
+        communicative_goal: Hablar de misiones, progreso y resultados del jugador.
+        lexical_focus:
+          - level
+          - mission
+          - score
+          - reward
+          - checkpoint
+        target_card_count: 5
+      - name: Roles y equipo
+        communicative_goal: Entender palabras para cooperar con otros jugadores.
+        lexical_focus:
+          - teammate
+          - leader
+          - healer
+          - tank
+          - support
+        target_card_count: 5
+      - name: Estado y estrategia
+        communicative_goal: Reconocer estados del juego y decisiones tacticas frecuentes.
+        lexical_focus:
+          - health
+          - damage
+          - shield
+          - strategy
+          - respawn
+        target_card_count: 5
+
+  - slug: minecraft-supervivencia-20
+    title: Minecraft Supervivencia
+    description: Vocabulario esencial para hablar de recursos, crafteo, construccion y supervivencia en Minecraft.
+    topic: minecraft survival
+    difficulty: elementary
+    desired_card_count: 20
+    batch_size: 8
+    model: qwen3.5:latest
+    fallback_models:
+      - gemma3:4b
+      - llama3.1:latest
+    overwrite_mode: replace
+    learner_profile: Estudiantes hispanohablantes que juegan Minecraft y quieren vocabulario ingles claro y util.
+    generation_notes: Mantén el vocabulario muy reconocible dentro de Minecraft, evita tecnicismos raros y distribuye bien recursos, crafteo, exploracion y combate.
+    sections:
+      - name: Recursos y bloques
+        communicative_goal: Identificar materiales y bloques comunes del juego.
+        lexical_focus:
+          - wood
+          - stone
+          - coal
+          - iron
+          - block
+        target_card_count: 5
+      - name: Herramientas y crafteo
+        communicative_goal: Entender acciones y objetos para fabricar y usar herramientas.
+        lexical_focus:
+          - craft
+          - pickaxe
+          - shovel
+          - furnace
+          - torch
+        target_card_count: 5
+      - name: Construccion y refugio
+        communicative_goal: Hablar de construir, protegerse y organizar una base.
+        lexical_focus:
+          - build
+          - shelter
+          - wall
+          - door
+          - chest
+        target_card_count: 5
+      - name: Exploracion y supervivencia
+        communicative_goal: Reconocer vocabulario de exploracion, hambre y combate basico.
+        lexical_focus:
+          - cave
+          - map
+          - hunger
+          - zombie
+          - survive
+        target_card_count: 5

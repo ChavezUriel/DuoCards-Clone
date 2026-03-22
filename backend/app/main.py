@@ -69,7 +69,7 @@ def list_decks() -> list[DeckSummary]:
             COALESCE(SUM(CASE WHEN cp.last_result = 'known' THEN 1 ELSE 0 END), 0) AS known_cards,
             COALESCE(SUM(CASE WHEN cp.last_result = 'unknown' THEN 1 ELSE 0 END), 0) AS unknown_cards
         FROM decks d
-        LEFT JOIN cards c ON c.deck_id = d.id AND c.is_enabled = 1
+        LEFT JOIN cards c ON c.deck_id = d.id AND c.is_enabled = 1 AND c.generation_phase = 'refined'
         LEFT JOIN card_progress cp ON cp.card_id = c.id
         GROUP BY d.id, d.slug, d.title, d.description, d.is_enabled_in_smart_practice
         ORDER BY d.id
@@ -130,7 +130,7 @@ def get_review_card(deck_id: int) -> ReviewCard:
         FROM cards c
         JOIN decks d ON d.id = c.deck_id
         LEFT JOIN card_progress cp ON cp.card_id = c.id
-        WHERE c.deck_id = ? AND c.is_enabled = 1
+        WHERE c.deck_id = ? AND c.is_enabled = 1 AND c.generation_phase = 'refined'
         ORDER BY
             review_stage ASC,
             CASE WHEN cp.last_result = 'unknown' THEN COALESCE(cp.unknown_count, 0) * -1 ELSE 0 END ASC,
@@ -161,7 +161,7 @@ def get_deck_progress(deck_id: int) -> DeckProgress:
             COALESCE(SUM(CASE WHEN cp.last_result = 'known' THEN 1 ELSE 0 END), 0) AS known_cards,
             COALESCE(SUM(CASE WHEN cp.last_result = 'unknown' THEN 1 ELSE 0 END), 0) AS unknown_cards
         FROM decks d
-        LEFT JOIN cards c ON c.deck_id = d.id AND c.is_enabled = 1
+        LEFT JOIN cards c ON c.deck_id = d.id AND c.is_enabled = 1 AND c.generation_phase = 'refined'
         LEFT JOIN card_progress cp ON cp.card_id = c.id
         WHERE d.id = ?
         GROUP BY d.id
@@ -209,7 +209,7 @@ def get_deck_preview(deck_id: int) -> DeckPreview:
             COALESCE(c.section_name, d.title) AS section_name
         FROM cards c
         JOIN decks d ON d.id = c.deck_id
-        WHERE c.deck_id = ?
+        WHERE c.deck_id = ? AND c.generation_phase = 'refined'
         ORDER BY COALESCE(c.section_name, d.title) ASC, c.id ASC
     """
 
@@ -234,7 +234,7 @@ def get_deck_preview(deck_id: int) -> DeckPreview:
 @app.post("/api/reviews", response_model=ReviewResult)
 def submit_review(payload: ReviewSubmission) -> ReviewResult:
     now = datetime.now(timezone.utc).isoformat()
-    card_query = "SELECT id FROM cards WHERE id = ? AND is_enabled = 1"
+    card_query = "SELECT id FROM cards WHERE id = ? AND is_enabled = 1 AND generation_phase = 'refined'"
     progress_query = "SELECT known_count, unknown_count, known_streak, initial_mastered_at FROM card_progress WHERE card_id = ?"
 
     with get_connection() as connection:

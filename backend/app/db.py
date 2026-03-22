@@ -14,6 +14,8 @@ DECK_EXPANSION_PATTERN = "deck_expansions*.json"
 
 DEFAULT_LANGUAGE_FROM = "es"
 DEFAULT_LANGUAGE_TO = "en"
+DEFAULT_GENERATION_PHASE = "refined"
+GENERATION_PHASES = {"draft", "refined"}
 
 
 @dataclass(slots=True)
@@ -234,6 +236,8 @@ CREATE TABLE IF NOT EXISTS cards (
     spanish_text TEXT NOT NULL,
     english_text TEXT NOT NULL,
     is_enabled INTEGER NOT NULL DEFAULT 1 CHECK(is_enabled IN (0, 1)),
+    generation_phase TEXT NOT NULL DEFAULT 'refined' CHECK(generation_phase IN ('draft', 'refined')),
+    generation_metadata TEXT NOT NULL DEFAULT '{}',
     section_name TEXT,
     part_of_speech TEXT,
     definition_en TEXT,
@@ -417,6 +421,8 @@ def upsert_deck(
         parameters = (
             card["spanish"],
             card["english"],
+            card["generation_phase"],
+            card["generation_metadata"],
             card.get("section_name"),
             card.get("part_of_speech"),
             card.get("definition_en"),
@@ -434,6 +440,8 @@ def upsert_deck(
                     deck_id,
                     spanish_text,
                     english_text,
+                    generation_phase,
+                    generation_metadata,
                     section_name,
                     part_of_speech,
                     definition_en,
@@ -443,7 +451,7 @@ def upsert_deck(
                     example_es,
                     example_en
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (deck_id, *parameters),
             )
@@ -454,6 +462,8 @@ def upsert_deck(
             """
             UPDATE cards
             SET
+                generation_phase = ?,
+                generation_metadata = ?,
                 section_name = ?,
                 part_of_speech = ?,
                 definition_en = ?,
@@ -465,6 +475,8 @@ def upsert_deck(
             WHERE id = ?
             """,
             (
+                card["generation_phase"],
+                card["generation_metadata"],
                 card.get("section_name"),
                 card.get("part_of_speech"),
                 card.get("definition_en"),
@@ -516,6 +528,8 @@ def _normalize_card_payload(card: Any, *, default_section_name: str | None = Non
     return {
         "spanish": spanish,
         "english": english,
+        "generation_phase": _normalize_generation_phase(card.get("generation_phase")),
+        "generation_metadata": _normalize_generation_metadata(card.get("generation_metadata")),
         "section_name": _optional_text(card.get("section_name")) or default_section_name,
         "part_of_speech": _optional_text(card.get("part_of_speech")),
         "definition_en": _optional_text(card.get("definition_en")),
@@ -565,6 +579,32 @@ def _normalize_text_list(value: Any) -> list[str]:
     return normalized_items
 
 
+def _normalize_generation_phase(value: Any) -> str:
+    if value is None:
+        return DEFAULT_GENERATION_PHASE
+    if not isinstance(value, str):
+        raise ValueError("generation_phase must be a string")
+    normalized = value.strip().casefold()
+    if normalized not in GENERATION_PHASES:
+        raise ValueError("generation_phase must be 'draft' or 'refined'")
+    return normalized
+
+
+def _normalize_generation_metadata(value: Any) -> str:
+    if value is None:
+        return "{}"
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError("generation_metadata must be valid JSON") from exc
+    elif isinstance(value, dict):
+        parsed = value
+    else:
+        raise ValueError("generation_metadata must be an object or JSON string")
+    return json.dumps(parsed, ensure_ascii=False, sort_keys=True)
+
+
 def _migrate_cards_table(connection: sqlite3.Connection) -> None:
     columns = {
         row["name"]
@@ -572,6 +612,8 @@ def _migrate_cards_table(connection: sqlite3.Connection) -> None:
     }
     migrations = {
         "is_enabled": "ALTER TABLE cards ADD COLUMN is_enabled INTEGER NOT NULL DEFAULT 1 CHECK(is_enabled IN (0, 1))",
+        "generation_phase": "ALTER TABLE cards ADD COLUMN generation_phase TEXT NOT NULL DEFAULT 'refined' CHECK(generation_phase IN ('draft', 'refined'))",
+        "generation_metadata": "ALTER TABLE cards ADD COLUMN generation_metadata TEXT NOT NULL DEFAULT '{}'",
         "section_name": "ALTER TABLE cards ADD COLUMN section_name TEXT",
         "part_of_speech": "ALTER TABLE cards ADD COLUMN part_of_speech TEXT",
         "definition_en": "ALTER TABLE cards ADD COLUMN definition_en TEXT",
@@ -587,6 +629,13 @@ def _migrate_cards_table(connection: sqlite3.Connection) -> None:
 
     connection.execute(
         "UPDATE cards SET section_name = COALESCE(NULLIF(TRIM(section_name), ''), (SELECT title FROM decks WHERE decks.id = cards.deck_id))"
+    )
+    connection.execute(
+        "UPDATE cards SET generation_phase = ? WHERE generation_phase IS NULL OR TRIM(generation_phase) = ''",
+        (DEFAULT_GENERATION_PHASE,),
+    )
+    connection.execute(
+        "UPDATE cards SET generation_metadata = '{}' WHERE generation_metadata IS NULL OR TRIM(generation_metadata) = ''"
     )
 
 
