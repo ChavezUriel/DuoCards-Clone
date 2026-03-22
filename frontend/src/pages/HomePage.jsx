@@ -10,11 +10,15 @@ function uniqueDeckIds(deckIds) {
 
 function sortDecksBySmartPractice(decks) {
   return [...decks].sort((leftDeck, rightDeck) => {
-    if (leftDeck.is_enabled_in_smart_practice === rightDeck.is_enabled_in_smart_practice) {
-      return 0;
+    if (leftDeck.is_enabled_in_smart_practice !== rightDeck.is_enabled_in_smart_practice) {
+      return leftDeck.is_enabled_in_smart_practice ? -1 : 1;
     }
 
-    return leftDeck.is_enabled_in_smart_practice ? -1 : 1;
+    if (leftDeck.completion_ratio !== rightDeck.completion_ratio) {
+      return rightDeck.completion_ratio - leftDeck.completion_ratio;
+    }
+
+    return leftDeck.title.localeCompare(rightDeck.title);
   });
 }
 
