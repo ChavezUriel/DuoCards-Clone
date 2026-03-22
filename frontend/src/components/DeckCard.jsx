@@ -4,7 +4,13 @@ function percentage(value) {
   return Math.round(value * 100);
 }
 
-function DeckCard({ deck, isPending = false, onToggleSmartPractice }) {
+function DeckCard({
+  deck,
+  isPending = false,
+  onToggleSmartPractice,
+  searchMatchReasons = [],
+  isSearchDimmed = false,
+}) {
   const navigate = useNavigate();
   const smartPracticeLabel = deck.is_enabled_in_smart_practice
     ? `Remove ${deck.title} from Smart Practice sampling`
@@ -31,7 +37,7 @@ function DeckCard({ deck, isPending = false, onToggleSmartPractice }) {
 
   return (
     <article
-      className={`panel deck-card ${deck.is_enabled_in_smart_practice ? '' : 'deck-card--inactive'}`}
+      className={`panel deck-card ${deck.is_enabled_in_smart_practice ? '' : 'deck-card--inactive'} ${isSearchDimmed ? 'deck-card--search-dimmed' : ''}`}
       role="link"
       tabIndex={0}
       aria-label={`Open ${deck.title} deck`}
@@ -61,6 +67,13 @@ function DeckCard({ deck, isPending = false, onToggleSmartPractice }) {
 
       <div className="deck-card__content">
         <h2>{deck.title}</h2>
+        {searchMatchReasons.length > 0 ? (
+          <div className="deck-card__match-reasons" aria-label={`Search matches for ${deck.title}`}>
+            {searchMatchReasons.map((reason) => (
+              <span key={reason} className="deck-card__match-badge">{reason}</span>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="deck-card__bottom">

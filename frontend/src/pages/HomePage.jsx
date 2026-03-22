@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchDecks, updateDeckSmartPracticeInclusion } from '../api';
+import { fetchDeckPreview, fetchDecks, updateDeckSmartPracticeInclusion } from '../api';
 import DeckCard from '../components/DeckCard';
 import { loadPracticeSettings, savePracticeSettings } from '../practiceSettings';
 
@@ -18,6 +18,134 @@ function sortDecksBySmartPractice(decks) {
   });
 }
 
+function normalizeSearchText(value) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function scoreFieldMatch(fieldValue, query) {
+  if (!fieldValue) {
+    return 0;
+  }
+
+  const normalizedField = normalizeSearchText(fieldValue);
+
+  if (!normalizedField) {
+    return 0;
+  }
+
+  if (normalizedField === query) {
+    return 120;
+  }
+
+  if (normalizedField.startsWith(query)) {
+    return 90;
+  }
+
+  if (normalizedField.includes(query)) {
+    return 70;
+  }
+
+  const queryTerms = query.split(' ');
+  const matchedTerms = queryTerms.filter((term) => normalizedField.includes(term)).length;
+  return matchedTerms === queryTerms.length ? 50 : matchedTerms > 0 ? 20 + matchedTerms : 0;
+}
+
+function buildDeckWordIndex(preview) {
+  return preview.cards
+    .flatMap((card) => [
+      card.answer_en,
+      card.prompt_es,
+      card.section_name,
+      card.definition_en,
+      ...(card.main_translations_es || []),
+      ...(card.collocations || []),
+      card.example_sentence,
+      card.example_en,
+      card.example_es,
+    ])
+    .filter(Boolean)
+    .join(' ');
+}
+
+function buildSearchMatchReasons(titleScore, descriptionScore, wordsScore) {
+  const reasons = [];
+
+  if (titleScore > 0) {
+    reasons.push('Title');
+  }
+
+  if (descriptionScore > 0) {
+    reasons.push('Description');
+  }
+
+  if (wordsScore > 0) {
+    reasons.push('Deck words');
+  }
+
+  if (reasons.length === 0) {
+    return [];
+  }
+
+  if (reasons.length === 1) {
+    return [`${reasons[0]} match`];
+  }
+
+  if (reasons.length === 2) {
+    return [`${reasons[0]} & ${reasons[1]} match`];
+  }
+
+  return [`${reasons.slice(0, -1).join(', ')} & ${reasons[reasons.length - 1]} match`];
+}
+
+function rankDeckSearchResults(decks, query, deckWordIndexById) {
+  if (!query) {
+    return sortDecksBySmartPractice(decks).map((deck) => ({
+      deck,
+      searchScore: 0,
+      searchDidMatch: false,
+      searchMatchReasons: [],
+    }));
+  }
+
+  return decks
+    .map((deck, index) => {
+      const titleScore = scoreFieldMatch(deck.title, query);
+      const descriptionScore = scoreFieldMatch(deck.description, query);
+      const wordsScore = scoreFieldMatch(deckWordIndexById[deck.id], query);
+      const score = (titleScore * 1_000_000) + (descriptionScore * 1_000) + wordsScore;
+
+      return {
+        deck,
+        index,
+        score,
+        searchScore: score,
+        searchDidMatch: score > 0,
+        searchMatchReasons: buildSearchMatchReasons(titleScore, descriptionScore, wordsScore),
+      };
+    })
+    .sort((leftEntry, rightEntry) => {
+      if (leftEntry.searchDidMatch !== rightEntry.searchDidMatch) {
+        return leftEntry.searchDidMatch ? -1 : 1;
+      }
+
+      if (leftEntry.searchScore !== rightEntry.searchScore) {
+        return rightEntry.searchScore - leftEntry.searchScore;
+      }
+
+      if (leftEntry.deck.is_enabled_in_smart_practice !== rightEntry.deck.is_enabled_in_smart_practice) {
+        return leftEntry.deck.is_enabled_in_smart_practice ? -1 : 1;
+      }
+
+      return leftEntry.index - rightEntry.index;
+    });
+}
+
 function HomePage() {
   const [decks, setDecks] = useState([]);
   const [status, setStatus] = useState('loading');
@@ -25,6 +153,8 @@ function HomePage() {
   const [settings, setSettings] = useState(() => loadPracticeSettings());
   const [pendingDeckIds, setPendingDeckIds] = useState([]);
   const [actionError, setActionError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [deckWordIndexById, setDeckWordIndexById] = useState({});
 
   const areAllDecksEnabledInSmartPractice = decks.length > 0
     && decks.every((deck) => deck.is_enabled_in_smart_practice);
@@ -66,6 +196,50 @@ function HomePage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDeckWordIndexes() {
+      if (decks.length === 0) {
+        return;
+      }
+
+      const results = await Promise.allSettled(
+        decks.map(async (deck) => {
+          const preview = await fetchDeckPreview(deck.id);
+          return [deck.id, buildDeckWordIndex(preview)];
+        })
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      const nextDeckWordIndexById = {};
+
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          const [deckId, deckWordIndex] = result.value;
+          nextDeckWordIndexById[deckId] = deckWordIndex;
+        }
+      }
+
+      setDeckWordIndexById(nextDeckWordIndexById);
+    }
+
+    loadDeckWordIndexes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [decks]);
+
+  const normalizedSearchQuery = normalizeSearchText(searchQuery);
+  const visibleDeckEntries = useMemo(
+    () => rankDeckSearchResults(decks, normalizedSearchQuery, deckWordIndexById),
+    [deckWordIndexById, decks, normalizedSearchQuery]
+  );
 
   async function updateSmartPracticeInclusion(deckIds, isEnabledInSmartPractice) {
     if (deckIds.length === 0) {
@@ -207,34 +381,51 @@ function HomePage() {
             <h2>Deck Review</h2>
           </div>
 
-          <label className="section-toggle" aria-label="Toggle Smart Practice sampling for all decks">
-            <span className="section-toggle__copy">
-              <strong>All decks</strong>
-              <small>{enabledDeckCount} of {decks.length} enabled</small>
-            </span>
-            <button
-              className={`section-toggle__switch ${areAllDecksEnabledInSmartPractice ? 'section-toggle__switch--active' : ''}`}
-              type="button"
-              role="switch"
-              aria-checked={areAllDecksEnabledInSmartPractice}
-              aria-label={areAllDecksEnabledInSmartPractice ? 'Disable all decks for Smart Practice sampling' : 'Enable all decks for Smart Practice sampling'}
-              onClick={handleToggleAllDecks}
-              disabled={hasPendingDeckUpdates || decks.length === 0}
-            >
-              <span className="section-toggle__thumb" aria-hidden="true" />
-            </button>
-          </label>
+          <div className="section-controls">
+            <label className="deck-search" aria-label="Search decks">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+                <path d="m16 16 4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search decks"
+              />
+            </label>
+
+            <label className="section-toggle" aria-label="Toggle Smart Practice sampling for all decks">
+              <span className="section-toggle__copy">
+                <strong>All decks</strong>
+                <small>{enabledDeckCount} of {decks.length} enabled</small>
+              </span>
+              <button
+                className={`section-toggle__switch ${areAllDecksEnabledInSmartPractice ? 'section-toggle__switch--active' : ''}`}
+                type="button"
+                role="switch"
+                aria-checked={areAllDecksEnabledInSmartPractice}
+                aria-label={areAllDecksEnabledInSmartPractice ? 'Disable all decks for Smart Practice sampling' : 'Enable all decks for Smart Practice sampling'}
+                onClick={handleToggleAllDecks}
+                disabled={hasPendingDeckUpdates || decks.length === 0}
+              >
+                <span className="section-toggle__thumb" aria-hidden="true" />
+              </button>
+            </label>
+          </div>
         </div>
 
         {actionError ? <p className="deck-grid__status deck-grid__status--error">{actionError}</p> : null}
 
         <div className="deck-grid">
-          {decks.map((deck) => (
+          {visibleDeckEntries.map(({ deck, searchDidMatch, searchMatchReasons }) => (
             <DeckCard
               key={deck.id}
               deck={deck}
               isPending={pendingDeckIds.includes(deck.id)}
               onToggleSmartPractice={handleToggleSmartPractice}
+              isSearchDimmed={Boolean(normalizedSearchQuery) && !searchDidMatch}
+              searchMatchReasons={searchMatchReasons}
             />
           ))}
         </div>

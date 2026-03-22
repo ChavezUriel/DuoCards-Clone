@@ -94,7 +94,7 @@ a {
 
 .deck-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 1.25rem;
 }
 
@@ -104,6 +104,45 @@ a {
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1rem;
+}
+
+.section-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.deck-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 18rem;
+  padding: 0.8rem 0.95rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(31, 111, 80, 0.08);
+  color: #6b7058;
+}
+
+.deck-search svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+}
+
+.deck-search input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #1f2a1f;
+}
+
+.deck-search input::placeholder {
+  color: #6b7058;
 }
 
 .section-toggle {
@@ -214,6 +253,16 @@ a {
   border-color: rgba(94, 103, 97, 0.16);
 }
 
+.deck-card--search-dimmed {
+  opacity: 0.56;
+  filter: saturate(0.72);
+}
+
+.deck-card--search-dimmed:hover,
+.deck-card--search-dimmed:focus-within {
+  opacity: 0.82;
+}
+
 .deck-card--inactive .deck-card__content p,
 .deck-card--inactive .deck-card__progress-label {
   color: #6c746f;
@@ -251,7 +300,29 @@ a {
 }
 
 .deck-card__content {
+  display: grid;
+  gap: 0.7rem;
   padding-right: 3.2rem;
+}
+
+.deck-card__match-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.deck-card__match-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.8rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(31, 111, 80, 0.1);
+  border: 1px solid rgba(31, 111, 80, 0.12);
+  color: var(--primary-dark);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .deck-card__progress-block {
@@ -340,6 +411,7 @@ a {
   font-size: 0.92rem;
   line-height: 1.42;
   display: -webkit-box;
+  line-clamp: 4;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -424,6 +496,17 @@ a {
   .section-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .section-controls {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .deck-search {
+    min-width: 0;
+    width: 100%;
   }
 
   .section-toggle {
