@@ -413,6 +413,20 @@ a {
   display: inline;
 }
 
+.flashcard__fit-heading {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  font-size: var(--flashcard-fit-font-size, clamp(2.2rem, 5vw, 3.8rem));
+  line-height: 1;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.flashcard__fit-heading--answer {
+  font-size: var(--flashcard-fit-font-size, clamp(1.6rem, 3vw, 2.2rem));
+}
+
 .flashcard__audio-button {
   display: inline-block;
   margin-left: 0.22em;
@@ -483,12 +497,7 @@ a {
 }
 
 .flashcard h2 {
-  font-size: clamp(2.2rem, 5vw, 3.8rem);
   line-height: 1;
-}
-
-.flashcard h3 {
-  font-size: clamp(1.6rem, 3vw, 2.2rem);
 }
 
 .answer {

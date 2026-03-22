@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 const AUTO_SPEECH_DEDUPE_WINDOW_MS = 750;
 let lastAutoSpeech = {
@@ -12,6 +12,77 @@ function canUseSpeechSynthesis() {
 
 function normalizeSpeechText(text) {
   return typeof text === 'string' ? text.trim() : '';
+}
+
+function useTwoLineFit(targetRef, dependencies) {
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const element = targetRef.current;
+    if (!element) {
+      return undefined;
+    }
+
+    let animationFrameId = 0;
+
+    function countRenderedLines() {
+      const computedStyles = window.getComputedStyle(element);
+      const lineHeight = parseFloat(computedStyles.lineHeight);
+
+      if (!Number.isFinite(lineHeight) || lineHeight <= 0) {
+        return 1;
+      }
+
+      return element.scrollHeight / lineHeight;
+    }
+
+    function fitToTwoLines() {
+      element.style.removeProperty('--flashcard-fit-font-size');
+
+      const computedStyles = window.getComputedStyle(element);
+      const baseFontSize = parseFloat(computedStyles.fontSize);
+
+      if (!Number.isFinite(baseFontSize) || baseFontSize <= 0) {
+        return;
+      }
+
+      const minimumFontSize = Math.max(baseFontSize * 0.38, 18);
+      let nextFontSize = baseFontSize;
+
+      while (countRenderedLines() > 2.05 && nextFontSize > minimumFontSize) {
+        nextFontSize = Math.max(nextFontSize - 1, minimumFontSize);
+        element.style.setProperty('--flashcard-fit-font-size', `${nextFontSize}px`);
+      }
+
+      if (nextFontSize >= baseFontSize - 0.5) {
+        element.style.removeProperty('--flashcard-fit-font-size');
+      }
+    }
+
+    function scheduleFit() {
+      window.cancelAnimationFrame(animationFrameId);
+      animationFrameId = window.requestAnimationFrame(fitToTwoLines);
+    }
+
+    scheduleFit();
+
+    const resizeObserver = 'ResizeObserver' in window ? new ResizeObserver(scheduleFit) : null;
+    resizeObserver?.observe(element);
+    if (element.parentElement) {
+      resizeObserver?.observe(element.parentElement);
+    }
+
+    window.addEventListener('resize', scheduleFit);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', scheduleFit);
+      element.style.removeProperty('--flashcard-fit-font-size');
+    };
+  }, dependencies);
 }
 
 function AudioIcon() {
@@ -28,7 +99,12 @@ function Flashcard({ card, isAnswerVisible, onReveal }) {
   const [isDetailsVisible, setIsDetailsVisible] = useState(false);
   const activeUtteranceRef = useRef(null);
   const previousAnswerVisibleRef = useRef(isAnswerVisible);
+  const promptHeadingRef = useRef(null);
+  const answerHeadingRef = useRef(null);
   const hasAnswerSpeech = canUseSpeechSynthesis() && Boolean(normalizeSpeechText(card.answer_en));
+
+  useTwoLineFit(promptHeadingRef, [card.card_id, card.prompt_es]);
+  useTwoLineFit(answerHeadingRef, [card.card_id, card.answer_en, isAnswerVisible]);
 
   function stopSpeech() {
     if (!canUseSpeechSynthesis()) {
@@ -120,7 +196,7 @@ function Flashcard({ card, isAnswerVisible, onReveal }) {
           ) : null}
           <p className="flashcard__label">Spanish</p>
           <div className="flashcard__prompt-row">
-            <h2 className="flashcard__inline-audio-heading">
+            <h2 className="flashcard__inline-audio-heading flashcard__fit-heading" ref={promptHeadingRef}>
               <span>{card.prompt_es}</span>
             </h2>
           </div>
@@ -132,7 +208,7 @@ function Flashcard({ card, isAnswerVisible, onReveal }) {
           {isAnswerVisible ? (
             <div className="answer__content">
               <div className="answer__header">
-                <h3 className="flashcard__inline-audio-heading">
+                <h3 className="flashcard__inline-audio-heading flashcard__fit-heading flashcard__fit-heading--answer" ref={answerHeadingRef}>
                   <span>{card.answer_en}</span>
                   <button
                     aria-label={hasAnswerSpeech ? 'Replay English audio' : 'English audio unavailable'}
