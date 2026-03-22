@@ -1,0 +1,142 @@
+decks:
+  - slug: ai-llama31-workplace-essentials
+    title: Workplace Essentials
+    description: Practical English for common workplace conversations, routines, and simple office needs.
+    topic: beginner English for office routines, coordination, and practical workplace communication
+    difficulty: beginner
+    desired_card_count: 100
+    batch_size: 10
+    model: llama3.1:latest
+    fallback_models:
+      - qwen3.5:latest
+      - gemma3:4b
+    overwrite_mode: fail
+    learner_profile: Spanish-speaking adults who need practical English for everyday work situations.
+    generation_notes: Prefer high-frequency words and short expressions useful in real workplaces. Keep the cards concrete and easy to review.
+    vocabulary_focus:
+      - office objects
+      - meetings
+      - schedules
+      - requests
+      - teamwork
+    excluded_vocabulary:
+      - corporate buzzwords
+      - legal HR terminology
+      - advanced management jargon
+    sections:
+      - name: Office objects and places
+        communicative_goal: Recognize the most common objects and places in an office.
+        lexical_focus:
+          - desk
+          - computer
+          - printer
+          - office
+          - meeting room
+        target_card_count: 20
+      - name: Daily tasks and routines
+        communicative_goal: Talk about simple work tasks and everyday routines.
+        lexical_focus:
+          - send
+          - call
+          - write
+          - check
+          - finish
+        target_card_count: 20
+      - name: Meetings and coordination
+        communicative_goal: Understand and use common vocabulary for short meetings and coordination.
+        lexical_focus:
+          - meeting
+          - start
+          - agenda
+          - note
+          - idea
+        target_card_count: 20
+      - name: Time and schedule
+        communicative_goal: Discuss simple deadlines, calendars, and availability.
+        lexical_focus:
+          - today
+          - tomorrow
+          - early
+          - late
+          - deadline
+        target_card_count: 20
+      - name: Requests and teamwork
+        communicative_goal: Make polite requests and respond in basic teamwork situations.
+        lexical_focus:
+          - help
+          - please
+          - can you
+          - together
+          - problem
+        target_card_count: 20
+
+  - slug: ai-llama31-home-and-family
+    title: Home and Family
+    description: Useful English for home life, family, chores, meals, and common daily interactions.
+    topic: beginner English for family life, household routines, and simple daily conversation at home
+    difficulty: beginner
+    desired_card_count: 100
+    batch_size: 10
+    model: llama3.1:latest
+    fallback_models:
+      - qwen3.5:latest
+      - gemma3:4b
+    overwrite_mode: fail
+    learner_profile: Spanish-speaking adults who want practical English for everyday life at home.
+    generation_notes: Keep the vocabulary very practical, frequent, and easy to reuse in daily conversation.
+    vocabulary_focus:
+      - family members
+      - rooms at home
+      - chores
+      - meals
+      - daily interactions
+    excluded_vocabulary:
+      - psychology terminology
+      - construction jargon
+      - literary expressions
+    sections:
+      - name: Family members and relationships
+        communicative_goal: Talk about close family members and simple relationships.
+        lexical_focus:
+          - mother
+          - father
+          - son
+          - daughter
+          - cousin
+        target_card_count: 20
+      - name: Rooms and furniture
+        communicative_goal: Name common parts of the home and basic furniture.
+        lexical_focus:
+          - kitchen
+          - bedroom
+          - chair
+          - table
+          - door
+        target_card_count: 20
+      - name: Chores and housework
+        communicative_goal: Describe basic chores and household actions.
+        lexical_focus:
+          - clean
+          - wash
+          - sweep
+          - cook
+          - fix
+        target_card_count: 20
+      - name: Meals and kitchen basics
+        communicative_goal: Handle simple conversation about food, meals, and kitchen needs.
+        lexical_focus:
+          - breakfast
+          - lunch
+          - dinner
+          - plate
+          - hungry
+        target_card_count: 20
+      - name: Daily conversation at home
+        communicative_goal: Use common expressions for everyday interaction at home.
+        lexical_focus:
+          - wait
+          - come here
+          - ready
+          - later
+          - bedtime
+        target_card_count: 20

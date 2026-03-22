@@ -1,0 +1,132 @@
+decks:
+  - slug: ai-gptoss2b-pharmacy-basics
+    title: Pharmacy Basics
+    description: Practical English for buying medicine and asking simple health questions.
+    topic: beginner English for pharmacy visits and basic health needs
+    difficulty: beginner
+    desired_card_count: 20
+    batch_size: 10
+    model: gpt-oss:2b
+    fallback_models:
+      - gpt-oss:20b
+      - qwen3.5:latest
+      - gemma3:4b
+    overwrite_mode: fail
+    learner_profile: Spanish-speaking beginners who need practical English in a pharmacy or drugstore.
+    generation_notes: Keep vocabulary concrete, high-frequency, and useful for short in-person interactions.
+    vocabulary_focus:
+      - medicine
+      - pain
+      - cough
+      - fever
+      - simple requests
+    excluded_vocabulary:
+      - medical research terms
+      - hospital administration jargon
+    sections:
+      - name: Asking for help
+        communicative_goal: Ask for medicine, describe a simple symptom, and understand basic pharmacy questions.
+        lexical_focus:
+          - headache
+          - cough
+          - sore throat
+          - pharmacy
+          - need
+        target_card_count: 10
+      - name: Buying and instructions
+        communicative_goal: Buy a product and understand simple directions about using it.
+        lexical_focus:
+          - tablet
+          - syrup
+          - twice a day
+          - after meals
+          - receipt
+        target_card_count: 10
+
+  - slug: ai-gptoss2b-neighborhood-errands
+    title: Neighborhood Errands
+    description: Everyday English for simple errands around the neighborhood.
+    topic: beginner English for local errands and practical daily interactions
+    difficulty: beginner
+    desired_card_count: 20
+    batch_size: 10
+    model: gpt-oss:2b
+    fallback_models:
+      - gpt-oss:20b
+      - qwen3.5:latest
+      - gemma3:4b
+    overwrite_mode: fail
+    learner_profile: Spanish-speaking beginners handling short errands in stores and service points.
+    generation_notes: Prefer short words and expressions that fit real daily life situations.
+    vocabulary_focus:
+      - bank
+      - post office
+      - bakery
+      - cash
+      - open and closed
+    excluded_vocabulary:
+      - financial legal language
+      - business banking terminology
+    sections:
+      - name: Places and services
+        communicative_goal: Identify common neighborhood places and ask where to go.
+        lexical_focus:
+          - bakery
+          - bank
+          - post office
+          - store
+          - corner
+        target_card_count: 10
+      - name: Simple errands
+        communicative_goal: Complete a simple purchase or service interaction politely.
+        lexical_focus:
+          - stamp
+          - withdraw
+          - change
+          - bag
+          - line
+        target_card_count: 10
+
+  - slug: ai-gptoss2b-weather-and-plans
+    title: Weather and Plans
+    description: Useful English for talking about weather and making simple plans.
+    topic: beginner English for weather, time, and casual planning
+    difficulty: beginner
+    desired_card_count: 20
+    batch_size: 10
+    model: gpt-oss:2b
+    fallback_models:
+      - gpt-oss:20b
+      - qwen3.5:latest
+      - gemma3:4b
+    overwrite_mode: fail
+    learner_profile: Spanish-speaking beginners who want to hold short casual conversations.
+    generation_notes: Keep the deck practical for daily conversation and easy review.
+    vocabulary_focus:
+      - weather
+      - weekend
+      - tomorrow
+      - umbrella
+      - meeting up
+    excluded_vocabulary:
+      - meteorology jargon
+      - advanced idioms
+    sections:
+      - name: Weather words
+        communicative_goal: Describe simple weather conditions and prepare for the day.
+        lexical_focus:
+          - sunny
+          - cloudy
+          - windy
+          - rain
+          - cold
+        target_card_count: 10
+      - name: Making plans
+        communicative_goal: Suggest a simple plan and respond to basic availability questions.
+        lexical_focus:
+          - free
+          - later
+          - weekend
+          - meet
+          - cancel
+        target_card_count: 10
