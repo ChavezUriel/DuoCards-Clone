@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import random
 import sqlite3
 from typing import Literal
 
@@ -288,15 +288,10 @@ def _select_new_material_cards(connection: sqlite3.Connection, settings: Practic
         WHERE c.is_enabled = 1
             AND d.is_enabled_in_smart_practice = 1
             AND (cp.initial_mastered_at IS NULL OR cp.card_id IS NULL)
-        ORDER BY
-            CASE WHEN cp.last_result IS NULL THEN 1 ELSE 0 END ASC,
-            COALESCE(cp.known_streak, 0) DESC,
-            COALESCE(cp.unknown_count, 0) DESC,
-            COALESCE(cp.last_reviewed_at, '1970-01-01T00:00:00+00:00') ASC,
-            c.id ASC
+        ORDER BY c.id ASC
         """
     ).fetchall()
-    return _interleave_rows(rows, limit=settings.new_block_size, intensity=settings.interleaving_intensity)
+    return _pick_random_rows(rows, limit=settings.new_block_size, intensity=settings.interleaving_intensity)
 
 
 def _select_review_cards(connection: sqlite3.Connection, settings: PracticeSettings) -> list[sqlite3.Row]:
@@ -317,50 +312,24 @@ def _select_review_cards(connection: sqlite3.Connection, settings: PracticeSetti
         WHERE c.is_enabled = 1
             AND d.is_enabled_in_smart_practice = 1
             AND cp.initial_mastered_at IS NOT NULL
-        ORDER BY
-            COALESCE(cp.unknown_count, 0) DESC,
-            COALESCE(cp.last_reviewed_at, cp.initial_mastered_at, '1970-01-01T00:00:00+00:00') ASC,
-            c.id ASC
+        ORDER BY c.id ASC
         """
     ).fetchall()
-    return _interleave_rows(rows, limit=settings.review_batch_size, intensity=settings.interleaving_intensity)
+    return _pick_random_rows(rows, limit=settings.review_batch_size, intensity=settings.interleaving_intensity)
 
 
-def _interleave_rows(
+def _pick_random_rows(
     rows: list[sqlite3.Row],
     *,
     limit: int,
     intensity: InterleavingIntensity,
 ) -> list[sqlite3.Row]:
-    if intensity == "low":
-        return rows[:limit]
+    del intensity
+    if limit <= 0 or not rows:
+        return []
 
-    grouped: dict[str, deque[sqlite3.Row]] = defaultdict(deque)
-    for row in rows:
-        grouped[row["section_name"]].append(row)
-
-    result: list[sqlite3.Row] = []
-    last_section: str | None = None
-
-    while len(result) < limit:
-        available_sections = [section for section, items in grouped.items() if items]
-        if not available_sections:
-            break
-
-        if intensity == "high":
-            preferred_sections = [section for section in available_sections if section != last_section] or available_sections
-            next_section = max(preferred_sections, key=lambda section: len(grouped[section]))
-        else:
-            preferred_sections = [section for section in available_sections if section != last_section]
-            if preferred_sections:
-                next_section = preferred_sections[0]
-            else:
-                next_section = available_sections[0]
-
-        result.append(grouped[next_section].popleft())
-        last_section = next_section
-
-    return result
+    shuffled_rows = random.sample(rows, k=len(rows))
+    return shuffled_rows[:limit]
 
 
 def _update_card_progress(

@@ -4,8 +4,10 @@ import gc
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import app.db as db_module
+import app.practice as practice_module
 from app.main import app
 from fastapi.testclient import TestClient
 
@@ -92,6 +94,75 @@ class SmartPracticeApiTests(unittest.TestCase):
         next_session = next_response.json()["session"]
         self.assertEqual(next_session["summary"]["remaining_cards"], 15)
         self.assertNotEqual(next_session["current_card"]["card_id"], first_card_id)
+
+    def test_new_material_session_uses_randomized_queue_order(self) -> None:
+        def reverse_sample(rows: list[object], k: int) -> list[object]:
+            return list(rows)[::-1][:k]
+
+        with patch.object(practice_module.random, "sample", side_effect=reverse_sample) as mocked_sample:
+            response = self.client.post(
+                "/api/practice/sessions",
+                json={
+                    "settings": {
+                        "new_block_size": 5,
+                        "review_batch_size": 20,
+                        "interleaving_intensity": "high",
+                        "focus_mode": "new_material",
+                    }
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["current_card"]["card_id"], 15)
+        mocked_sample.assert_called_once()
+
+        with db_module.get_connection() as connection:
+            queued_card_ids = [
+                row["card_id"]
+                for row in connection.execute(
+                    "SELECT card_id FROM practice_session_cards WHERE session_id = ? ORDER BY queue_position ASC",
+                    (payload["summary"]["session_id"],),
+                ).fetchall()
+            ]
+
+        self.assertEqual(queued_card_ids, [15, 14, 13, 12, 11])
+
+    def test_review_session_uses_randomized_queue_order(self) -> None:
+        self._initially_master_cards(card_limit=15)
+
+        def reverse_sample(rows: list[object], k: int) -> list[object]:
+            return list(rows)[::-1][:k]
+
+        with patch.object(practice_module.random, "sample", side_effect=reverse_sample) as mocked_sample:
+            response = self.client.post(
+                "/api/practice/sessions",
+                json={
+                    "settings": {
+                        "new_block_size": 5,
+                        "review_batch_size": 20,
+                        "interleaving_intensity": "low",
+                        "focus_mode": "review",
+                    }
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["summary"]["mode"], "review")
+        self.assertEqual(payload["current_card"]["card_id"], 15)
+        mocked_sample.assert_called_once()
+
+        with db_module.get_connection() as connection:
+            queued_card_ids = [
+                row["card_id"]
+                for row in connection.execute(
+                    "SELECT card_id FROM practice_session_cards WHERE session_id = ? ORDER BY queue_position ASC",
+                    (payload["summary"]["session_id"],),
+                ).fetchall()
+            ]
+
+        self.assertEqual(queued_card_ids, [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1])
 
     def test_deck_preview_returns_full_card_list(self) -> None:
         response = self.client.get("/api/decks/1/preview")
@@ -322,17 +393,18 @@ class SmartPracticeApiTests(unittest.TestCase):
         self.assertEqual(enable_response.status_code, 200)
         self.assertTrue(enable_response.json()["is_enabled_in_smart_practice"])
 
-        session_response = self.client.post(
-            "/api/practice/sessions",
-            json={
-                "settings": {
-                    "new_block_size": 5,
-                    "review_batch_size": 20,
-                    "interleaving_intensity": "high",
-                    "focus_mode": "new_material",
-                }
-            },
-        )
+        with patch.object(practice_module.random, "sample", side_effect=lambda rows, k: list(rows)[:k]):
+            session_response = self.client.post(
+                "/api/practice/sessions",
+                json={
+                    "settings": {
+                        "new_block_size": 5,
+                        "review_batch_size": 20,
+                        "interleaving_intensity": "high",
+                        "focus_mode": "new_material",
+                    }
+                },
+            )
 
         self.assertEqual(session_response.status_code, 200)
 
