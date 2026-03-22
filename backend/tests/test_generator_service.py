@@ -13,12 +13,29 @@ from generator_app.service import DeckGeneratorService, OllamaError, SpecError
 
 
 class ScriptedOllamaClient:
-    def __init__(self, steps: list[tuple[str, dict | Exception]]) -> None:
+    def __init__(self, steps: list[tuple[str, dict | Exception]], *, expected_provider: str = "ollama") -> None:
         self.steps = list(steps)
+        self.expected_provider = expected_provider
         self.calls: list[str] = []
+        self.providers: list[str] = []
+        self.api_keys: list[str | None] = []
 
-    def chat_json(self, *, model: str, system_prompt: str, user_prompt: str, temperature: float = 0.2) -> dict:
+    def chat_json(
+        self,
+        *,
+        provider: str,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.2,
+        api_key: str | None = None,
+    ) -> dict:
+        if provider != self.expected_provider:
+            raise AssertionError(f"Expected provider {self.expected_provider}, received {provider}")
+
+        self.providers.append(provider)
         self.calls.append(model)
+        self.api_keys.append(api_key)
         if not self.steps:
             raise AssertionError(f"Unexpected Ollama call for model {model}")
 
@@ -489,6 +506,123 @@ class DeckGeneratorServiceTests(unittest.TestCase):
         self.assertTrue(all(row["generation_phase"] == "refined" for row in rows))
         self.assertTrue(all(isinstance(row["definition_en"], str) and row["definition_en"] for row in rows))
         self.assertTrue(all(isinstance(row["example_sentence"], str) and row["example_sentence"] for row in rows))
+
+    def test_generate_and_insert_supports_openai_with_api_key(self) -> None:
+        spec_path = self.write_spec(
+            "openai.yaml",
+            {
+                "deck": {
+                    "slug": "openai-deck",
+                    "title": "OpenAI Deck",
+                    "description": "Generate cards with OpenAI.",
+                    "topic": "cafe",
+                    "difficulty": "beginner",
+                    "desired_card_count": 4,
+                    "batch_size": 4,
+                    "model_provider": "openai",
+                    "model": "gpt-4.1-mini",
+                    "fallback_models": ["gpt-4o-mini"],
+                    "overwrite_mode": "replace",
+                    "sections": [
+                        {
+                            "name": "Cafe",
+                            "communicative_goal": "Order politely.",
+                            "lexical_focus": ["coffee", "bill"],
+                            "target_card_count": 4,
+                        }
+                    ],
+                }
+            },
+        )
+        client = ScriptedOllamaClient(
+            [
+                ("gpt-4.1-mini", build_valid_batch("openai-draft")),
+                ("gpt-4.1-mini", build_valid_batch("openai-draft")),
+            ],
+            expected_provider="openai",
+        )
+        service = DeckGeneratorService(ollama_client=client)
+
+        result = service.generate_and_insert(spec_path, max_repair_attempts=0, api_key="test-openai-key")
+
+        self.assertEqual(result["total_cards"], 4)
+        self.assertEqual(client.providers, ["openai", "openai"])
+        self.assertEqual(client.api_keys, ["test-openai-key", "test-openai-key"])
+
+    def test_inference_logs_include_operation_and_elapsed_time(self) -> None:
+        spec_path = self.write_spec(
+            "timing.yaml",
+            {
+                "deck": {
+                    "slug": "timing-deck",
+                    "title": "Timing Deck",
+                    "description": "Capture inference timing logs.",
+                    "topic": "cafe",
+                    "difficulty": "beginner",
+                    "desired_card_count": 4,
+                    "batch_size": 4,
+                    "model": "qwen3.5:latest",
+                    "fallback_models": [],
+                    "overwrite_mode": "replace",
+                    "sections": [
+                        {
+                            "name": "Cafe",
+                            "communicative_goal": "Order politely.",
+                            "lexical_focus": ["coffee", "bill"],
+                            "target_card_count": 4,
+                        }
+                    ],
+                }
+            },
+        )
+        client = ScriptedOllamaClient(
+            [
+                ("qwen3.5:latest", build_valid_batch("timing")),
+                ("qwen3.5:latest", build_valid_batch("timing")),
+            ]
+        )
+        service = DeckGeneratorService(ollama_client=client)
+
+        with self.assertLogs("generator_app.service", level="INFO") as captured_logs:
+            service.generate_and_insert(spec_path, max_repair_attempts=0)
+
+        joined_logs = "\n".join(captured_logs.output)
+        self.assertIn("Inference attempt started", joined_logs)
+        self.assertIn("Inference attempt succeeded", joined_logs)
+        self.assertIn("operation=card_generation", joined_logs)
+        self.assertRegex(joined_logs, r"elapsed_ms=\d+")
+
+    def test_generate_and_insert_requires_openai_api_key(self) -> None:
+        spec_path = self.write_spec(
+            "openai-missing-key.yaml",
+            {
+                "deck": {
+                    "slug": "openai-missing-key",
+                    "title": "OpenAI Missing Key",
+                    "description": "Fail without an API key.",
+                    "topic": "cafe",
+                    "difficulty": "beginner",
+                    "desired_card_count": 4,
+                    "batch_size": 4,
+                    "model_provider": "openai",
+                    "model": "gpt-4.1-mini",
+                    "fallback_models": [],
+                    "overwrite_mode": "replace",
+                    "sections": [
+                        {
+                            "name": "Cafe",
+                            "communicative_goal": "Order politely.",
+                            "lexical_focus": ["coffee"],
+                            "target_card_count": 4,
+                        }
+                    ],
+                }
+            },
+        )
+        service = DeckGeneratorService()
+
+        with self.assertRaises(OllamaError):
+            service.generate_and_insert(spec_path, max_repair_attempts=0)
 
 
 if __name__ == "__main__":

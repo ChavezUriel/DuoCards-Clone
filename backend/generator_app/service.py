@@ -3,10 +3,13 @@ from __future__ import annotations
 from collections import Counter
 import json
 import logging
+import os
 from pathlib import Path
+import time
 from typing import Any
 from urllib import error, request
 
+import httpx
 import yaml
 from pydantic import ValidationError
 
@@ -31,7 +34,8 @@ SPEC_DIR = BASE_DIR / "generator_specs"
 MODEL_ALIASES = {
     "gpt:oss-20b": "gpt-oss:20b",
 }
-OLLAMA_REQUEST_TIMEOUT_SECONDS = 600
+MODEL_REQUEST_TIMEOUT_SECONDS = 600
+OPENAI_API_KEY_ENV_VAR = "OPENAI_API_KEY"
 logger = logging.getLogger("generator_app.service")
 WORD_SET_PROMPT_VERSION = "word-set-v1"
 ENRICHMENT_PROMPT_VERSION = "enrichment-v1"
@@ -45,13 +49,46 @@ class SpecError(ValueError):
     pass
 
 
-class OllamaClient:
-    def __init__(self, base_url: str = "http://127.0.0.1:11434") -> None:
-        self.base_url = base_url.rstrip("/")
+class ModelClient:
+    def __init__(
+        self,
+        ollama_base_url: str = "http://127.0.0.1:11434",
+        openai_base_url: str = "https://api.openai.com/v1",
+    ) -> None:
+        self.ollama_base_url = ollama_base_url.rstrip("/")
+        self.openai_base_url = openai_base_url.rstrip("/")
 
-    def chat_json(self, *, model: str, system_prompt: str, user_prompt: str, temperature: float = 0.2) -> dict[str, Any]:
+    def chat_json(
+        self,
+        *,
+        provider: str,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.2,
+        api_key: str | None = None,
+    ) -> dict[str, Any]:
+        if provider == "openai":
+            return self._chat_openai(
+                model=model,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=temperature,
+                api_key=api_key,
+            )
+        if provider != "ollama":
+            raise OllamaError(f"Unsupported model provider '{provider}'")
+        return self._chat_ollama(
+            model=model,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=temperature,
+        )
+
+    def _chat_ollama(self, *, model: str, system_prompt: str, user_prompt: str, temperature: float = 0.2) -> dict[str, Any]:
         resolved_model = MODEL_ALIASES.get(model, model)
         logger.info("Ollama chat request started: model=%s temperature=%s", resolved_model, temperature)
+        started_at = time.perf_counter()
         payload = {
             "model": resolved_model,
             "think": False,
@@ -67,26 +104,42 @@ class OllamaClient:
         }
         body = json.dumps(payload).encode("utf-8")
         http_request = request.Request(
-            url=f"{self.base_url}/api/chat",
+            url=f"{self.ollama_base_url}/api/chat",
             data=body,
             headers={"Content-Type": "application/json"},
             method="POST",
         )
 
         try:
-            with request.urlopen(http_request, timeout=OLLAMA_REQUEST_TIMEOUT_SECONDS) as response:
+            with request.urlopen(http_request, timeout=MODEL_REQUEST_TIMEOUT_SECONDS) as response:
                 response_payload = json.loads(response.read().decode("utf-8"))
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            logger.warning("Ollama HTTP error: model=%s status=%s detail=%s", resolved_model, exc.code, detail)
+            logger.warning(
+                "Ollama HTTP error: model=%s status=%s elapsed_ms=%s detail=%s",
+                resolved_model,
+                exc.code,
+                _elapsed_ms(started_at),
+                detail,
+            )
             raise OllamaError(f"Ollama request failed for model '{resolved_model}' with status {exc.code}: {detail}") from exc
         except error.URLError as exc:
-            logger.warning("Ollama connection error for model=%s: %s", resolved_model, exc)
+            logger.warning(
+                "Ollama connection error for model=%s elapsed_ms=%s: %s",
+                resolved_model,
+                _elapsed_ms(started_at),
+                exc,
+            )
             raise OllamaError("Unable to reach Ollama at http://127.0.0.1:11434") from exc
         except TimeoutError as exc:
-            logger.warning("Ollama timeout: model=%s timeout_seconds=%s", resolved_model, OLLAMA_REQUEST_TIMEOUT_SECONDS)
+            logger.warning(
+                "Ollama timeout: model=%s timeout_seconds=%s elapsed_ms=%s",
+                resolved_model,
+                MODEL_REQUEST_TIMEOUT_SECONDS,
+                _elapsed_ms(started_at),
+            )
             raise OllamaError(
-                f"Ollama request timed out for model '{resolved_model}' after {OLLAMA_REQUEST_TIMEOUT_SECONDS} seconds"
+                f"Ollama request timed out for model '{resolved_model}' after {MODEL_REQUEST_TIMEOUT_SECONDS} seconds"
             ) from exc
 
         content = response_payload.get("message", {}).get("content")
@@ -97,15 +150,88 @@ class OllamaClient:
         try:
             parsed = json.loads(_extract_json_text(content))
         except json.JSONDecodeError as exc:
-            logger.warning("Ollama returned invalid JSON: model=%s", resolved_model)
+            logger.warning("Ollama returned invalid JSON: model=%s elapsed_ms=%s", resolved_model, _elapsed_ms(started_at))
             raise OllamaError(f"Ollama returned invalid JSON content: {content}") from exc
-        logger.info("Ollama chat request completed: model=%s", resolved_model)
+        logger.info("Ollama chat request completed: model=%s elapsed_ms=%s", resolved_model, _elapsed_ms(started_at))
+        return parsed
+
+    def _chat_openai(
+        self,
+        *,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.2,
+        api_key: str | None = None,
+    ) -> dict[str, Any]:
+        resolved_api_key = api_key or os.getenv(OPENAI_API_KEY_ENV_VAR)
+        if not resolved_api_key:
+            raise OllamaError(
+                "OpenAI API key is required. Provide api_key in the request or set OPENAI_API_KEY in the environment"
+            )
+
+        logger.info("OpenAI chat request started: model=%s temperature=%s", model, temperature)
+        started_at = time.perf_counter()
+        payload = {
+            "model": model,
+            "temperature": temperature,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+
+        try:
+            response = httpx.post(
+                f"{self.openai_base_url}/chat/completions",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {resolved_api_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=MODEL_REQUEST_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            response_payload = response.json()
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text
+            logger.warning(
+                "OpenAI HTTP error: model=%s status=%s elapsed_ms=%s detail=%s",
+                model,
+                exc.response.status_code,
+                _elapsed_ms(started_at),
+                detail,
+            )
+            raise OllamaError(
+                f"OpenAI request failed for model '{model}' with status {exc.response.status_code}: {detail}"
+            ) from exc
+        except httpx.RequestError as exc:
+            logger.warning(
+                "OpenAI connection error for model=%s elapsed_ms=%s: %s",
+                model,
+                _elapsed_ms(started_at),
+                exc,
+            )
+            raise OllamaError("Unable to reach the OpenAI API") from exc
+
+        content = _extract_openai_message_content(response_payload)
+        if not content.strip():
+            logger.warning("OpenAI returned empty content: model=%s", model)
+            raise OllamaError("OpenAI returned an empty response")
+
+        try:
+            parsed = json.loads(_extract_json_text(content))
+        except json.JSONDecodeError as exc:
+            logger.warning("OpenAI returned invalid JSON: model=%s elapsed_ms=%s", model, _elapsed_ms(started_at))
+            raise OllamaError(f"OpenAI returned invalid JSON content: {content}") from exc
+        logger.info("OpenAI chat request completed: model=%s elapsed_ms=%s", model, _elapsed_ms(started_at))
         return parsed
 
 
 class DeckGeneratorService:
-    def __init__(self, ollama_client: OllamaClient | None = None) -> None:
-        self.ollama_client = ollama_client or OllamaClient()
+    def __init__(self, ollama_client: ModelClient | None = None) -> None:
+        self.ollama_client = ollama_client or ModelClient()
 
     def list_specs(self) -> list[SpecFileInfo]:
         SPEC_DIR.mkdir(parents=True, exist_ok=True)
@@ -151,19 +277,37 @@ class DeckGeneratorService:
             )
         return specs[0]
 
-    def preview_deck(self, spec_path: str, slug: str | None = None, *, max_repair_attempts: int = 1) -> DeckPreview:
+    def preview_deck(
+        self,
+        spec_path: str,
+        slug: str | None = None,
+        *,
+        max_repair_attempts: int = 1,
+        api_key: str | None = None,
+    ) -> DeckPreview:
         spec = self.load_spec(spec_path, slug)
-        return self._preview_spec(spec, max_repair_attempts=max_repair_attempts)
+        return self._preview_spec(spec, max_repair_attempts=max_repair_attempts, api_key=api_key)
 
-    def _preview_spec(self, spec: DeckGenerationSpec, *, max_repair_attempts: int = 1) -> DeckPreview:
+    def _preview_spec(
+        self,
+        spec: DeckGenerationSpec,
+        *,
+        max_repair_attempts: int = 1,
+        api_key: str | None = None,
+    ) -> DeckPreview:
         logger.info(
             "Preview pipeline started: slug=%s desired_cards=%s batch_size=%s",
             spec.slug,
             spec.desired_card_count,
             spec.batch_size,
         )
-        blueprint, blueprint_warnings = self._build_blueprint(spec)
-        cards, warnings, rejected_cards = self._generate_cards(spec, blueprint, max_repair_attempts=max_repair_attempts)
+        blueprint, blueprint_warnings = self._build_blueprint(spec, api_key=api_key)
+        cards, warnings, rejected_cards = self._generate_cards(
+            spec,
+            blueprint,
+            max_repair_attempts=max_repair_attempts,
+            api_key=api_key,
+        )
         logger.info(
             "Preview pipeline completed: slug=%s cards=%s warnings=%s rejected=%s",
             spec.slug,
@@ -185,20 +329,39 @@ class DeckGeneratorService:
         slug: str | None = None,
         *,
         max_repair_attempts: int = 1,
+        api_key: str | None = None,
     ) -> dict[str, Any]:
         spec = self.load_spec(spec_path, slug)
-        return self._generate_word_set_spec_and_insert(spec, max_repair_attempts=max_repair_attempts)
+        return self._generate_word_set_spec_and_insert(spec, max_repair_attempts=max_repair_attempts, api_key=api_key)
 
-    def generate_and_insert(self, spec_path: str, slug: str | None = None, *, max_repair_attempts: int = 1) -> dict[str, Any]:
+    def generate_and_insert(
+        self,
+        spec_path: str,
+        slug: str | None = None,
+        *,
+        max_repair_attempts: int = 1,
+        api_key: str | None = None,
+    ) -> dict[str, Any]:
         spec = self.load_spec(spec_path, slug)
-        return self._generate_spec_and_insert(spec, max_repair_attempts=max_repair_attempts)
+        return self._generate_spec_and_insert(spec, max_repair_attempts=max_repair_attempts, api_key=api_key)
 
-    def _generate_spec_and_insert(self, spec: DeckGenerationSpec, *, max_repair_attempts: int = 1) -> dict[str, Any]:
-        word_set_result = self._generate_word_set_spec_and_insert(spec, max_repair_attempts=max_repair_attempts)
+    def _generate_spec_and_insert(
+        self,
+        spec: DeckGenerationSpec,
+        *,
+        max_repair_attempts: int = 1,
+        api_key: str | None = None,
+    ) -> dict[str, Any]:
+        word_set_result = self._generate_word_set_spec_and_insert(
+            spec,
+            max_repair_attempts=max_repair_attempts,
+            api_key=api_key,
+        )
         enrich_result = self._enrich_generated_deck(
             deck_id=word_set_result["deck_id"],
             spec=spec,
             max_repair_attempts=max_repair_attempts,
+            api_key=api_key,
         )
         return {
             "spec": word_set_result["spec"],
@@ -214,8 +377,14 @@ class DeckGeneratorService:
             "phase_summary": enrich_result["phase_summary"],
         }
 
-    def _generate_word_set_spec_and_insert(self, spec: DeckGenerationSpec, *, max_repair_attempts: int = 1) -> dict[str, Any]:
-        preview = self._preview_spec(spec, max_repair_attempts=max_repair_attempts)
+    def _generate_word_set_spec_and_insert(
+        self,
+        spec: DeckGenerationSpec,
+        *,
+        max_repair_attempts: int = 1,
+        api_key: str | None = None,
+    ) -> dict[str, Any]:
+        preview = self._preview_spec(spec, max_repair_attempts=max_repair_attempts, api_key=api_key)
         if len(preview.cards) < preview.spec.desired_card_count:
             raise SpecError(
                 f"Generated {len(preview.cards)} valid cards, below the requested {preview.spec.desired_card_count}"
@@ -267,8 +436,19 @@ class DeckGeneratorService:
             "phase_summary": self._build_phase_summary(draft_cards=result.total_cards, refined_cards=0),
         }
 
-    def enrich_generated_deck(self, deck_id: int, *, max_repair_attempts: int = 1) -> dict[str, Any]:
-        return self._enrich_generated_deck(deck_id=deck_id, spec=None, max_repair_attempts=max_repair_attempts)
+    def enrich_generated_deck(
+        self,
+        deck_id: int,
+        *,
+        max_repair_attempts: int = 1,
+        api_key: str | None = None,
+    ) -> dict[str, Any]:
+        return self._enrich_generated_deck(
+            deck_id=deck_id,
+            spec=None,
+            max_repair_attempts=max_repair_attempts,
+            api_key=api_key,
+        )
 
     def _enrich_generated_deck(
         self,
@@ -276,6 +456,7 @@ class DeckGeneratorService:
         deck_id: int,
         spec: DeckGenerationSpec | None,
         max_repair_attempts: int,
+        api_key: str | None,
     ) -> dict[str, Any]:
         initialize_database()
         with get_connection() as connection:
@@ -319,9 +500,11 @@ class DeckGeneratorService:
                     batch_rows = rows[batch_start : batch_start + batch_size]
                     payload, used_model = self._chat_json_with_fallback(
                         spec=context_spec,
+                        operation_name="card_enrichment",
                         system_prompt=_enrichment_system_prompt(),
                         user_prompt=_build_enrichment_prompt(spec=context_spec, section_name=section_name, rows=batch_rows),
                         temperature=0.1,
+                        api_key=api_key,
                     )
                     if used_model != context_spec.model:
                         warnings.append(
@@ -340,6 +523,7 @@ class DeckGeneratorService:
                             rejected_cards=rejected_batch,
                             max_repair_attempts=max_repair_attempts,
                             preferred_models=[used_model, *context_spec.fallback_models, context_spec.model],
+                            api_key=api_key,
                         )
                         accepted_batch.extend(repaired_cards)
                         warnings.extend(repair_warnings)
@@ -358,19 +542,25 @@ class DeckGeneratorService:
             "rejected_cards": rejected_cards,
         }
 
-    def generate_all_and_insert(self, spec_path: str, *, max_repair_attempts: int = 1) -> list[GenerateDeckResponse]:
+    def generate_all_and_insert(
+        self,
+        spec_path: str,
+        *,
+        max_repair_attempts: int = 1,
+        api_key: str | None = None,
+    ) -> list[GenerateDeckResponse]:
         results: list[GenerateDeckResponse] = []
         specs = self.load_specs(spec_path)
         logger.info("Batch generation started: spec_path=%s deck_count=%s", spec_path, len(specs))
         for index, spec in enumerate(specs, start=1):
             logger.info("Batch deck started: index=%s/%s slug=%s", index, len(specs), spec.slug)
-            result = self._generate_spec_and_insert(spec, max_repair_attempts=max_repair_attempts)
+            result = self._generate_spec_and_insert(spec, max_repair_attempts=max_repair_attempts, api_key=api_key)
             results.append(GenerateDeckResponse(**result))
             logger.info("Batch deck completed: index=%s/%s slug=%s", index, len(specs), spec.slug)
         logger.info("Batch generation completed: spec_path=%s deck_count=%s", spec_path, len(results))
         return results
 
-    def _build_blueprint(self, spec: DeckGenerationSpec) -> tuple[DeckBlueprint, list[str]]:
+    def _build_blueprint(self, spec: DeckGenerationSpec, *, api_key: str | None = None) -> tuple[DeckBlueprint, list[str]]:
         if spec.sections:
             logger.info("Using spec-defined blueprint sections: slug=%s section_count=%s", spec.slug, len(spec.sections))
             return (
@@ -428,9 +618,11 @@ class DeckGeneratorService:
         )
         blueprint_payload, used_model = self._chat_json_with_fallback(
             spec=spec,
+            operation_name="blueprint_generation",
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             temperature=0.1,
+            api_key=api_key,
         )
         try:
             blueprint = DeckBlueprint.model_validate(blueprint_payload)
@@ -451,6 +643,7 @@ class DeckGeneratorService:
         blueprint: DeckBlueprint,
         *,
         max_repair_attempts: int,
+        api_key: str | None,
     ) -> tuple[list[GeneratedCard], list[str], list[RejectedCard]]:
         accepted_cards: list[GeneratedCard] = []
         warnings: list[str] = []
@@ -478,6 +671,7 @@ class DeckGeneratorService:
                 )
                 candidate_payload, used_model = self._chat_json_with_fallback(
                     spec=spec,
+                    operation_name="card_generation",
                     system_prompt=_card_generation_system_prompt(),
                     user_prompt=_build_card_generation_prompt(
                         spec=spec,
@@ -486,6 +680,7 @@ class DeckGeneratorService:
                         existing_cards=accepted_cards + section_cards,
                     ),
                     temperature=0.15,
+                    api_key=api_key,
                 )
                 if used_model != spec.model:
                     warnings.append(f"Card generation for section '{section.name}' fell back from {spec.model} to {used_model}")
@@ -508,6 +703,7 @@ class DeckGeneratorService:
                         seen_pairs=seen_pairs,
                         max_repair_attempts=max_repair_attempts,
                         preferred_models=[used_model, *spec.fallback_models, spec.model],
+                        api_key=api_key,
                     )
                     warnings.extend(repair_warnings)
                     accepted_batch.extend(repaired_cards)
@@ -575,6 +771,7 @@ class DeckGeneratorService:
                 "difficulty": spec.difficulty,
                 "learner_profile": spec.learner_profile,
                 "generation_notes": spec.generation_notes,
+                "model_provider": spec.model_provider,
                 "model": spec.model,
                 "fallback_models": spec.fallback_models,
                 "batch_size": spec.batch_size,
@@ -648,6 +845,7 @@ class DeckGeneratorService:
         rejected_cards: list[RejectedCard],
         max_repair_attempts: int,
         preferred_models: list[str] | None = None,
+        api_key: str | None = None,
     ) -> tuple[list[GeneratedCard], list[RejectedCard], list[str]]:
         current_rejections = rejected_cards
         accepted_cards: list[GeneratedCard] = []
@@ -658,6 +856,7 @@ class DeckGeneratorService:
                 break
             repair_payload, used_model = self._chat_json_with_fallback(
                 spec=spec,
+                operation_name="enrichment_repair",
                 system_prompt=_enrichment_repair_system_prompt(),
                 user_prompt=_build_enrichment_repair_prompt(
                     spec=spec,
@@ -667,6 +866,7 @@ class DeckGeneratorService:
                 ),
                 temperature=0.05,
                 preferred_models=preferred_models,
+                api_key=api_key,
             )
             if used_model != spec.model:
                 warnings.append(
@@ -770,6 +970,7 @@ class DeckGeneratorService:
             difficulty=str(metadata.get("difficulty") or "beginner"),
             desired_card_count=max(len(rows), 4),
             batch_size=min(max(int(metadata.get("batch_size") or len(rows) or 4), 4), 20),
+            model_provider=str(metadata.get("model_provider") or "ollama"),
             model=str(metadata.get("model") or "qwen3.5:latest"),
             fallback_models=[str(item) for item in metadata.get("fallback_models", []) if isinstance(item, str)],
             overwrite_mode="append",
@@ -845,6 +1046,7 @@ class DeckGeneratorService:
         seen_pairs: set[tuple[str, str]],
         max_repair_attempts: int,
         preferred_models: list[str] | None = None,
+        api_key: str | None = None,
     ) -> tuple[list[GeneratedCard], list[RejectedCard], list[str]]:
         current_rejections = rejected_cards
         accepted_cards: list[GeneratedCard] = []
@@ -856,10 +1058,12 @@ class DeckGeneratorService:
 
             repair_payload, used_model = self._chat_json_with_fallback(
                 spec=spec,
+                operation_name="card_repair",
                 system_prompt=_repair_system_prompt(),
                 user_prompt=_build_repair_prompt(spec=spec, section=section, rejected_cards=current_rejections),
                 temperature=0.05,
                 preferred_models=preferred_models,
+                api_key=api_key,
             )
             if used_model != spec.model:
                 warnings.append(f"Repair generation for section '{section.name}' fell back from {spec.model} to {used_model}")
@@ -882,10 +1086,12 @@ class DeckGeneratorService:
         self,
         *,
         spec: DeckGenerationSpec,
+        operation_name: str,
         system_prompt: str,
         user_prompt: str,
         temperature: float,
         preferred_models: list[str] | None = None,
+        api_key: str | None = None,
     ) -> tuple[dict[str, Any], str]:
         attempted_models: list[str] = []
         errors: list[str] = []
@@ -894,22 +1100,51 @@ class DeckGeneratorService:
             if model_name in attempted_models:
                 continue
             attempted_models.append(model_name)
-            logger.info("Trying Ollama model: slug=%s model=%s", spec.slug, model_name)
+            logger.info(
+                "Inference attempt started: slug=%s operation=%s provider=%s model=%s attempt=%s",
+                spec.slug,
+                operation_name,
+                spec.model_provider,
+                model_name,
+                len(attempted_models),
+            )
+            started_at = time.perf_counter()
             try:
                 response = self.ollama_client.chat_json(
+                    provider=spec.model_provider,
                     model=model_name,
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
                     temperature=temperature,
+                    api_key=api_key,
                 )
             except OllamaError as exc:
                 errors.append(str(exc))
-                logger.warning("Model attempt failed: slug=%s model=%s error=%s", spec.slug, model_name, exc)
+                logger.warning(
+                    "Inference attempt failed: slug=%s operation=%s provider=%s model=%s attempt=%s elapsed_ms=%s error=%s",
+                    spec.slug,
+                    operation_name,
+                    spec.model_provider,
+                    model_name,
+                    len(attempted_models),
+                    _elapsed_ms(started_at),
+                    exc,
+                )
                 continue
-            logger.info("Model attempt succeeded: slug=%s model=%s", spec.slug, model_name)
+            logger.info(
+                "Inference attempt succeeded: slug=%s operation=%s provider=%s model=%s attempt=%s elapsed_ms=%s",
+                spec.slug,
+                operation_name,
+                spec.model_provider,
+                model_name,
+                len(attempted_models),
+                _elapsed_ms(started_at),
+            )
             return response, model_name
 
-        raise OllamaError("All candidate Ollama models failed: " + " | ".join(errors))
+        raise OllamaError(
+            f"All candidate {spec.model_provider} models failed: " + " | ".join(errors)
+        )
 
 
 def _resolve_spec_path(spec_path: str) -> Path:
@@ -963,6 +1198,35 @@ def _extract_json_text(value: str) -> str:
     if end < start:
         raise json.JSONDecodeError("No JSON terminator found", value, start)
     return stripped[start : end + 1]
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return max(0, round((time.perf_counter() - started_at) * 1000))
+
+
+def _extract_openai_message_content(payload: dict[str, Any]) -> str:
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise OllamaError("OpenAI response did not include any choices")
+
+    message = choices[0].get("message")
+    if not isinstance(message, dict):
+        raise OllamaError("OpenAI response did not include a message payload")
+
+    content = message.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        text_parts: list[str] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            text_value = item.get("text")
+            if isinstance(text_value, str):
+                text_parts.append(text_value)
+        return "\n".join(text_parts)
+
+    raise OllamaError("OpenAI response message content was not textual")
 
 
 def _extract_card_list(payload: Any) -> list[Any]:

@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 GenerationPhase = Literal["draft", "refined"]
+ModelProvider = Literal["ollama", "openai"]
 
 
 def _normalize_text(value: Any) -> str:
@@ -21,6 +22,10 @@ def _normalize_optional_text(value: Any) -> str | None:
     if value is None:
         return None
     return _normalize_text(value)
+
+
+def _normalize_model_provider(value: Any) -> str:
+    return _normalize_text(value).lower()
 
 
 def _normalize_text_list(value: Any) -> list[str]:
@@ -64,6 +69,7 @@ class DeckGenerationSpec(BaseModel):
     difficulty: Literal["beginner", "elementary", "intermediate", "upper-intermediate", "advanced"] = "beginner"
     desired_card_count: int = Field(ge=4, le=120)
     batch_size: int = Field(default=10, ge=4, le=20)
+    model_provider: ModelProvider = "ollama"
     model: str = "qwen3.5:latest"
     fallback_models: list[str] = Field(default_factory=lambda: ["gemma3:4b", "llama3.1:latest"])
     overwrite_mode: Literal["fail", "append", "replace"] = "fail"
@@ -79,6 +85,8 @@ class DeckGenerationSpec(BaseModel):
     _normalize_title = field_validator("title", mode="before")(_normalize_text)
     _normalize_description = field_validator("description", mode="before")(_normalize_text)
     _normalize_topic = field_validator("topic", mode="before")(_normalize_text)
+    _normalize_model_provider = field_validator("model_provider", mode="before")(_normalize_model_provider)
+    _normalize_model = field_validator("model", mode="before")(_normalize_text)
     _normalize_learner = field_validator("learner_profile", mode="before")(_normalize_optional_text)
     _normalize_notes = field_validator("generation_notes", mode="before")(_normalize_optional_text)
     _normalize_fallback_models = field_validator("fallback_models", mode="before")(_normalize_text_list)
@@ -185,7 +193,10 @@ class SpecValidationResponse(BaseModel):
 class GenerateDeckRequest(BaseModel):
     spec_path: str = Field(min_length=1)
     slug: str | None = None
+    api_key: str | None = None
     max_repair_attempts: int = Field(default=1, ge=0, le=3)
+
+    _normalize_api_key = field_validator("api_key", mode="before")(_normalize_optional_text)
 
 
 class EnrichDeckRequest(BaseModel):

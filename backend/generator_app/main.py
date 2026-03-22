@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from fastapi import FastAPI, HTTPException
 
@@ -59,6 +60,7 @@ def validate_spec(payload: SpecFileRequest) -> SpecValidationResponse:
 
 @app.post("/decks/preview")
 def preview_deck(payload: GenerateDeckRequest) -> dict[str, object]:
+    started_at = time.perf_counter()
     logger.info(
         "Preview request started: spec_path=%s slug=%s max_repair_attempts=%s",
         payload.spec_path,
@@ -66,7 +68,12 @@ def preview_deck(payload: GenerateDeckRequest) -> dict[str, object]:
         payload.max_repair_attempts,
     )
     try:
-        preview = service.preview_deck(payload.spec_path, payload.slug, max_repair_attempts=payload.max_repair_attempts)
+        preview = service.preview_deck(
+            payload.spec_path,
+            payload.slug,
+            max_repair_attempts=payload.max_repair_attempts,
+            api_key=payload.api_key,
+        )
     except SpecError as exc:
         logger.warning("Preview request failed validation: spec_path=%s slug=%s error=%s", payload.spec_path, payload.slug, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -74,18 +81,20 @@ def preview_deck(payload: GenerateDeckRequest) -> dict[str, object]:
         logger.error("Preview request failed during Ollama call: spec_path=%s slug=%s error=%s", payload.spec_path, payload.slug, exc)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     logger.info(
-        "Preview request completed: spec_path=%s slug=%s cards=%s warnings=%s rejected=%s",
+        "Preview request completed: spec_path=%s slug=%s cards=%s warnings=%s rejected=%s elapsed_ms=%s",
         payload.spec_path,
         preview.spec.slug,
         len(preview.cards),
         len(preview.warnings),
         len(preview.rejected_cards),
+        _elapsed_ms(started_at),
     )
     return preview.model_dump(mode="json")
 
 
 @app.post("/decks/generate", response_model=GenerateDeckResponse)
 def generate_deck(payload: GenerateDeckRequest) -> GenerateDeckResponse:
+    started_at = time.perf_counter()
     logger.info(
         "Generate request started: spec_path=%s slug=%s max_repair_attempts=%s",
         payload.spec_path,
@@ -93,7 +102,12 @@ def generate_deck(payload: GenerateDeckRequest) -> GenerateDeckResponse:
         payload.max_repair_attempts,
     )
     try:
-        result = service.generate_and_insert(payload.spec_path, payload.slug, max_repair_attempts=payload.max_repair_attempts)
+        result = service.generate_and_insert(
+            payload.spec_path,
+            payload.slug,
+            max_repair_attempts=payload.max_repair_attempts,
+            api_key=payload.api_key,
+        )
     except SpecError as exc:
         logger.warning("Generate request failed validation: spec_path=%s slug=%s error=%s", payload.spec_path, payload.slug, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -104,7 +118,7 @@ def generate_deck(payload: GenerateDeckRequest) -> GenerateDeckResponse:
         logger.warning("Generate request hit deck conflict: spec_path=%s slug=%s error=%s", payload.spec_path, payload.slug, exc)
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     logger.info(
-        "Generate request completed: spec_path=%s slug=%s deck_id=%s inserted=%s updated=%s deleted=%s warnings=%s rejected=%s",
+        "Generate request completed: spec_path=%s slug=%s deck_id=%s inserted=%s updated=%s deleted=%s warnings=%s rejected=%s elapsed_ms=%s",
         payload.spec_path,
         result["spec"].slug,
         result["deck_id"],
@@ -113,19 +127,25 @@ def generate_deck(payload: GenerateDeckRequest) -> GenerateDeckResponse:
         result["deleted_cards"],
         len(result["warnings"]),
         len(result["rejected_cards"]),
+        _elapsed_ms(started_at),
     )
     return GenerateDeckResponse(**result)
 
 
 @app.post("/decks/generate-batch", response_model=GenerateBatchResponse)
 def generate_deck_batch(payload: GenerateDeckRequest) -> GenerateBatchResponse:
+    started_at = time.perf_counter()
     logger.info(
         "Batch generate request started: spec_path=%s max_repair_attempts=%s",
         payload.spec_path,
         payload.max_repair_attempts,
     )
     try:
-        results = service.generate_all_and_insert(payload.spec_path, max_repair_attempts=payload.max_repair_attempts)
+        results = service.generate_all_and_insert(
+            payload.spec_path,
+            max_repair_attempts=payload.max_repair_attempts,
+            api_key=payload.api_key,
+        )
     except SpecError as exc:
         logger.warning("Batch generate request failed validation: spec_path=%s error=%s", payload.spec_path, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -135,5 +155,14 @@ def generate_deck_batch(payload: GenerateDeckRequest) -> GenerateBatchResponse:
     except ValueError as exc:
         logger.warning("Batch generate request hit deck conflict: spec_path=%s error=%s", payload.spec_path, exc)
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    logger.info("Batch generate request completed: spec_path=%s deck_count=%s", payload.spec_path, len(results))
+    logger.info(
+        "Batch generate request completed: spec_path=%s deck_count=%s elapsed_ms=%s",
+        payload.spec_path,
+        len(results),
+        _elapsed_ms(started_at),
+    )
     return GenerateBatchResponse(results=results)
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return max(0, round((time.perf_counter() - started_at) * 1000))

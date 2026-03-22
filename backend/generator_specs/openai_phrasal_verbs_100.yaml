@@ -1,0 +1,75 @@
+deck:
+  slug: ai-openai-phrasal-verbs-100
+  title: 100 Essential Phrasal Verbs
+  description: A practical deck of 100 high-utility English phrasal verbs for Spanish-speaking learners.
+  topic: high-frequency English phrasal verbs for everyday conversation, work, travel, and daily life
+  difficulty: intermediate
+  desired_card_count: 100
+  batch_size: 10
+  model_provider: openai
+  model: gpt-5.4-mini
+  fallback_models:
+    - gpt-4.1-mini
+    - gpt-4o-mini
+  overwrite_mode: fail
+  learner_profile: Spanish-speaking learners who already know core English verbs and need phrasal verbs that appear often in real conversation.
+  generation_notes: Prioritize true phrasal verbs with clear, common meanings. Prefer natural everyday usage over rare idiomatic senses. Avoid near-duplicate pairs, overly regional usages, and expressions that are not actually phrasal verbs.
+  vocabulary_focus:
+    - daily routines
+    - conversations
+    - work and study
+    - planning and organization
+    - problems and decisions
+    - travel and movement
+  excluded_vocabulary:
+    - single-word verbs presented without particles
+    - rare regional phrasal verbs
+    - slang-only expressions
+    - highly idiomatic senses that are hard to review in isolation
+    - obsolete expressions
+  sections:
+    - name: Daily actions and routines
+      communicative_goal: Understand and use phrasal verbs for everyday actions, habits, and home routines.
+      lexical_focus:
+        - get up
+        - wake up
+        - turn on
+        - turn off
+        - clean up
+      target_card_count: 20
+    - name: Social interaction and communication
+      communicative_goal: Handle common conversations, invitations, explanations, and interpersonal situations.
+      lexical_focus:
+        - find out
+        - speak up
+        - calm down
+        - hang out
+        - bring up
+      target_card_count: 20
+    - name: Work and study tasks
+      communicative_goal: Use phrasal verbs that appear often in work, study, meetings, and task management.
+      lexical_focus:
+        - carry out
+        - hand in
+        - look over
+        - catch up
+        - set up
+      target_card_count: 20
+    - name: Problems, decisions, and change
+      communicative_goal: Express difficulty, recovery, postponement, decision-making, and adaptation.
+      lexical_focus:
+        - deal with
+        - figure out
+        - put off
+        - go through
+        - work out
+      target_card_count: 20
+    - name: Travel, movement, and organization
+      communicative_goal: Use phrasal verbs for moving around, arriving, leaving, packing, and keeping things organized.
+      lexical_focus:
+        - check in
+        - get on
+        - get off
+        - pack up
+        - sort out
+      target_card_count: 20
