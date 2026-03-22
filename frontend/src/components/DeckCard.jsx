@@ -67,16 +67,23 @@ function DeckCard({
 
       <div className="deck-card__content">
         <h2>{deck.title}</h2>
-        {searchMatchReasons.length > 0 ? (
-          <div className="deck-card__match-reasons" aria-label={`Search matches for ${deck.title}`}>
-            {searchMatchReasons.map((reason) => (
-              <span key={reason} className="deck-card__match-badge">{reason}</span>
-            ))}
-          </div>
-        ) : null}
       </div>
 
       <div className="deck-card__bottom">
+        {searchMatchReasons.length > 0 ? (
+          <div className="deck-card__match-reasons" aria-label={`Search matches for ${deck.title}`}>
+            {searchMatchReasons.map((reason) => (
+              <span key={reason} className="deck-card__match-badge">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="m16 16 4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+                <span>{reason}</span>
+              </span>
+            ))}
+          </div>
+        ) : null}
+
         <div className="deck-card__progress-block">
           <div className="deck-card__progress-meta" aria-label={`Progress for ${deck.title}`}>
             <div>
