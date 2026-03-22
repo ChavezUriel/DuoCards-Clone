@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchDecks } from '../api';
+import { fetchDecks, updateDeckSmartPracticeInclusion } from '../api';
 import DeckCard from '../components/DeckCard';
 import { loadPracticeSettings, savePracticeSettings } from '../practiceSettings';
 
@@ -9,6 +9,8 @@ function HomePage() {
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [settings, setSettings] = useState(() => loadPracticeSettings());
+  const [pendingDeckIds, setPendingDeckIds] = useState([]);
+  const [actionError, setActionError] = useState('');
 
   function updateSettings(partialSettings) {
     setSettings((current) => {
@@ -45,6 +47,24 @@ function HomePage() {
       cancelled = true;
     };
   }, []);
+
+  async function handleToggleSmartPractice(deckId, isEnabledInSmartPractice) {
+    setActionError('');
+    setPendingDeckIds((current) => [...current, deckId]);
+
+    try {
+      await updateDeckSmartPracticeInclusion(deckId, isEnabledInSmartPractice);
+      setDecks((current) => current.map((deck) => (
+        deck.id === deckId
+          ? { ...deck, is_enabled_in_smart_practice: isEnabledInSmartPractice }
+          : deck
+      )));
+    } catch (requestError) {
+      setActionError(requestError.message);
+    } finally {
+      setPendingDeckIds((current) => current.filter((pendingDeckId) => pendingDeckId !== deckId));
+    }
+  }
 
   if (status === 'loading') {
     return <section className="panel empty-state">Loading starter decks...</section>;
@@ -135,9 +155,16 @@ function HomePage() {
           </div>
         </div>
 
+        {actionError ? <p className="deck-grid__status deck-grid__status--error">{actionError}</p> : null}
+
         <div className="deck-grid">
           {decks.map((deck) => (
-            <DeckCard key={deck.id} deck={deck} />
+            <DeckCard
+              key={deck.id}
+              deck={deck}
+              isPending={pendingDeckIds.includes(deck.id)}
+              onToggleSmartPractice={handleToggleSmartPractice}
+            />
           ))}
         </div>
       </section>

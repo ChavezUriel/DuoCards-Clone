@@ -223,6 +223,7 @@ CREATE TABLE IF NOT EXISTS decks (
     slug TEXT NOT NULL UNIQUE,
     title TEXT NOT NULL,
     description TEXT NOT NULL,
+    is_enabled_in_smart_practice INTEGER NOT NULL DEFAULT 1 CHECK(is_enabled_in_smart_practice IN (0, 1)),
     language_from TEXT NOT NULL DEFAULT 'es',
     language_to TEXT NOT NULL DEFAULT 'en'
 );
@@ -296,10 +297,26 @@ def get_connection() -> sqlite3.Connection:
 def initialize_database() -> None:
     with get_connection() as connection:
         connection.executescript(SCHEMA_SQL)
+        _migrate_decks_table(connection)
         _migrate_cards_table(connection)
         _migrate_card_progress_table(connection)
         _seed_database(connection)
         connection.commit()
+
+
+def _migrate_decks_table(connection: sqlite3.Connection) -> None:
+    columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(decks)").fetchall()
+    }
+    if "is_enabled_in_smart_practice" not in columns:
+        connection.execute(
+            """
+            ALTER TABLE decks
+            ADD COLUMN is_enabled_in_smart_practice INTEGER NOT NULL DEFAULT 1
+            CHECK(is_enabled_in_smart_practice IN (0, 1))
+            """
+        )
 
 
 def _seed_database(connection: sqlite3.Connection) -> None:

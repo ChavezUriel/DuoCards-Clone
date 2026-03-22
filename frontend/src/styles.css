@@ -123,8 +123,30 @@ a {
 }
 
 .deck-card {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   gap: 1rem;
+}
+
+.deck-card--inactive {
+  background: rgba(232, 232, 228, 0.82);
+  border-color: rgba(94, 103, 97, 0.16);
+}
+
+.deck-card--inactive .deck-card__content p,
+.deck-card--inactive .deck-card__label,
+.deck-card--inactive .deck-card__progress-label {
+  color: #6c746f;
+}
+
+.deck-card--inactive .deck-card__progress-block {
+  background: rgba(241, 241, 237, 0.92);
+  border-color: rgba(111, 124, 117, 0.14);
+}
+
+.deck-card--inactive .progress-track {
+  background: rgba(111, 124, 117, 0.16);
 }
 
 .deck-card h2,
@@ -137,25 +159,52 @@ a {
   margin: 0;
 }
 
-.deck-card__stats,
+.deck-card__progress-meta,
 .action-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
 }
 
-.deck-card__stats span {
-  padding: 0.35rem 0.65rem;
-  border-radius: 999px;
-  background: rgba(31, 111, 80, 0.08);
+.deck-card__bottom {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.deck-card__progress-block {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(31, 111, 80, 0.08);
+}
+
+.deck-card__progress-meta {
+  justify-content: space-between;
+}
+
+.deck-card__progress-meta div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.deck-card__progress-meta strong {
   color: var(--primary-dark);
+  font-size: 1.05rem;
+}
+
+.deck-card__progress-label {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7058;
 }
 
 .deck-card__footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: flex-end;
 }
 
 .deck-card__actions {
@@ -174,19 +223,40 @@ a {
   border: 1px solid rgba(31, 111, 80, 0.16);
   background: rgba(255, 255, 255, 0.72);
   color: var(--primary-dark);
+  cursor: pointer;
   text-decoration: none;
   transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
 }
 
-.deck-card__icon-button:hover {
+.deck-card__icon-button:hover:not(:disabled) {
   transform: translateY(-1px);
   background: rgba(255, 255, 255, 0.94);
   border-color: rgba(31, 111, 80, 0.28);
 }
 
+.deck-card__icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
+.deck-card__icon-button--inactive {
+  color: #6f7c75;
+  border-color: rgba(111, 124, 117, 0.22);
+  background: rgba(244, 240, 232, 0.88);
+}
+
 .deck-card__icon-button svg {
   width: 1.2rem;
   height: 1.2rem;
+}
+
+.deck-grid__status {
+  margin: 0 0 1rem;
+}
+
+.deck-grid__status--error {
+  color: var(--danger);
 }
 
 .smart-practice-panel {

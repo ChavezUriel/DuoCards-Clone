@@ -22,6 +22,13 @@ export function fetchDecks() {
   return request('/api/decks');
 }
 
+export function updateDeckSmartPracticeInclusion(deckId, isEnabledInSmartPractice) {
+  return request(`/api/decks/${deckId}/smart-practice-inclusion`, {
+    method: 'PATCH',
+    body: JSON.stringify({ is_enabled_in_smart_practice: isEnabledInSmartPractice }),
+  });
+}
+
 export function fetchReviewCard(deckId) {
   return request(`/api/decks/${deckId}/review`);
 }

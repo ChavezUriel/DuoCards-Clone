@@ -183,6 +183,175 @@ class SmartPracticeApiTests(unittest.TestCase):
         decks_response = self.client.get("/api/decks")
         self.assertEqual(decks_response.json()[0]["total_cards"], 5)
 
+    def test_decks_endpoint_exposes_smart_practice_toggle_state(self) -> None:
+        response = self.client.get("/api/decks")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload[0]["is_enabled_in_smart_practice"])
+
+    def test_disabling_deck_excludes_it_from_new_smart_practice_sessions(self) -> None:
+        disable_response = self.client.patch(
+            "/api/decks/1/smart-practice-inclusion",
+            json={"is_enabled_in_smart_practice": False},
+        )
+
+        self.assertEqual(disable_response.status_code, 200)
+        self.assertFalse(disable_response.json()["is_enabled_in_smart_practice"])
+
+        decks_response = self.client.get("/api/decks")
+        self.assertEqual(decks_response.status_code, 200)
+        self.assertFalse(decks_response.json()[0]["is_enabled_in_smart_practice"])
+
+        session_response = self.client.post(
+            "/api/practice/sessions",
+            json={
+                "settings": {
+                    "new_block_size": 5,
+                    "review_batch_size": 20,
+                    "interleaving_intensity": "high",
+                    "focus_mode": "new_material",
+                }
+            },
+        )
+
+        self.assertEqual(session_response.status_code, 200)
+
+        with db_module.get_connection() as connection:
+            queued_deck_ids = {
+                row["deck_id"]
+                for row in connection.execute(
+                    """
+                    SELECT DISTINCT c.deck_id
+                    FROM practice_session_cards psc
+                    JOIN cards c ON c.id = psc.card_id
+                    WHERE psc.session_id = ?
+                    """,
+                    (session_response.json()["summary"]["session_id"],),
+                ).fetchall()
+            }
+
+        self.assertNotIn(1, queued_deck_ids)
+
+    def test_disabling_deck_removes_pending_cards_from_active_session(self) -> None:
+        session_response = self.client.post(
+            "/api/practice/sessions",
+            json={
+                "settings": {
+                    "new_block_size": 8,
+                    "review_batch_size": 20,
+                    "interleaving_intensity": "high",
+                    "focus_mode": "new_material",
+                }
+            },
+        )
+
+        self.assertEqual(session_response.status_code, 200)
+        session_id = session_response.json()["summary"]["session_id"]
+
+        disable_response = self.client.patch(
+            "/api/decks/1/smart-practice-inclusion",
+            json={"is_enabled_in_smart_practice": False},
+        )
+
+        self.assertEqual(disable_response.status_code, 200)
+
+        with db_module.get_connection() as connection:
+            remaining_rows = connection.execute(
+                """
+                SELECT c.deck_id
+                FROM practice_session_cards psc
+                JOIN cards c ON c.id = psc.card_id
+                WHERE psc.session_id = ? AND psc.status = 'pending'
+                """,
+                (session_id,),
+            ).fetchall()
+
+        self.assertTrue(remaining_rows)
+        self.assertTrue(all(row["deck_id"] != 1 for row in remaining_rows))
+
+    def test_disabling_only_available_deck_completes_active_session(self) -> None:
+        self.client.patch(
+            "/api/decks/2/smart-practice-inclusion",
+            json={"is_enabled_in_smart_practice": False},
+        )
+        self.client.patch(
+            "/api/decks/3/smart-practice-inclusion",
+            json={"is_enabled_in_smart_practice": False},
+        )
+
+        session_response = self.client.post(
+            "/api/practice/sessions",
+            json={
+                "settings": {
+                    "new_block_size": 5,
+                    "review_batch_size": 20,
+                    "interleaving_intensity": "high",
+                    "focus_mode": "new_material",
+                }
+            },
+        )
+
+        self.assertEqual(session_response.status_code, 200)
+        session_id = session_response.json()["summary"]["session_id"]
+
+        disable_response = self.client.patch(
+            "/api/decks/1/smart-practice-inclusion",
+            json={"is_enabled_in_smart_practice": False},
+        )
+
+        self.assertEqual(disable_response.status_code, 200)
+
+        snapshot_response = self.client.get(f"/api/practice/sessions/{session_id}")
+        self.assertEqual(snapshot_response.status_code, 200)
+        snapshot = snapshot_response.json()
+        self.assertEqual(snapshot["summary"]["status"], "completed")
+        self.assertIsNone(snapshot["current_card"])
+
+    def test_disabled_deck_can_be_reenabled_for_future_sessions(self) -> None:
+        self.client.patch(
+            "/api/decks/1/smart-practice-inclusion",
+            json={"is_enabled_in_smart_practice": False},
+        )
+
+        enable_response = self.client.patch(
+            "/api/decks/1/smart-practice-inclusion",
+            json={"is_enabled_in_smart_practice": True},
+        )
+
+        self.assertEqual(enable_response.status_code, 200)
+        self.assertTrue(enable_response.json()["is_enabled_in_smart_practice"])
+
+        session_response = self.client.post(
+            "/api/practice/sessions",
+            json={
+                "settings": {
+                    "new_block_size": 5,
+                    "review_batch_size": 20,
+                    "interleaving_intensity": "high",
+                    "focus_mode": "new_material",
+                }
+            },
+        )
+
+        self.assertEqual(session_response.status_code, 200)
+
+        with db_module.get_connection() as connection:
+            queued_deck_ids = {
+                row["deck_id"]
+                for row in connection.execute(
+                    """
+                    SELECT DISTINCT c.deck_id
+                    FROM practice_session_cards psc
+                    JOIN cards c ON c.id = psc.card_id
+                    WHERE psc.session_id = ?
+                    """,
+                    (session_response.json()["summary"]["session_id"],),
+                ).fetchall()
+            }
+
+        self.assertIn(1, queued_deck_ids)
+
     def test_card_update_persists_edited_metadata(self) -> None:
         response = self.client.patch(
             "/api/cards/1",

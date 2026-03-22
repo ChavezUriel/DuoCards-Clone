@@ -11,6 +11,7 @@ class DeckSummary(BaseModel):
     slug: str
     title: str
     description: str
+    is_enabled_in_smart_practice: bool = True
     total_cards: int
     reviewed_cards: int
     known_cards: int
@@ -91,6 +92,15 @@ class CardVisibilityResult(BaseModel):
     card_id: int
     deck_id: int
     is_enabled: bool
+
+
+class DeckSmartPracticeUpdate(BaseModel):
+    is_enabled_in_smart_practice: bool
+
+
+class DeckSmartPracticeResult(BaseModel):
+    deck_id: int
+    is_enabled_in_smart_practice: bool
 
 
 class CardUpdateRequest(BaseModel):

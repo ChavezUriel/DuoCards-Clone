@@ -15,6 +15,8 @@ from .schemas import (
     DeckPreview,
     DeckPreviewCard,
     DeckProgress,
+    DeckSmartPracticeResult,
+    DeckSmartPracticeUpdate,
     DeckSummary,
     HealthResponse,
     ReviewCard,
@@ -61,6 +63,7 @@ def list_decks() -> list[DeckSummary]:
             d.slug,
             d.title,
             d.description,
+            d.is_enabled_in_smart_practice,
             COUNT(c.id) AS total_cards,
             COALESCE(SUM(CASE WHEN cp.last_result IS NOT NULL THEN 1 ELSE 0 END), 0) AS reviewed_cards,
             COALESCE(SUM(CASE WHEN cp.last_result = 'known' THEN 1 ELSE 0 END), 0) AS known_cards,
@@ -68,7 +71,7 @@ def list_decks() -> list[DeckSummary]:
         FROM decks d
         LEFT JOIN cards c ON c.deck_id = d.id AND c.is_enabled = 1
         LEFT JOIN card_progress cp ON cp.card_id = c.id
-        GROUP BY d.id, d.slug, d.title, d.description
+        GROUP BY d.id, d.slug, d.title, d.description, d.is_enabled_in_smart_practice
         ORDER BY d.id
     """
     with get_connection() as connection:
@@ -86,6 +89,7 @@ def list_decks() -> list[DeckSummary]:
                 slug=row["slug"],
                 title=row["title"],
                 description=row["description"],
+                is_enabled_in_smart_practice=bool(row["is_enabled_in_smart_practice"]),
                 total_cards=total_cards,
                 reviewed_cards=reviewed_cards,
                 known_cards=known_cards,
@@ -335,6 +339,74 @@ def update_card_visibility(card_id: int, payload: CardVisibilityUpdate) -> CardV
         card_id=card_id,
         deck_id=card_row["deck_id"],
         is_enabled=payload.is_enabled,
+    )
+
+
+@app.patch("/api/decks/{deck_id}/smart-practice-inclusion", response_model=DeckSmartPracticeResult)
+def update_deck_smart_practice_inclusion(
+    deck_id: int,
+    payload: DeckSmartPracticeUpdate,
+) -> DeckSmartPracticeResult:
+    now = datetime.now(timezone.utc).isoformat()
+
+    with get_connection() as connection:
+        deck_row = connection.execute(
+            "SELECT id, is_enabled_in_smart_practice FROM decks WHERE id = ?",
+            (deck_id,),
+        ).fetchone()
+        if deck_row is None:
+            raise HTTPException(status_code=404, detail="Deck not found")
+
+        next_enabled_value = 1 if payload.is_enabled_in_smart_practice else 0
+        connection.execute(
+            "UPDATE decks SET is_enabled_in_smart_practice = ? WHERE id = ?",
+            (next_enabled_value, deck_id),
+        )
+
+        if not payload.is_enabled_in_smart_practice:
+            affected_sessions = connection.execute(
+                """
+                SELECT DISTINCT psc.session_id
+                FROM practice_session_cards psc
+                JOIN cards c ON c.id = psc.card_id
+                WHERE c.deck_id = ? AND psc.status = 'pending'
+                """,
+                (deck_id,),
+            ).fetchall()
+            connection.execute(
+                """
+                DELETE FROM practice_session_cards
+                WHERE id IN (
+                    SELECT psc.id
+                    FROM practice_session_cards psc
+                    JOIN cards c ON c.id = psc.card_id
+                    WHERE c.deck_id = ? AND psc.status = 'pending'
+                )
+                """,
+                (deck_id,),
+            )
+
+            for session_row in affected_sessions:
+                pending_total = connection.execute(
+                    "SELECT COUNT(*) AS total FROM practice_session_cards WHERE session_id = ? AND status = 'pending'",
+                    (session_row["session_id"],),
+                ).fetchone()["total"]
+                if pending_total == 0:
+                    connection.execute(
+                        "UPDATE practice_sessions SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ? AND status = 'active'",
+                        (now, now, session_row["session_id"]),
+                    )
+                else:
+                    connection.execute(
+                        "UPDATE practice_sessions SET updated_at = ? WHERE id = ? AND status = 'active'",
+                        (now, session_row["session_id"]),
+                    )
+
+        connection.commit()
+
+    return DeckSmartPracticeResult(
+        deck_id=deck_id,
+        is_enabled_in_smart_practice=payload.is_enabled_in_smart_practice,
     )
 
 
