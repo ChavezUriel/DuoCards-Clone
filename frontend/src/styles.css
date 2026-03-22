@@ -536,16 +536,54 @@ a {
   color: var(--danger);
 }
 
+
 .smart-practice-panel {
+  position: relative;
   display: grid;
+  gap: 1.4rem;
+  padding: 2rem;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top right, rgba(255, 197, 117, 0.32), transparent 26%),
+    radial-gradient(circle at bottom left, rgba(31, 111, 80, 0.12), transparent 30%),
+    linear-gradient(135deg, rgba(255, 252, 247, 0.96), rgba(244, 248, 242, 0.92));
+}
+
+.smart-practice-panel::before {
+  content: '';
+  position: absolute;
+  inset: 1rem;
+  border-radius: 28px;
+  border: 1px solid rgba(31, 111, 80, 0.08);
+  pointer-events: none;
+}
+
+.hero--smart-practice {
+  box-shadow: 0 30px 90px rgba(48, 57, 42, 0.12);
+}
+
+.smart-practice-panel__hero {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.95fr);
   gap: 1.5rem;
-  padding: 1.5rem;
+  align-items: stretch;
 }
 
 .smart-practice-panel__intro {
   display: grid;
-  gap: 0.65rem;
-  max-width: 72ch;
+  align-content: start;
+  gap: 1.25rem;
+  max-width: 62ch;
+}
+
+.smart-practice-panel__intro h1 {
+  margin: 0;
+  font-size: clamp(3rem, 6vw, 5rem);
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
 }
 
 .smart-practice-panel__intro p,
@@ -554,10 +592,167 @@ a {
   color: #44524a;
 }
 
+.smart-practice-panel__glance {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.smart-practice-panel__glance-card {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(31, 111, 80, 0.08);
+}
+
+.smart-practice-panel__glance-card--button {
+  width: 100%;
+  border: 1px solid rgba(31, 111, 80, 0.08);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.smart-practice-panel__glance-card--button:hover,
+.smart-practice-panel__glance-card--button:focus-visible {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.84);
+  border-color: rgba(31, 111, 80, 0.18);
+  box-shadow: 0 14px 28px rgba(48, 57, 42, 0.08);
+}
+
+.smart-practice-panel__glance-card span {
+  font-size: 0.77rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7058;
+}
+
+.smart-practice-panel__glance-card strong {
+  color: var(--primary-dark);
+  font-size: 1.05rem;
+}
+
+.smart-practice-panel__play-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.smart-practice-panel__primary-action {
+  display: grid;
+  align-content: space-between;
+  gap: 0.8rem;
+  min-height: 100%;
+  padding: 1.35rem;
+  border-radius: 30px;
+  background: linear-gradient(145deg, var(--primary-dark), var(--primary));
+  color: #ffffff;
+  text-decoration: none;
+  box-shadow: 0 26px 52px rgba(31, 111, 80, 0.24);
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+
+.smart-practice-panel__primary-action:hover,
+.smart-practice-panel__primary-action:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 34px 60px rgba(31, 111, 80, 0.28);
+  filter: saturate(1.03);
+}
+
+.smart-practice-panel__primary-kicker {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  opacity: 0.74;
+}
+
+.smart-practice-panel__primary-action strong {
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+}
+
+.smart-practice-panel__secondary-stage {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.smart-practice-panel__secondary-actions {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.smart-practice-panel__secondary-action {
+  display: grid;
+  gap: 0.3rem;
+  padding: 1rem 1.05rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(31, 111, 80, 0.08);
+  color: #2d3b31;
+  text-decoration: none;
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+.smart-practice-panel__secondary-action:hover,
+.smart-practice-panel__secondary-action:focus-visible {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(31, 111, 80, 0.18);
+}
+
+.smart-practice-panel__secondary-action strong {
+  font-size: 1rem;
+  color: var(--primary-dark);
+}
+
+.smart-practice-panel__secondary-action span,
+.smart-practice-panel__secondary-stage p {
+  color: #44524a;
+  line-height: 1.5;
+}
+
 .smart-practice-panel__controls {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1rem;
+  position: relative;
+  z-index: 1;
+  padding: 1rem;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(31, 111, 80, 0.08);
+}
+
+.smart-practice-panel__controls-copy {
+  display: grid;
+  gap: 0.85rem;
+  grid-column: 1 / -1;
+}
+
+.smart-practice-panel__controls-copy-block {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem 1.05rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(31, 111, 80, 0.08);
+}
+
+.smart-practice-panel__controls-copy-block strong {
+  color: var(--primary-dark);
+  font-size: 0.95rem;
+}
+
+.smart-practice-panel__controls-copy-block p {
+  margin: 0;
+  color: #44524a;
+  line-height: 1.55;
 }
 
 .setting-field {
@@ -583,18 +778,18 @@ a {
   color: var(--primary-dark);
 }
 
-.smart-practice-panel__footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
+.home-section--secondary {
+  display: grid;
   gap: 1rem;
 }
 
-.smart-practice-panel__summary {
-  display: grid;
-  gap: 0.4rem;
-  color: #44524a;
+.home-section--secondary .section-heading {
+  margin-bottom: 0;
+}
+
+.home-section--secondary h2 {
+  margin: 0;
+  font-size: clamp(1.6rem, 2.4vw, 2.1rem);
 }
 
 .progress-track {
@@ -1385,6 +1580,19 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .smart-practice-panel {
+    padding: 1.35rem;
+  }
+
+  .smart-practice-panel__hero,
+  .smart-practice-panel__play-stage {
+    grid-template-columns: 1fr;
+  }
+
+  .smart-practice-panel__glance {
+    grid-template-columns: 1fr;
+  }
+
   .practice-session-bar {
     grid-template-columns: 1fr;
     gap: 0.4rem;
@@ -1396,6 +1604,12 @@ a {
 
   .practice-session-summary__stats {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .smart-practice-panel__primary-action strong {
+    font-size: 2rem;
   }
 }
 

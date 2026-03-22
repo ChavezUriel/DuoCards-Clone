@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchDeckPreview, fetchDecks, updateDeckSmartPracticeInclusion } from '../api';
 import DeckCard from '../components/DeckCard';
@@ -151,10 +151,12 @@ function HomePage() {
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [settings, setSettings] = useState(() => loadPracticeSettings());
+  const [isPracticeSettingsOpen, setIsPracticeSettingsOpen] = useState(false);
   const [pendingDeckIds, setPendingDeckIds] = useState([]);
   const [actionError, setActionError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [deckWordIndexById, setDeckWordIndexById] = useState({});
+  const deckReviewSectionRef = useRef(null);
 
   const areAllDecksEnabledInSmartPractice = decks.length > 0
     && decks.every((deck) => deck.is_enabled_in_smart_practice);
@@ -169,6 +171,17 @@ function HomePage() {
       };
       savePracticeSettings(nextSettings);
       return nextSettings;
+    });
+  }
+
+  function handleTogglePracticeSettings() {
+    setIsPracticeSettingsOpen((current) => !current);
+  }
+
+  function handleScrollToDeckReview() {
+    deckReviewSectionRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
     });
   }
 
@@ -303,78 +316,130 @@ function HomePage() {
 
   return (
     <>
-      <section className="panel smart-practice-panel">
-        <div className="smart-practice-panel__intro">
-          <p className="eyebrow">Main workflow</p>
-          <h2>Smart Practice</h2>
-          <p>
-            Mix sections across decks, keep new material in small blocks, and push failed review cards to the end of the stack for wider spacing.
-          </p>
-        </div>
+      <section className="panel smart-practice-panel hero hero--smart-practice">
+        <div className="smart-practice-panel__hero">
+          <div className="smart-practice-panel__intro">
+            <p className="eyebrow">Main workflow</p>
+            <h1>Smart Practice</h1>
 
-        <div className="smart-practice-panel__controls">
-          <label className="setting-field">
-            <span>New material block</span>
-            <input
-              type="range"
-              min="5"
-              max="12"
-              value={settings.new_block_size}
-              onChange={(event) => updateSettings({ new_block_size: Number(event.target.value) })}
-            />
-            <strong>{settings.new_block_size} cards</strong>
-          </label>
-
-          <label className="setting-field">
-            <span>Review stack</span>
-            <input
-              type="range"
-              min="20"
-              max="50"
-              step="5"
-              value={settings.review_batch_size}
-              onChange={(event) => updateSettings({ review_batch_size: Number(event.target.value) })}
-            />
-            <strong>{settings.review_batch_size} cards</strong>
-          </label>
-
-          <label className="setting-field">
-            <span>Interleaving intensity</span>
-            <select
-              value={settings.interleaving_intensity}
-              onChange={(event) => updateSettings({ interleaving_intensity: event.target.value })}
-            >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-          </label>
-
-          <label className="setting-field">
-            <span>Session focus</span>
-            <select
-              value={settings.focus_mode}
-              onChange={(event) => updateSettings({ focus_mode: event.target.value })}
-            >
-              <option value="auto">Auto</option>
-              <option value="new_material">New material</option>
-              <option value="review">Review</option>
-            </select>
-          </label>
-        </div>
-
-        <div className="smart-practice-panel__footer">
-          <div className="smart-practice-panel__summary">
-            <span>New blocks unlock only after each card reaches an initial 2-streak mastery threshold.</span>
-            <span>Review misses go back to the end of the queue instead of repeating immediately.</span>
+            <div className="smart-practice-panel__glance">
+              <button
+                className="smart-practice-panel__glance-card smart-practice-panel__glance-card--button"
+                type="button"
+                onClick={handleScrollToDeckReview}
+              >
+                <span>Decks in rotation</span>
+                <strong>{enabledDeckCount} enabled</strong>
+              </button>
+              <button
+                className="smart-practice-panel__glance-card smart-practice-panel__glance-card--button"
+                type="button"
+                aria-expanded={isPracticeSettingsOpen}
+                aria-controls="smart-practice-settings"
+                onClick={handleTogglePracticeSettings}
+              >
+                <span>Session shape</span>
+                <strong>{settings.new_block_size} new / {settings.review_batch_size} review</strong>
+              </button>
+              <button
+                className="smart-practice-panel__glance-card smart-practice-panel__glance-card--button"
+                type="button"
+                aria-expanded={isPracticeSettingsOpen}
+                aria-controls="smart-practice-settings"
+                onClick={handleTogglePracticeSettings}
+              >
+                <span>Interleaving</span>
+                <strong>{settings.interleaving_intensity}</strong>
+              </button>
+            </div>
           </div>
-          <Link className="button button--primary" to="/practice">
-            Start Smart Practice
-          </Link>
+
+          <div className="smart-practice-panel__play-stage">
+            <Link
+              className="smart-practice-panel__primary-action"
+              to="/practice"
+              onClick={() => updateSettings({ focus_mode: 'auto' })}
+            >
+              <span className="smart-practice-panel__primary-kicker">Recommended</span>
+              <strong>Play Auto</strong>
+            </Link>
+
+            <div className="smart-practice-panel__secondary-stage">
+              <div className="smart-practice-panel__secondary-actions" aria-label="Alternative smart practice modes">
+                <Link
+                  className="smart-practice-panel__secondary-action"
+                  to="/practice"
+                  onClick={() => updateSettings({ focus_mode: 'new_material' })}
+                >
+                  <strong>New material</strong>
+                </Link>
+
+                <Link
+                  className="smart-practice-panel__secondary-action"
+                  to="/practice"
+                  onClick={() => updateSettings({ focus_mode: 'review' })}
+                >
+                  <strong>Review</strong>
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
+
+        {isPracticeSettingsOpen ? (
+          <div className="smart-practice-panel__controls" id="smart-practice-settings">
+            <label className="setting-field">
+              <span>New material flashcard count</span>
+              <input
+                type="range"
+                min="5"
+                max="12"
+                value={settings.new_block_size}
+                onChange={(event) => updateSettings({ new_block_size: Number(event.target.value) })}
+              />
+              <strong>{settings.new_block_size} cards</strong>
+            </label>
+
+            <label className="setting-field">
+              <span>Review stack flashcard count</span>
+              <input
+                type="range"
+                min="20"
+                max="50"
+                step="5"
+                value={settings.review_batch_size}
+                onChange={(event) => updateSettings({ review_batch_size: Number(event.target.value) })}
+              />
+              <strong>{settings.review_batch_size} cards</strong>
+            </label>
+
+            <label className="setting-field">
+              <span>Interleaving intensity</span>
+              <select
+                value={settings.interleaving_intensity}
+                onChange={(event) => updateSettings({ interleaving_intensity: event.target.value })}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+
+            <div className="smart-practice-panel__controls-copy">
+              <div className="smart-practice-panel__controls-copy-block">
+                <strong>Session types</strong>
+                <p>Auto mixes new material and review for the default run. New material biases the session toward fresh cards. Review prioritizes pending recall before expanding.</p>
+              </div>
+              <div className="smart-practice-panel__controls-copy-block">
+                <strong>How progression works</strong>
+                <p>New blocks unlock only after each card reaches an initial 2-streak mastery threshold. Review misses go back to the end of the queue instead of repeating immediately.</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
 
-      <section>
+      <section className="home-section home-section--secondary" ref={deckReviewSectionRef}>
         <div className="section-heading">
           <div>
             <p className="eyebrow">Secondary workflow</p>
