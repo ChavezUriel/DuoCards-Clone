@@ -1,15 +1,19 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import HomePage from './pages/HomePage';
+import DeckWordsPage from './pages/DeckWordsPage';
 import PracticePage from './pages/PracticePage';
 import ReviewPage from './pages/ReviewPage';
 
 function App() {
   const location = useLocation();
-  const isReviewRoute = location.pathname.startsWith('/review/') || location.pathname === '/practice';
+  const isFocusedRoute =
+    location.pathname.startsWith('/review/') ||
+    location.pathname === '/practice' ||
+    location.pathname.startsWith('/decks/');
 
   return (
-    <div className={`app-shell ${isReviewRoute ? 'app-shell--review' : ''}`}>
-      {!isReviewRoute ? (
+    <div className={`app-shell ${isFocusedRoute ? 'app-shell--review' : ''}`}>
+      {!isFocusedRoute ? (
         <header className="hero">
           <div>
             <p className="eyebrow">Spanish speakers learning English</p>
@@ -21,9 +25,10 @@ function App() {
         </header>
       ) : null}
 
-      <main className={`page-content ${isReviewRoute ? 'page-content--review' : ''}`}>
+      <main className={`page-content ${isFocusedRoute ? 'page-content--review' : ''}`}>
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/decks/:deckId/words" element={<DeckWordsPage />} />
           <Route path="/practice" element={<PracticePage />} />
           <Route path="/review/:deckId" element={<ReviewPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

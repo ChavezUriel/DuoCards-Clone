@@ -30,9 +30,23 @@ function DeckCard({ deck }) {
 
       <div className="deck-card__footer">
         <strong>{statusLabel}</strong>
-        <Link className="button button--secondary" to={`/review/${deck.id}`}>
-          {actionLabel}
-        </Link>
+        <div className="deck-card__actions">
+          <Link
+            className="deck-card__icon-button"
+            to={`/decks/${deck.id}/words`}
+            aria-label={`Explore ${deck.title}`}
+            title="Explore deck"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M1.5 12s3.9-6.5 10.5-6.5S22.5 12 22.5 12s-3.9 6.5-10.5 6.5S1.5 12 1.5 12Z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="12" cy="12" r="3.25" fill="none" stroke="currentColor" strokeWidth="1.7" />
+            </svg>
+          </Link>
+
+          <Link className="button button--secondary" to={`/review/${deck.id}`}>
+            {actionLabel}
+          </Link>
+        </div>
       </div>
     </article>
   );

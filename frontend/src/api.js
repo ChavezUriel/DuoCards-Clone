@@ -37,6 +37,24 @@ export function fetchDeckProgress(deckId) {
   return request(`/api/decks/${deckId}/progress`);
 }
 
+export function fetchDeckPreview(deckId) {
+  return request(`/api/decks/${deckId}/preview`);
+}
+
+export function updateCardVisibility(cardId, isEnabled) {
+  return request(`/api/cards/${cardId}/visibility`, {
+    method: 'PATCH',
+    body: JSON.stringify({ is_enabled: isEnabled }),
+  });
+}
+
+export function updateCard(cardId, payload) {
+  return request(`/api/cards/${cardId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function startSmartPracticeSession(settings) {
   return request('/api/practice/sessions', {
     method: 'POST',

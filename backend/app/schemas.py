@@ -62,6 +62,50 @@ class DeckProgress(BaseModel):
     is_completed: bool
 
 
+class DeckPreviewCard(BaseModel):
+    card_id: int
+    prompt_es: str
+    answer_en: str
+    section_name: str | None = None
+    is_enabled: bool = True
+    part_of_speech: str | None = None
+    definition_en: str | None = None
+    main_translations_es: list[str] = Field(default_factory=list)
+    collocations: list[str] = Field(default_factory=list)
+    example_sentence: str | None = None
+    example_es: str | None = None
+    example_en: str | None = None
+
+
+class DeckPreview(BaseModel):
+    deck_id: int
+    deck_title: str
+    deck_description: str
+    total_cards: int
+    cards: list[DeckPreviewCard]
+    
+class CardVisibilityUpdate(BaseModel):
+    is_enabled: bool
+
+class CardVisibilityResult(BaseModel):
+    card_id: int
+    deck_id: int
+    is_enabled: bool
+
+
+class CardUpdateRequest(BaseModel):
+    prompt_es: str = Field(min_length=1)
+    answer_en: str = Field(min_length=1)
+    section_name: str | None = None
+    part_of_speech: str | None = None
+    definition_en: str | None = None
+    main_translations_es: list[str] = Field(default_factory=list)
+    collocations: list[str] = Field(default_factory=list)
+    example_sentence: str | None = None
+    example_es: str | None = None
+    example_en: str | None = None
+
+
 class SmartPracticeSettings(BaseModel):
     new_block_size: int = Field(default=7, ge=5, le=12)
     review_batch_size: int = Field(default=30, ge=20, le=50)

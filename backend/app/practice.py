@@ -124,7 +124,7 @@ def get_session_snapshot(connection: sqlite3.Connection, session_id: int) -> dic
         FROM practice_session_cards psc
         JOIN cards c ON c.id = psc.card_id
         JOIN decks d ON d.id = c.deck_id
-        WHERE psc.session_id = ? AND psc.status = 'pending'
+        WHERE psc.session_id = ? AND psc.status = 'pending' AND c.is_enabled = 1
         ORDER BY psc.queue_position ASC
         LIMIT 1
         """,
@@ -229,6 +229,7 @@ def _choose_session_mode(connection: sqlite3.Connection, settings: PracticeSetti
             COALESCE(SUM(CASE WHEN cp.initial_mastered_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS learned_count
         FROM cards c
         LEFT JOIN card_progress cp ON cp.card_id = c.id
+        WHERE c.is_enabled = 1
         """
     ).fetchone()
     unmastered_count = counts["unmastered_count"]
@@ -280,7 +281,7 @@ def _select_new_material_cards(connection: sqlite3.Connection, settings: Practic
         FROM cards c
         JOIN decks d ON d.id = c.deck_id
         LEFT JOIN card_progress cp ON cp.card_id = c.id
-        WHERE cp.initial_mastered_at IS NULL OR cp.card_id IS NULL
+        WHERE c.is_enabled = 1 AND (cp.initial_mastered_at IS NULL OR cp.card_id IS NULL)
         ORDER BY
             CASE WHEN cp.last_result IS NULL THEN 1 ELSE 0 END ASC,
             COALESCE(cp.known_streak, 0) DESC,
@@ -307,7 +308,7 @@ def _select_review_cards(connection: sqlite3.Connection, settings: PracticeSetti
         FROM cards c
         JOIN decks d ON d.id = c.deck_id
         JOIN card_progress cp ON cp.card_id = c.id
-        WHERE cp.initial_mastered_at IS NOT NULL
+        WHERE c.is_enabled = 1 AND cp.initial_mastered_at IS NOT NULL
         ORDER BY
             COALESCE(cp.unknown_count, 0) DESC,
             COALESCE(cp.last_reviewed_at, cp.initial_mastered_at, '1970-01-01T00:00:00+00:00') ASC,

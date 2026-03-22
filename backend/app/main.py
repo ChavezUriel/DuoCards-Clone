@@ -9,6 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from .db import get_connection, initialize_database
 from .practice import PracticeSettings, get_session_snapshot, start_or_resume_session, submit_session_review
 from .schemas import (
+    CardUpdateRequest,
+    CardVisibilityResult,
+    CardVisibilityUpdate,
+    DeckPreview,
+    DeckPreviewCard,
     DeckProgress,
     DeckSummary,
     HealthResponse,
@@ -61,7 +66,7 @@ def list_decks() -> list[DeckSummary]:
             COALESCE(SUM(CASE WHEN cp.last_result = 'known' THEN 1 ELSE 0 END), 0) AS known_cards,
             COALESCE(SUM(CASE WHEN cp.last_result = 'unknown' THEN 1 ELSE 0 END), 0) AS unknown_cards
         FROM decks d
-        LEFT JOIN cards c ON c.deck_id = d.id
+        LEFT JOIN cards c ON c.deck_id = d.id AND c.is_enabled = 1
         LEFT JOIN card_progress cp ON cp.card_id = c.id
         GROUP BY d.id, d.slug, d.title, d.description
         ORDER BY d.id
@@ -121,7 +126,7 @@ def get_review_card(deck_id: int) -> ReviewCard:
         FROM cards c
         JOIN decks d ON d.id = c.deck_id
         LEFT JOIN card_progress cp ON cp.card_id = c.id
-        WHERE c.deck_id = ?
+        WHERE c.deck_id = ? AND c.is_enabled = 1
         ORDER BY
             review_stage ASC,
             CASE WHEN cp.last_result = 'unknown' THEN COALESCE(cp.unknown_count, 0) * -1 ELSE 0 END ASC,
@@ -152,7 +157,7 @@ def get_deck_progress(deck_id: int) -> DeckProgress:
             COALESCE(SUM(CASE WHEN cp.last_result = 'known' THEN 1 ELSE 0 END), 0) AS known_cards,
             COALESCE(SUM(CASE WHEN cp.last_result = 'unknown' THEN 1 ELSE 0 END), 0) AS unknown_cards
         FROM decks d
-        LEFT JOIN cards c ON c.deck_id = d.id
+        LEFT JOIN cards c ON c.deck_id = d.id AND c.is_enabled = 1
         LEFT JOIN card_progress cp ON cp.card_id = c.id
         WHERE d.id = ?
         GROUP BY d.id
@@ -177,10 +182,55 @@ def get_deck_progress(deck_id: int) -> DeckProgress:
     )
 
 
+@app.get("/api/decks/{deck_id}/preview", response_model=DeckPreview)
+def get_deck_preview(deck_id: int) -> DeckPreview:
+    deck_query = """
+        SELECT id, title, description
+        FROM decks
+        WHERE id = ?
+    """
+    cards_query = """
+        SELECT
+            c.id AS card_id,
+            c.spanish_text,
+            c.english_text,
+            c.is_enabled,
+            c.part_of_speech,
+            c.definition_en,
+            c.main_translations_es,
+            c.collocations,
+            c.example_sentence,
+            c.example_es,
+            c.example_en,
+            COALESCE(c.section_name, d.title) AS section_name
+        FROM cards c
+        JOIN decks d ON d.id = c.deck_id
+        WHERE c.deck_id = ?
+        ORDER BY COALESCE(c.section_name, d.title) ASC, c.id ASC
+    """
+
+    with get_connection() as connection:
+        deck_row = connection.execute(deck_query, (deck_id,)).fetchone()
+        if deck_row is None:
+            raise HTTPException(status_code=404, detail="Deck not found")
+
+        card_rows = connection.execute(cards_query, (deck_id,)).fetchall()
+
+    cards = [_build_deck_preview_card(row) for row in card_rows]
+
+    return DeckPreview(
+        deck_id=deck_row["id"],
+        deck_title=deck_row["title"],
+        deck_description=deck_row["description"],
+        total_cards=len(cards),
+        cards=cards,
+    )
+
+
 @app.post("/api/reviews", response_model=ReviewResult)
 def submit_review(payload: ReviewSubmission) -> ReviewResult:
     now = datetime.now(timezone.utc).isoformat()
-    card_query = "SELECT id FROM cards WHERE id = ?"
+    card_query = "SELECT id FROM cards WHERE id = ? AND is_enabled = 1"
     progress_query = "SELECT known_count, unknown_count, known_streak, initial_mastered_at FROM card_progress WHERE card_id = ?"
 
     with get_connection() as connection:
@@ -234,6 +284,125 @@ def submit_review(payload: ReviewSubmission) -> ReviewResult:
         known_count=known_count,
         unknown_count=unknown_count,
     )
+
+@app.patch("/api/cards/{card_id}/visibility", response_model=CardVisibilityResult)
+def update_card_visibility(card_id: int, payload: CardVisibilityUpdate) -> CardVisibilityResult:
+    now = datetime.now(timezone.utc).isoformat()
+
+    with get_connection() as connection:
+        card_row = connection.execute(
+            "SELECT id, deck_id, is_enabled FROM cards WHERE id = ?",
+            (card_id,),
+        ).fetchone()
+        if card_row is None:
+            raise HTTPException(status_code=404, detail="Card not found")
+
+        next_enabled_value = 1 if payload.is_enabled else 0
+        connection.execute(
+            "UPDATE cards SET is_enabled = ? WHERE id = ?",
+            (next_enabled_value, card_id),
+        )
+
+        if not payload.is_enabled:
+            affected_sessions = connection.execute(
+                "SELECT DISTINCT session_id FROM practice_session_cards WHERE card_id = ? AND status = 'pending'",
+                (card_id,),
+            ).fetchall()
+            connection.execute(
+                "DELETE FROM practice_session_cards WHERE card_id = ? AND status = 'pending'",
+                (card_id,),
+            )
+
+            for session_row in affected_sessions:
+                pending_total = connection.execute(
+                    "SELECT COUNT(*) AS total FROM practice_session_cards WHERE session_id = ? AND status = 'pending'",
+                    (session_row["session_id"],),
+                ).fetchone()["total"]
+                if pending_total == 0:
+                    connection.execute(
+                        "UPDATE practice_sessions SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ? AND status = 'active'",
+                        (now, now, session_row["session_id"]),
+                    )
+                else:
+                    connection.execute(
+                        "UPDATE practice_sessions SET updated_at = ? WHERE id = ? AND status = 'active'",
+                        (now, session_row["session_id"]),
+                    )
+
+        connection.commit()
+
+    return CardVisibilityResult(
+        card_id=card_id,
+        deck_id=card_row["deck_id"],
+        is_enabled=payload.is_enabled,
+    )
+
+
+@app.patch("/api/cards/{card_id}", response_model=DeckPreviewCard)
+def update_card(card_id: int, payload: CardUpdateRequest) -> DeckPreviewCard:
+    with get_connection() as connection:
+        existing_card = connection.execute(
+            "SELECT id FROM cards WHERE id = ?",
+            (card_id,),
+        ).fetchone()
+        if existing_card is None:
+            raise HTTPException(status_code=404, detail="Card not found")
+
+        connection.execute(
+            """
+            UPDATE cards
+            SET
+                spanish_text = ?,
+                english_text = ?,
+                section_name = ?,
+                part_of_speech = ?,
+                definition_en = ?,
+                main_translations_es = ?,
+                collocations = ?,
+                example_sentence = ?,
+                example_es = ?,
+                example_en = ?
+            WHERE id = ?
+            """,
+            (
+                _normalize_required_text(payload.prompt_es, "prompt_es"),
+                _normalize_required_text(payload.answer_en, "answer_en"),
+                _normalize_optional_text(payload.section_name),
+                _normalize_optional_text(payload.part_of_speech),
+                _normalize_optional_text(payload.definition_en),
+                json.dumps(_normalize_text_items(payload.main_translations_es), ensure_ascii=False),
+                json.dumps(_normalize_text_items(payload.collocations), ensure_ascii=False),
+                _normalize_optional_text(payload.example_sentence),
+                _normalize_optional_text(payload.example_es),
+                _normalize_optional_text(payload.example_en),
+                card_id,
+            ),
+        )
+
+        updated_row = connection.execute(
+            """
+            SELECT
+                c.id AS card_id,
+                c.spanish_text,
+                c.english_text,
+                c.is_enabled,
+                c.part_of_speech,
+                c.definition_en,
+                c.main_translations_es,
+                c.collocations,
+                c.example_sentence,
+                c.example_es,
+                c.example_en,
+                COALESCE(c.section_name, d.title) AS section_name
+            FROM cards c
+            JOIN decks d ON d.id = c.deck_id
+            WHERE c.id = ?
+            """,
+            (card_id,),
+        ).fetchone()
+        connection.commit()
+
+    return _build_deck_preview_card(updated_row)
 
 
 @app.post("/api/practice/sessions", response_model=SmartPracticeSession)
@@ -298,6 +467,37 @@ def _decode_json_list(value: str | None) -> list[str]:
     return [item for item in parsed if isinstance(item, str)]
 
 
+def _normalize_required_text(value: str, field_name: str) -> str:
+    normalized = _normalize_optional_text(value)
+    if normalized is None:
+        raise HTTPException(status_code=422, detail=f"{field_name} must be a non-empty string")
+    return normalized
+
+
+def _normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _normalize_text_items(values: list[str]) -> list[str]:
+    normalized_items: list[str] = []
+    seen_items: set[str] = set()
+
+    for value in values:
+        normalized_value = _normalize_optional_text(value)
+        if normalized_value is None:
+            continue
+        lookup_value = normalized_value.casefold()
+        if lookup_value in seen_items:
+            continue
+        seen_items.add(lookup_value)
+        normalized_items.append(normalized_value)
+
+    return normalized_items
+
+
 def _build_smart_practice_session(snapshot: dict[str, object]) -> SmartPracticeSession:
     summary = SmartPracticeSessionSummary(
         session_id=int(snapshot["session_id"]),
@@ -327,6 +527,23 @@ def _build_review_card(row: object) -> ReviewCard:
         section_name=row["section_name"],
         prompt_es=row["spanish_text"],
         answer_en=row["english_text"],
+        part_of_speech=row["part_of_speech"],
+        definition_en=row["definition_en"],
+        main_translations_es=_decode_json_list(row["main_translations_es"]),
+        collocations=_decode_json_list(row["collocations"]),
+        example_sentence=row["example_sentence"],
+        example_es=row["example_es"],
+        example_en=row["example_en"],
+    )
+
+
+def _build_deck_preview_card(row: object) -> DeckPreviewCard:
+    return DeckPreviewCard(
+        card_id=row["card_id"],
+        prompt_es=row["spanish_text"],
+        answer_en=row["english_text"],
+        section_name=row["section_name"],
+        is_enabled=bool(row["is_enabled"]),
         part_of_speech=row["part_of_speech"],
         definition_en=row["definition_en"],
         main_translations_es=_decode_json_list(row["main_translations_es"]),

@@ -93,6 +93,126 @@ class SmartPracticeApiTests(unittest.TestCase):
         self.assertEqual(next_session["summary"]["remaining_cards"], 15)
         self.assertNotEqual(next_session["current_card"]["card_id"], first_card_id)
 
+    def test_deck_preview_returns_full_card_list(self) -> None:
+        response = self.client.get("/api/decks/1/preview")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["deck_id"], 1)
+        self.assertEqual(payload["deck_title"], "English Basics")
+        self.assertEqual(payload["total_cards"], 5)
+        self.assertEqual(len(payload["cards"]), 5)
+        self.assertEqual(payload["cards"][0]["prompt_es"], "Hola")
+        self.assertIn("answer_en", payload["cards"][0])
+        self.assertIn("part_of_speech", payload["cards"][0])
+        self.assertIn("main_translations_es", payload["cards"][0])
+
+    def test_disabling_card_hides_it_from_deck_surfaces(self) -> None:
+        disable_response = self.client.patch(
+            "/api/cards/1/visibility",
+            json={"is_enabled": False},
+        )
+
+        self.assertEqual(disable_response.status_code, 200)
+        self.assertFalse(disable_response.json()["is_enabled"])
+
+        preview_response = self.client.get("/api/decks/1/preview")
+        preview_payload = preview_response.json()
+        self.assertEqual(preview_response.status_code, 200)
+        self.assertEqual(preview_payload["total_cards"], 5)
+        self.assertEqual([card["card_id"] for card in preview_payload["cards"]], [1, 2, 3, 4, 5])
+        self.assertFalse(preview_payload["cards"][0]["is_enabled"])
+
+        decks_response = self.client.get("/api/decks")
+        self.assertEqual(decks_response.status_code, 200)
+        self.assertEqual(decks_response.json()[0]["total_cards"], 4)
+
+        review_response = self.client.get("/api/decks/1/review")
+        self.assertEqual(review_response.status_code, 200)
+        self.assertNotEqual(review_response.json()["card_id"], 1)
+
+    def test_disabling_card_removes_it_from_new_practice_sessions(self) -> None:
+        disable_response = self.client.patch(
+            "/api/cards/1/visibility",
+            json={"is_enabled": False},
+        )
+        self.assertEqual(disable_response.status_code, 200)
+
+        session_response = self.client.post(
+            "/api/practice/sessions",
+            json={
+                "settings": {
+                    "new_block_size": 5,
+                    "review_batch_size": 20,
+                    "interleaving_intensity": "high",
+                    "focus_mode": "new_material",
+                }
+            },
+        )
+
+        self.assertEqual(session_response.status_code, 200)
+        payload = session_response.json()
+        self.assertNotEqual(payload["current_card"]["card_id"], 1)
+
+        with db_module.get_connection() as connection:
+            queued_card_ids = [
+                row["card_id"]
+                for row in connection.execute(
+                    "SELECT card_id FROM practice_session_cards WHERE session_id = ? ORDER BY queue_position ASC",
+                    (payload["summary"]["session_id"],),
+                ).fetchall()
+            ]
+
+        self.assertNotIn(1, queued_card_ids)
+
+    def test_disabled_card_can_be_reenabled(self) -> None:
+        self.client.patch("/api/cards/1/visibility", json={"is_enabled": False})
+
+        enable_response = self.client.patch(
+            "/api/cards/1/visibility",
+            json={"is_enabled": True},
+        )
+
+        self.assertEqual(enable_response.status_code, 200)
+        self.assertTrue(enable_response.json()["is_enabled"])
+
+        preview_response = self.client.get("/api/decks/1/preview")
+        preview_payload = preview_response.json()
+        self.assertTrue(preview_payload["cards"][0]["is_enabled"])
+
+        decks_response = self.client.get("/api/decks")
+        self.assertEqual(decks_response.json()[0]["total_cards"], 5)
+
+    def test_card_update_persists_edited_metadata(self) -> None:
+        response = self.client.patch(
+            "/api/cards/1",
+            json={
+                "prompt_es": "Hola a todos",
+                "answer_en": "Hello everyone",
+                "section_name": "Greetings",
+                "part_of_speech": "expression",
+                "definition_en": "A greeting addressed to a group.",
+                "main_translations_es": ["hola a todos", "buenas a todos"],
+                "collocations": ["say hello everyone", "hello everyone"],
+                "example_sentence": "Hello everyone, welcome to class.",
+                "example_es": "Hola a todos, bienvenidos a clase.",
+                "example_en": "Hello everyone, welcome to class.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["prompt_es"], "Hola a todos")
+        self.assertEqual(payload["answer_en"], "Hello everyone")
+        self.assertEqual(payload["section_name"], "Greetings")
+        self.assertEqual(payload["main_translations_es"], ["hola a todos", "buenas a todos"])
+
+        preview_response = self.client.get("/api/decks/1/preview")
+        preview_payload = preview_response.json()
+        updated_card = next(card for card in preview_payload["cards"] if card["card_id"] == 1)
+        self.assertEqual(updated_card["prompt_es"], "Hola a todos")
+        self.assertEqual(updated_card["definition_en"], "A greeting addressed to a group.")
+
     def _initially_master_cards(self, *, card_limit: int) -> None:
         with db_module.get_connection() as connection:
             card_rows = connection.execute("SELECT id FROM cards ORDER BY id LIMIT ?", (card_limit,)).fetchall()

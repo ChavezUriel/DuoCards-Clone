@@ -28,7 +28,6 @@ function Flashcard({ card, isAnswerVisible, onReveal }) {
   const [isDetailsVisible, setIsDetailsVisible] = useState(false);
   const activeUtteranceRef = useRef(null);
   const previousAnswerVisibleRef = useRef(isAnswerVisible);
-  const shouldShowDeckTitle = card.deck_title && card.deck_title !== card.section_name;
   const hasAnswerSpeech = canUseSpeechSynthesis() && Boolean(normalizeSpeechText(card.answer_en));
 
   function stopSpeech() {
@@ -114,10 +113,9 @@ function Flashcard({ card, isAnswerVisible, onReveal }) {
     <>
       <section className="panel flashcard">
         <div className="flashcard__face flashcard__face--front">
-          {card.section_name || card.deck_title ? (
+          {card.section_name ? (
             <div className="flashcard__meta-row">
               {card.section_name ? <span className="flashcard__meta-pill">{card.section_name}</span> : null}
-              {shouldShowDeckTitle ? <span className="flashcard__meta-pill flashcard__meta-pill--secondary">{card.deck_title}</span> : null}
             </div>
           ) : null}
           <p className="flashcard__label">Spanish</p>

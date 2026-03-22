@@ -232,6 +232,7 @@ CREATE TABLE IF NOT EXISTS cards (
     deck_id INTEGER NOT NULL,
     spanish_text TEXT NOT NULL,
     english_text TEXT NOT NULL,
+    is_enabled INTEGER NOT NULL DEFAULT 1 CHECK(is_enabled IN (0, 1)),
     section_name TEXT,
     part_of_speech TEXT,
     definition_en TEXT,
@@ -553,6 +554,7 @@ def _migrate_cards_table(connection: sqlite3.Connection) -> None:
         for row in connection.execute("PRAGMA table_info(cards)").fetchall()
     }
     migrations = {
+        "is_enabled": "ALTER TABLE cards ADD COLUMN is_enabled INTEGER NOT NULL DEFAULT 1 CHECK(is_enabled IN (0, 1))",
         "section_name": "ALTER TABLE cards ADD COLUMN section_name TEXT",
         "part_of_speech": "ALTER TABLE cards ADD COLUMN part_of_speech TEXT",
         "definition_en": "ALTER TABLE cards ADD COLUMN definition_en TEXT",
