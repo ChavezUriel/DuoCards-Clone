@@ -13,18 +13,6 @@ function App() {
 
   return (
     <div className={`app-shell ${isFocusedRoute ? 'app-shell--review' : ''}`}>
-      {!isFocusedRoute ? (
-        <header className="hero">
-          <div>
-            <p className="eyebrow">Spanish speakers learning English</p>
-            <h1>DuoCards Clone</h1>
-            <p className="hero-copy">
-              Review short English flashcards, reveal the answer, and track what you already know.
-            </p>
-          </div>
-        </header>
-      ) : null}
-
       <main className={`page-content ${isFocusedRoute ? 'page-content--review' : ''}`}>
         <Routes>
           <Route path="/" element={<HomePage />} />

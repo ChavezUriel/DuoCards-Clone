@@ -152,6 +152,7 @@ function HomePage() {
   const [error, setError] = useState('');
   const [settings, setSettings] = useState(() => loadPracticeSettings());
   const [isPracticeSettingsOpen, setIsPracticeSettingsOpen] = useState(false);
+  const [shouldRenderPracticeSettings, setShouldRenderPracticeSettings] = useState(false);
   const [pendingDeckIds, setPendingDeckIds] = useState([]);
   const [actionError, setActionError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -184,6 +185,21 @@ function HomePage() {
       block: 'start',
     });
   }
+
+  useEffect(() => {
+    if (isPracticeSettingsOpen) {
+      setShouldRenderPracticeSettings(true);
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShouldRenderPracticeSettings(false);
+    }, 220);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isPracticeSettingsOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -319,7 +335,6 @@ function HomePage() {
       <section className="panel smart-practice-panel hero hero--smart-practice">
         <div className="smart-practice-panel__hero">
           <div className="smart-practice-panel__intro">
-            <p className="eyebrow">Main workflow</p>
             <h1>Smart Practice</h1>
 
             <div className="smart-practice-panel__glance">
@@ -371,7 +386,9 @@ function HomePage() {
                   to="/practice"
                   onClick={() => updateSettings({ focus_mode: 'new_material' })}
                 >
-                  <strong>New material</strong>
+                  <span className="smart-practice-panel__secondary-kicker">Session</span>
+                  <strong>Play New material</strong>
+                  <span className="smart-practice-panel__secondary-copy">Start a run biased toward fresh cards.</span>
                 </Link>
 
                 <Link
@@ -379,15 +396,20 @@ function HomePage() {
                   to="/practice"
                   onClick={() => updateSettings({ focus_mode: 'review' })}
                 >
-                  <strong>Review</strong>
+                  <span className="smart-practice-panel__secondary-kicker">Session</span>
+                  <strong>Play Review</strong>
+                  <span className="smart-practice-panel__secondary-copy">Start a run focused on pending recall.</span>
                 </Link>
               </div>
             </div>
           </div>
         </div>
 
-        {isPracticeSettingsOpen ? (
-          <div className="smart-practice-panel__controls" id="smart-practice-settings">
+        {shouldRenderPracticeSettings ? (
+          <div
+            className={`smart-practice-panel__controls ${isPracticeSettingsOpen ? 'smart-practice-panel__controls--open' : 'smart-practice-panel__controls--closing'}`}
+            id="smart-practice-settings"
+          >
             <label className="setting-field">
               <span>New material flashcard count</span>
               <input
@@ -416,6 +438,7 @@ function HomePage() {
             <label className="setting-field">
               <span>Interleaving intensity</span>
               <select
+                className="setting-field__select"
                 value={settings.interleaving_intensity}
                 onChange={(event) => updateSettings({ interleaving_intensity: event.target.value })}
               >
@@ -428,11 +451,26 @@ function HomePage() {
             <div className="smart-practice-panel__controls-copy">
               <div className="smart-practice-panel__controls-copy-block">
                 <strong>Session types</strong>
-                <p>Auto mixes new material and review for the default run. New material biases the session toward fresh cards. Review prioritizes pending recall before expanding.</p>
+                <ul>
+                  <li>Auto mixes new material and review for the default run.</li>
+                  <li>New material biases the session toward fresh cards.</li>
+                  <li>Review prioritizes pending recall before expanding.</li>
+                </ul>
+              </div>
+              <div className="smart-practice-panel__controls-copy-block">
+                <strong>Interleaving intensity</strong>
+                <ul>
+                  <li>Low keeps cards grouped in a steadier rhythm.</li>
+                  <li>Medium mixes new and review cards more evenly.</li>
+                  <li>High creates a more varied session with faster alternation between card types.</li>
+                </ul>
               </div>
               <div className="smart-practice-panel__controls-copy-block">
                 <strong>How progression works</strong>
-                <p>New blocks unlock only after each card reaches an initial 2-streak mastery threshold. Review misses go back to the end of the queue instead of repeating immediately.</p>
+                <ul>
+                  <li>New blocks unlock only after each card reaches an initial 2-streak mastery threshold.</li>
+                  <li>Review misses go back to the end of the queue instead of repeating immediately.</li>
+                </ul>
               </div>
             </div>
           </div>
@@ -442,7 +480,6 @@ function HomePage() {
       <section className="home-section home-section--secondary" ref={deckReviewSectionRef}>
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Secondary workflow</p>
             <h2>Deck Review</h2>
           </div>
 
