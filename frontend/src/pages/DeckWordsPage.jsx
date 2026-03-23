@@ -14,7 +14,7 @@ function DeckWordsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pendingCardIds, setPendingCardIds] = useState([]);
   const [actionError, setActionError] = useState('');
-  const [detailsCardId, setDetailsCardId] = useState(null);
+  const [detailsModalState, setDetailsModalState] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,7 +65,9 @@ function DeckWordsPage() {
   const pageStart = (currentPage - 1) * PAGE_SIZE;
   const pageEnd = pageStart + PAGE_SIZE;
   const visibleCards = preview.cards.slice(pageStart, pageEnd);
-  const detailsCard = detailsCardId ? preview.cards.find((card) => card.card_id === detailsCardId) ?? null : null;
+  const detailsCard = detailsModalState
+    ? preview.cards.find((card) => card.card_id === detailsModalState.cardId) ?? null
+    : null;
 
   async function handleToggleCard(cardId, isEnabled) {
     setActionError('');
@@ -186,7 +188,8 @@ function DeckWordsPage() {
                 key={card.card_id}
                 card={card}
                 isPending={pendingCardIds.includes(card.card_id)}
-                onOpenDetails={() => setDetailsCardId(card.card_id)}
+                onEdit={() => setDetailsModalState({ cardId: card.card_id, startInEditMode: true })}
+                onOpenDetails={() => setDetailsModalState({ cardId: card.card_id, startInEditMode: false })}
                 onToggle={() => handleToggleCard(card.card_id, !card.is_enabled)}
               />
             ))}
@@ -203,7 +206,8 @@ function DeckWordsPage() {
         <DeckWordDetailsModal
           card={detailsCard}
           isPending={pendingCardIds.includes(detailsCard.card_id)}
-          onClose={() => setDetailsCardId(null)}
+          startInEditMode={detailsModalState?.startInEditMode ?? false}
+          onClose={() => setDetailsModalState(null)}
           onSave={(values) => handleSaveCard(detailsCard.card_id, values)}
           onToggle={() => handleToggleCard(detailsCard.card_id, !detailsCard.is_enabled)}
         />
@@ -212,7 +216,7 @@ function DeckWordsPage() {
   );
 }
 
-function DeckWordCard({ card, isPending, onToggle, onOpenDetails }) {
+function DeckWordCard({ card, isPending, onToggle, onEdit, onOpenDetails }) {
   const toggleLabel = card.is_enabled ? `Hide card ${card.prompt_es}` : `Show card ${card.prompt_es}`;
   const toggleTitle = card.is_enabled ? 'Hide card from deck' : 'Show card in deck again';
 
@@ -256,7 +260,9 @@ function DeckWordCard({ card, isPending, onToggle, onOpenDetails }) {
           className="deck-preview__icon-button deck-preview__icon-button--muted"
           type="button"
           aria-label={`Edit card ${card.prompt_es}`}
-          title="Edit card coming soon"
+          title="Edit card"
+          onClick={onEdit}
+          disabled={isPending}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M4 20h4.2L19 9.2a1.5 1.5 0 0 0 0-2.1l-2.1-2.1a1.5 1.5 0 0 0-2.1 0L4 15.8V20Z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
@@ -283,17 +289,17 @@ function DeckWordCard({ card, isPending, onToggle, onOpenDetails }) {
   );
 }
 
-function DeckWordDetailsModal({ card, isPending, onClose, onSave, onToggle }) {
+function DeckWordDetailsModal({ card, isPending, startInEditMode = false, onClose, onSave, onToggle }) {
   const toggleLabel = card.is_enabled ? 'Hide card' : 'Show card';
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(startInEditMode);
   const [saveError, setSaveError] = useState('');
   const [formValues, setFormValues] = useState(() => buildFormValues(card));
 
   useEffect(() => {
-    setIsEditing(false);
+    setIsEditing(startInEditMode);
     setSaveError('');
     setFormValues(buildFormValues(card));
-  }, [card]);
+  }, [card.card_id, startInEditMode]);
 
   function updateField(name, value) {
     setFormValues((current) => ({ ...current, [name]: value }));
