@@ -1,9 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 const AUTO_SPEECH_DEDUPE_WINDOW_MS = 750;
-const TAP_REVEAL_TOLERANCE_PX = 10;
-const SWIPE_REVIEW_THRESHOLD_PX = 72;
-const HORIZONTAL_SWIPE_RATIO = 1.2;
+const TAP_REVEAL_TOLERANCE_PX = 12;
+const TOUCH_SWIPE_REVIEW_THRESHOLD_PX = 56;
+const POINTER_SWIPE_REVIEW_THRESHOLD_PX = 72;
+const TOUCH_HORIZONTAL_SWIPE_RATIO = 0.85;
+const POINTER_HORIZONTAL_SWIPE_RATIO = 1.2;
+const TOUCH_CLICK_SUPPRESSION_WINDOW_MS = 500;
 let lastAutoSpeech = {
   key: '',
   at: 0,
@@ -177,10 +180,15 @@ function Flashcard({
 }) {
   const activeUtteranceRef = useRef(null);
   const previousAnswerVisibleRef = useRef(isAnswerVisible);
+  const hasAutoSpokenAnswerRef = useRef(false);
   const promptHeadingRef = useRef(null);
   const answerHeadingRef = useRef(null);
+  const lastTouchInteractionAtRef = useRef(0);
+  const suppressSurfaceClickRef = useRef(false);
   const gestureStateRef = useRef({
     pointerId: null,
+    pointerType: '',
+    touchIdentifier: null,
     startX: 0,
     startY: 0,
     tracking: false,
@@ -188,7 +196,7 @@ function Flashcard({
   const [dragOffsetX, setDragOffsetX] = useState(0);
   const hasAnswerSpeech = canUseSpeechSynthesis() && Boolean(normalizeSpeechText(card.answer_en));
   const swipeFeedback =
-    dragOffsetX >= SWIPE_REVIEW_THRESHOLD_PX ? 'known' : dragOffsetX <= -SWIPE_REVIEW_THRESHOLD_PX ? 'unknown' : '';
+    dragOffsetX >= TOUCH_SWIPE_REVIEW_THRESHOLD_PX ? 'known' : dragOffsetX <= -TOUCH_SWIPE_REVIEW_THRESHOLD_PX ? 'unknown' : '';
   const showRevealHint = isIdleHintVisible && !isAnswerVisible;
   const showSwipeHint = isIdleHintVisible && isAnswerVisible;
 
@@ -198,6 +206,8 @@ function Flashcard({
   function resetGesture() {
     gestureStateRef.current = {
       pointerId: null,
+      pointerType: '',
+      touchIdentifier: null,
       startX: 0,
       startY: 0,
       tracking: false,
@@ -249,6 +259,7 @@ function Flashcard({
 
   useEffect(() => {
     stopSpeech();
+    hasAutoSpokenAnswerRef.current = false;
   }, [card.card_id]);
 
   useEffect(() => {
@@ -259,10 +270,11 @@ function Flashcard({
     const wasAnswerVisible = previousAnswerVisibleRef.current;
     previousAnswerVisibleRef.current = isAnswerVisible;
 
-    if (!isAnswerVisible || wasAnswerVisible) {
+    if (!isAnswerVisible || wasAnswerVisible || hasAutoSpokenAnswerRef.current) {
       return;
     }
 
+    hasAutoSpokenAnswerRef.current = true;
     speakText(card.answer_en, 'en-US', `answer:${card.card_id}:${card.answer_en}`);
   }, [card.answer_en, card.card_id, isAnswerVisible]);
 
@@ -283,12 +295,26 @@ function Flashcard({
   }
 
   function handlePointerDown(event) {
-    if (event.pointerType !== 'touch' || !event.isPrimary || isSubmitting || isInteractiveTarget(event.target)) {
+    if (event.pointerType === 'touch') {
+      return;
+    }
+
+    if (!event.isPrimary || isSubmitting || isInteractiveTarget(event.target)) {
+      return;
+    }
+
+    if (event.pointerType === 'mouse' && event.button !== 0) {
+      return;
+    }
+
+    if (event.pointerType === 'mouse' && !isAnswerVisible) {
       return;
     }
 
     gestureStateRef.current = {
       pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      touchIdentifier: null,
       startX: event.clientX,
       startY: event.clientY,
       tracking: true,
@@ -300,7 +326,7 @@ function Flashcard({
   function handlePointerMove(event) {
     const gestureState = gestureStateRef.current;
 
-    if (!gestureState.tracking || gestureState.pointerId !== event.pointerId || !isAnswerVisible) {
+    if (!gestureState.tracking || gestureState.pointerId !== event.pointerId || gestureState.pointerType === 'touch' || !isAnswerVisible) {
       return;
     }
 
@@ -311,7 +337,7 @@ function Flashcard({
       return;
     }
 
-    if (Math.abs(deltaX) <= Math.abs(deltaY) * HORIZONTAL_SWIPE_RATIO) {
+    if (Math.abs(deltaX) <= Math.abs(deltaY) * POINTER_HORIZONTAL_SWIPE_RATIO) {
       return;
     }
 
@@ -322,7 +348,7 @@ function Flashcard({
   function handlePointerEnd(event) {
     const gestureState = gestureStateRef.current;
 
-    if (!gestureState.tracking || gestureState.pointerId !== event.pointerId) {
+    if (!gestureState.tracking || gestureState.pointerId !== event.pointerId || gestureState.pointerType === 'touch') {
       return;
     }
 
@@ -330,23 +356,35 @@ function Flashcard({
     const deltaY = event.clientY - gestureState.startY;
     const absoluteX = Math.abs(deltaX);
     const absoluteY = Math.abs(deltaY);
+    const isTapGesture = absoluteX <= TAP_REVEAL_TOLERANCE_PX && absoluteY <= TAP_REVEAL_TOLERANCE_PX;
+    const isMousePointer = gestureState.pointerType === 'mouse';
 
     event.currentTarget.releasePointerCapture?.(event.pointerId);
 
     if (!isAnswerVisible) {
       resetGesture();
-      if (absoluteX <= TAP_REVEAL_TOLERANCE_PX && absoluteY <= TAP_REVEAL_TOLERANCE_PX) {
+      if (isTapGesture && !isMousePointer) {
+        if (typeof onToggleReveal === 'function') {
+          onToggleReveal();
+          return;
+        }
+
         onReveal();
       }
       return;
     }
 
-    const isHorizontalSwipe = absoluteX >= SWIPE_REVIEW_THRESHOLD_PX && absoluteX > absoluteY * HORIZONTAL_SWIPE_RATIO;
+    const isHorizontalSwipe = absoluteX >= POINTER_SWIPE_REVIEW_THRESHOLD_PX && absoluteX > absoluteY * POINTER_HORIZONTAL_SWIPE_RATIO;
     resetGesture();
 
     if (!isHorizontalSwipe) {
+      if (isTapGesture && !isMousePointer && typeof onToggleReveal === 'function') {
+        onToggleReveal();
+      }
       return;
     }
+
+    suppressSurfaceClickRef.current = true;
 
     if (deltaX > 0) {
       onReviewKnown();
@@ -357,7 +395,7 @@ function Flashcard({
   }
 
   function handlePointerCancel(event) {
-    if (gestureStateRef.current.pointerId !== event.pointerId) {
+    if (gestureStateRef.current.pointerId !== event.pointerId || gestureStateRef.current.pointerType === 'touch') {
       return;
     }
 
@@ -365,8 +403,140 @@ function Flashcard({
     resetGesture();
   }
 
+  function findTrackedTouch(touchList) {
+    const trackedIdentifier = gestureStateRef.current.touchIdentifier;
+
+    if (trackedIdentifier === null) {
+      return null;
+    }
+
+    return Array.from(touchList).find((touch) => touch.identifier === trackedIdentifier) ?? null;
+  }
+
+  function handleTouchStart(event) {
+    if (isSubmitting || isInteractiveTarget(event.target) || event.touches.length !== 1) {
+      return;
+    }
+
+    const [touch] = event.touches;
+    lastTouchInteractionAtRef.current = Date.now();
+    gestureStateRef.current = {
+      pointerId: null,
+      pointerType: 'touch',
+      touchIdentifier: touch.identifier,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      tracking: true,
+    };
+  }
+
+  function handleTouchMove(event) {
+    const gestureState = gestureStateRef.current;
+
+    if (!gestureState.tracking || gestureState.pointerType !== 'touch' || !isAnswerVisible) {
+      return;
+    }
+
+    const trackedTouch = findTrackedTouch(event.touches);
+    if (!trackedTouch) {
+      return;
+    }
+
+    const deltaX = trackedTouch.clientX - gestureState.startX;
+    const deltaY = trackedTouch.clientY - gestureState.startY;
+
+    if (Math.abs(deltaX) < TAP_REVEAL_TOLERANCE_PX && Math.abs(deltaY) < TAP_REVEAL_TOLERANCE_PX) {
+      return;
+    }
+
+    if (Math.abs(deltaX) <= Math.abs(deltaY) * TOUCH_HORIZONTAL_SWIPE_RATIO) {
+      return;
+    }
+
+    event.preventDefault();
+    lastTouchInteractionAtRef.current = Date.now();
+    setDragOffsetX(deltaX);
+  }
+
+  function handleTouchEnd(event) {
+    const gestureState = gestureStateRef.current;
+
+    if (!gestureState.tracking || gestureState.pointerType !== 'touch') {
+      return;
+    }
+
+    const trackedTouch = findTrackedTouch(event.changedTouches);
+    if (!trackedTouch) {
+      resetGesture();
+      return;
+    }
+
+    const deltaX = trackedTouch.clientX - gestureState.startX;
+    const deltaY = trackedTouch.clientY - gestureState.startY;
+    const absoluteX = Math.abs(deltaX);
+    const absoluteY = Math.abs(deltaY);
+    const isTapGesture = absoluteX <= TAP_REVEAL_TOLERANCE_PX && absoluteY <= TAP_REVEAL_TOLERANCE_PX;
+    const isHorizontalSwipe =
+      absoluteX >= TOUCH_SWIPE_REVIEW_THRESHOLD_PX && absoluteX > absoluteY * TOUCH_HORIZONTAL_SWIPE_RATIO;
+
+    lastTouchInteractionAtRef.current = Date.now();
+
+    if (!isAnswerVisible) {
+      resetGesture();
+      if (isTapGesture) {
+        if (typeof onToggleReveal === 'function') {
+          onToggleReveal();
+          return;
+        }
+
+        onReveal();
+      }
+      return;
+    }
+
+    resetGesture();
+
+    if (isHorizontalSwipe) {
+      suppressSurfaceClickRef.current = true;
+      if (deltaX > 0) {
+        onReviewKnown();
+        return;
+      }
+
+      onReviewUnknown();
+      return;
+    }
+
+    if (isTapGesture && typeof onToggleReveal === 'function') {
+      onToggleReveal();
+    }
+  }
+
+  function handleTouchCancel() {
+    if (gestureStateRef.current.pointerType !== 'touch') {
+      return;
+    }
+
+    resetGesture();
+  }
+
   function handleSurfaceClick(event) {
-    if (isAnswerVisible || isSubmitting || isInteractiveTarget(event.target)) {
+    if (suppressSurfaceClickRef.current) {
+      suppressSurfaceClickRef.current = false;
+      return;
+    }
+
+    if (
+      isSubmitting ||
+      isInteractiveTarget(event.target) ||
+      event.nativeEvent?.pointerType === 'touch' ||
+      Date.now() - lastTouchInteractionAtRef.current < TOUCH_CLICK_SUPPRESSION_WINDOW_MS
+    ) {
+      return;
+    }
+
+    if (typeof onToggleReveal === 'function') {
+      onToggleReveal();
       return;
     }
 
@@ -395,84 +565,92 @@ function Flashcard({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
+        onTouchCancel={handleTouchCancel}
+        onTouchEnd={handleTouchEnd}
+        onTouchMove={handleTouchMove}
+        onTouchStart={handleTouchStart}
         role="presentation"
         style={{
           '--flashcard-swipe-rotate': `${dragOffsetX / 18}deg`,
           '--flashcard-swipe-x': `${dragOffsetX}px`,
         }}
       >
-        {showRevealHint ? (
-          <div className="flashcard__reveal-hint" aria-hidden="true">
-            <span className="flashcard__reveal-pill">
-              <TapRevealIcon />
-              <span>Tap to reveal</span>
-            </span>
-          </div>
-        ) : null}
-
+        
         {isAnswerVisible ? (
-          <div className={`flashcard__swipe-feedback${showSwipeHint ? ' flashcard__swipe-feedback--visible' : ''}`} aria-hidden="true">
-            <span className="flashcard__swipe-pill flashcard__swipe-pill--unknown">
-              <SwipeDirectionIcon direction="left" />
-              <span>I didn't know it</span>
-            </span>
-            <span className="flashcard__swipe-pill flashcard__swipe-pill--known">
-              <span>I knew it</span>
-              <SwipeDirectionIcon direction="right" />
-            </span>
-          </div>
-        ) : null}
-
-        <div className="flashcard__face flashcard__face--front">
-          {card.section_name ? (
-            <div className="flashcard__meta-row">
-              {card.section_name ? <span className="flashcard__meta-pill">{card.section_name}</span> : null}
-            </div>
-          ) : null}
-          <p className="flashcard__label">Spanish</p>
-          <div className="flashcard__prompt-row">
-            <h2 className="flashcard__inline-audio-heading flashcard__fit-heading" ref={promptHeadingRef}>
-              <span>{card.prompt_es}</span>
-            </h2>
-          </div>
-          {card.example_es ? <p className="flashcard__example">{card.example_es}</p> : null}
-        </div>
-
-        <div className={`answer ${isAnswerVisible ? 'answer--visible' : ''}`}>
-          <p className="flashcard__label">English</p>
-          {isAnswerVisible ? (
-            <div className="answer__content">
-              <div className="answer__header">
-                <h3 className="flashcard__inline-audio-heading flashcard__fit-heading flashcard__fit-heading--answer" ref={answerHeadingRef}>
-                  <span>{card.answer_en}</span>
-                  <button
-                    aria-label={hasAnswerSpeech ? 'Replay English audio' : 'English audio unavailable'}
-                    className="flashcard__audio-button"
-                    type="button"
-                    onClick={handlePlayAnswerSpeech}
-                    disabled={!hasAnswerSpeech}
-                    title={hasAnswerSpeech ? 'Replay English audio' : 'English audio unavailable'}
-                  >
-                    <AudioIcon />
-                  </button>
-                </h3>
+          
+          <div className="flashcard__face flashcard__face--back">
+            
+            {card.section_name ? (
+              <div className="flashcard__meta-row">
+                <span className="flashcard__meta-pill flashcard__meta-pill--secondary">{card.section_name}</span>
               </div>
-              {card.example_en ? <p className="flashcard__example flashcard__example--answer">{card.example_en}</p> : null}
-              <button
-                aria-label="Show flashcard metadata"
-                className="info-button"
-                type="button"
-                onClick={onOpenDetails}
-              >
-                i
-              </button>
+            ) : null}
+            <p className="flashcard__label">English</p>
+            <div className="flashcard__prompt-row flashcard__prompt-row--answer">
+              <h3 className="flashcard__inline-audio-heading flashcard__fit-heading flashcard__fit-heading--answer" ref={answerHeadingRef}>
+                <span>{card.answer_en}</span>
+                <button
+                  aria-label={hasAnswerSpeech ? 'Replay English audio' : 'English audio unavailable'}
+                  className="flashcard__audio-button"
+                  type="button"
+                  onClick={handlePlayAnswerSpeech}
+                  disabled={!hasAnswerSpeech}
+                  title={hasAnswerSpeech ? 'Replay English audio' : 'English audio unavailable'}
+                >
+                  <AudioIcon />
+                </button>
+              </h3>
             </div>
-          ) : (
-            <>
-              <h3 className="flashcard__placeholder">?</h3>
-            </>
-          )}
-        </div>
+            {card.example_en ? <p className="flashcard__example flashcard__example--answer">{card.example_en}</p> : null}
+            <button
+              aria-label="Show flashcard metadata"
+              className="info-button"
+              type="button"
+              onClick={onOpenDetails}
+            >
+              i
+            </button>
+            
+            {isAnswerVisible ? (
+              <div className={`flashcard__swipe-feedback${showSwipeHint ? ' flashcard__swipe-feedback--visible' : ''}`} aria-hidden="true">
+                <span className="flashcard__swipe-pill flashcard__swipe-pill--unknown">
+                  <SwipeDirectionIcon direction="left" />
+                  <span>I didn't know it</span>
+                </span>
+                <span className="flashcard__swipe-pill flashcard__swipe-pill--known">
+                  <span>I knew it</span>
+                  <SwipeDirectionIcon direction="right" />
+                </span>
+              </div>
+            ) : null}
+
+          </div>
+        ) : (
+          <div className="flashcard__face flashcard__face--front">
+            {card.section_name ? (
+              <div className="flashcard__meta-row">
+                <span className="flashcard__meta-pill">{card.section_name}</span>
+              </div>
+            ) : null}
+            <p className="flashcard__label">Spanish</p>
+            <div className="flashcard__prompt-row">
+              <h2 className="flashcard__inline-audio-heading flashcard__fit-heading" ref={promptHeadingRef}>
+                <span>{card.prompt_es}</span>
+              </h2>
+            </div>
+            {card.example_es ? <p className="flashcard__example">{card.example_es}</p> : null}
+            
+            {showRevealHint ? (
+              <div className="flashcard__reveal-hint" aria-hidden="true">
+                <span className="flashcard__reveal-pill">
+                  <TapRevealIcon />
+                  <span>Tap to reveal</span>
+                </span>
+              </div>
+            ) : null}
+          </div>
+          
+        )}
       </div>
 
       {!hideRevealButton ? (

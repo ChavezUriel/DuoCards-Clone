@@ -57,7 +57,13 @@ function ReviewPage() {
         return;
       }
 
-      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setIsAnswerVisible((current) => !current);
+        return;
+      }
+
+      if (event.key === 'ArrowDown') {
         event.preventDefault();
         setIsAnswerVisible(true);
         return;
@@ -164,6 +170,7 @@ function ReviewPage() {
           card={card}
           isAnswerVisible={isAnswerVisible}
           onReveal={() => setIsAnswerVisible((current) => !current)}
+          onToggleReveal={() => setIsAnswerVisible((current) => !current)}
           onOpenDetails={() => setIsDetailsVisible(true)}
         />
 

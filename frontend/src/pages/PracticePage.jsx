@@ -92,7 +92,13 @@ function PracticePage() {
         return;
       }
 
-      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setIsAnswerVisible((current) => !current);
+        return;
+      }
+
+      if (event.key === 'ArrowDown') {
         event.preventDefault();
         setIsAnswerVisible(true);
         return;
