@@ -374,7 +374,7 @@ a {
 
 .deck-card__progress-meta {
   justify-content: space-between;
-  transition: opacity 180ms ease, filter 180ms ease, transform 180ms ease;
+  transition: none;
 }
 
 .deck-card__progress-meta div {
@@ -412,17 +412,14 @@ a {
   z-index: 2;
 }
 
-.deck-card:hover .deck-card__description-overlay,
-.deck-card:focus-within .deck-card__description-overlay {
+.deck-card:hover .deck-card__description-overlay {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
 }
 
 .deck-card:hover .deck-card__progress-meta,
-.deck-card:hover .progress-track,
-.deck-card:focus-within .deck-card__progress-meta,
-.deck-card:focus-within .progress-track {
+.deck-card:hover .progress-track {
   opacity: 0.04;
   filter: blur(10px);
   transform: scale(0.975);
@@ -482,8 +479,7 @@ a {
     border-color 160ms ease;
 }
 
-.deck-card:hover .deck-card__explore-button,
-.deck-card:focus-within .deck-card__explore-button {
+.deck-card:hover .deck-card__explore-button {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
@@ -501,7 +497,7 @@ a {
 }
 
 .progress-track {
-  transition: opacity 180ms ease, filter 180ms ease, transform 180ms ease;
+  transition: none;
 }
 
 @media (max-width: 720px) {
