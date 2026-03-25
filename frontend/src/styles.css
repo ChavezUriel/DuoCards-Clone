@@ -952,8 +952,9 @@ a {
 }
 
 .flashcard {
+  position: relative;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(210px, 250px) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 1rem;
   padding: 2rem;
   border-radius: 32px;
@@ -961,6 +962,111 @@ a {
   height: min(100%, 680px);
   min-height: 520px;
   overflow: hidden;
+}
+
+.flashcard__gesture-surface {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(210px, 250px);
+  gap: 1rem;
+  min-height: 0;
+  touch-action: pan-y;
+  transform: translate3d(var(--flashcard-swipe-x, 0), 0, 0) rotate(var(--flashcard-swipe-rotate, 0deg));
+  transition: transform 180ms ease;
+  will-change: transform;
+}
+
+.flashcard__gesture-surface--dragging {
+  transition: none;
+}
+
+.flashcard__swipe-feedback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  pointer-events: none;
+}
+
+.flashcard__swipe-feedback--visible .flashcard__swipe-pill {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.flashcard__reveal-hint {
+  position: absolute;
+  top: 50%;
+  right: 1rem;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.flashcard__reveal-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.4rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(31, 111, 80, 0.12);
+  border: 1px solid rgba(31, 111, 80, 0.2);
+  color: var(--primary-dark);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.flashcard__tap-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.flashcard__swipe-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.4rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0;
+  text-transform: uppercase;
+  transform: scale(0.92);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.flashcard__swipe-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.flashcard__swipe-pill--unknown {
+  background: rgba(166, 75, 60, 0.12);
+  border-color: rgba(166, 75, 60, 0.2);
+  color: var(--danger);
+}
+
+.flashcard__swipe-pill--known {
+  background: rgba(31, 111, 80, 0.12);
+  border-color: rgba(31, 111, 80, 0.2);
+  color: var(--primary-dark);
+}
+
+.flashcard__gesture-surface--unknown .flashcard__swipe-pill--unknown,
+.flashcard__gesture-surface--known .flashcard__swipe-pill--known {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .flashcard__face {
@@ -1176,6 +1282,10 @@ a {
   min-width: 180px;
 }
 
+.flashcard__reveal--mobile-hidden {
+  display: inline-flex;
+}
+
 .practice-session-bar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -1328,17 +1438,40 @@ a {
   color: var(--primary-dark);
 }
 
-.review-shortcuts {
-  margin: 0;
-  text-align: center;
-  color: #5f6a63;
-  font-size: 0.88rem;
-}
-
 .back-link {
   display: inline-flex;
+  align-items: center;
   align-self: center;
+  gap: 0.55rem;
   color: var(--primary-dark);
+  text-decoration: none;
+}
+
+.back-link__icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.back-link--home {
+  padding: 0.7rem 0.95rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(31, 111, 80, 0.12);
+  box-shadow: 0 12px 28px rgba(48, 57, 42, 0.08);
+  font-weight: 600;
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+.back-link--home:hover,
+.back-link--home:focus-visible {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(31, 111, 80, 0.2);
+}
+
+.back-link--button {
+  justify-content: center;
 }
 
 .review-actions {
@@ -1376,12 +1509,6 @@ a {
   gap: 1rem;
 }
 
-.deck-preview__header {
-  display: grid;
-  gap: 0.3rem;
-}
-
-.deck-preview__header h2,
 .deck-preview__description,
 .deck-preview__pagination-status,
 .deck-preview__languages p,
@@ -1661,11 +1788,22 @@ a {
   .flashcard {
     padding: 1.5rem;
     min-height: 480px;
-    grid-template-rows: minmax(0, 1fr) minmax(200px, 235px) auto;
+  }
+
+  .flashcard__gesture-surface {
+    grid-template-rows: minmax(0, 1fr) minmax(200px, 235px);
   }
 
   .flashcard__face--front {
     align-content: center;
+  }
+
+  .flashcard__reveal--mobile-hidden {
+    display: none;
+  }
+
+  .review-actions--mobile-gesture-only .action-row {
+    display: none;
   }
 
   .smart-practice-panel__controls {
@@ -1694,12 +1832,12 @@ a {
   }
 
   .practice-session-bar {
-    grid-template-columns: 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 0.4rem;
   }
 
   .practice-session-summary {
-    justify-items: start;
+    justify-items: end;
   }
 
   .practice-session-summary__stats {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { fetchDeckProgress, fetchReviewCard, submitReview } from '../api';
+import { fetchDeckProgress, fetchReviewCard, submitReview, updateCard } from '../api';
+import CardDetailsModal from '../components/CardDetailsModal';
 import Flashcard from '../components/Flashcard';
 import ProgressSummary from '../components/ProgressSummary';
 
@@ -12,6 +13,8 @@ function ReviewPage() {
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDetailsVisible, setIsDetailsVisible] = useState(false);
+  const [isSavingCard, setIsSavingCard] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +86,12 @@ function ReviewPage() {
     };
   }, [card, isAnswerVisible, isSubmitting, status]);
 
+  useEffect(() => {
+    if (!isAnswerVisible) {
+      setIsDetailsVisible(false);
+    }
+  }, [card?.card_id, isAnswerVisible]);
+
   async function handleReview(result) {
     if (!card) {
       return;
@@ -103,6 +112,26 @@ function ReviewPage() {
       setStatus('error');
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleSaveCard(values) {
+    if (!card) {
+      return null;
+    }
+
+    setIsSavingCard(true);
+    setError('');
+
+    try {
+      const updatedCard = await updateCard(card.card_id, values);
+      setCard((current) => (current?.card_id === updatedCard.card_id ? { ...current, ...updatedCard } : current));
+      return updatedCard;
+    } catch (saveError) {
+      setError(saveError.message);
+      return null;
+    } finally {
+      setIsSavingCard(false);
     }
   }
 
@@ -135,6 +164,7 @@ function ReviewPage() {
           card={card}
           isAnswerVisible={isAnswerVisible}
           onReveal={() => setIsAnswerVisible((current) => !current)}
+          onOpenDetails={() => setIsDetailsVisible(true)}
         />
 
         <div className="review-actions">
@@ -158,6 +188,15 @@ function ReviewPage() {
             </button>
           </div>
         </div>
+
+        {card && isDetailsVisible ? (
+          <CardDetailsModal
+            card={card}
+            isPending={isSavingCard}
+            onClose={() => setIsDetailsVisible(false)}
+            onSave={handleSaveCard}
+          />
+        ) : null}
       </div>
 
     </section>

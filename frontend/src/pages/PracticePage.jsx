@@ -1,8 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { startSmartPracticeSession, submitSmartPracticeReview } from '../api';
+import { startSmartPracticeSession, submitSmartPracticeReview, updateCard } from '../api';
+import CardDetailsModal from '../components/CardDetailsModal';
 import Flashcard from '../components/Flashcard';
 import { loadPracticeSettings } from '../practiceSettings';
+
+const FIRST_IDLE_HINT_DELAY_MS = 10000;
+const REPEATED_IDLE_HINT_DELAY_MS = 20000;
+
+function HomeIcon() {
+  return (
+    <svg aria-hidden="true" className="back-link__icon" viewBox="0 0 24 24">
+      <path d="M4 10.5 12 4l8 6.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.5 9.75V20h11V9.75" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 20v-5.25h4V20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 function modeLabel(mode) {
   return mode === 'new_material' ? 'New Material' : 'Review Stack';
@@ -14,6 +28,33 @@ function PracticePage() {
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDetailsVisible, setIsDetailsVisible] = useState(false);
+  const [isSavingCard, setIsSavingCard] = useState(false);
+  const [isIdleHintVisible, setIsIdleHintVisible] = useState(false);
+  const idleHintTimeoutRef = useRef(null);
+  const hasShownIdleHintRef = useRef(false);
+
+  function clearIdleHintTimer() {
+    if (idleHintTimeoutRef.current) {
+      window.clearTimeout(idleHintTimeoutRef.current);
+      idleHintTimeoutRef.current = null;
+    }
+  }
+
+  function scheduleIdleHint() {
+    clearIdleHintTimer();
+
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const delay = hasShownIdleHintRef.current ? REPEATED_IDLE_HINT_DELAY_MS : FIRST_IDLE_HINT_DELAY_MS;
+    idleHintTimeoutRef.current = window.setTimeout(() => {
+      setIsIdleHintVisible(true);
+      hasShownIdleHintRef.current = true;
+      idleHintTimeoutRef.current = null;
+    }, delay);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +121,37 @@ function PracticePage() {
     };
   }, [isAnswerVisible, isSubmitting, session, status]);
 
+  useEffect(() => {
+    if (!isAnswerVisible) {
+      setIsDetailsVisible(false);
+    }
+  }, [isAnswerVisible, session?.current_card?.card_id]);
+
+  useEffect(() => {
+    if (status !== 'ready' || !session?.current_card || isSubmitting || isDetailsVisible) {
+      setIsIdleHintVisible(false);
+      clearIdleHintTimer();
+      return undefined;
+    }
+
+    setIsIdleHintVisible(false);
+    scheduleIdleHint();
+
+    function handleInteraction() {
+      setIsIdleHintVisible(false);
+      scheduleIdleHint();
+    }
+
+    window.addEventListener('pointerdown', handleInteraction, true);
+    window.addEventListener('keydown', handleInteraction, true);
+
+    return () => {
+      clearIdleHintTimer();
+      window.removeEventListener('pointerdown', handleInteraction, true);
+      window.removeEventListener('keydown', handleInteraction, true);
+    };
+  }, [isAnswerVisible, isDetailsVisible, isSubmitting, session?.current_card?.card_id, status]);
+
   async function handleReview(result) {
     if (!session?.current_card) {
       return;
@@ -98,6 +170,38 @@ function PracticePage() {
     }
   }
 
+  async function handleSaveCard(values) {
+    if (!session?.current_card) {
+      return null;
+    }
+
+    setIsSavingCard(true);
+    setError('');
+
+    try {
+      const updatedCard = await updateCard(session.current_card.card_id, values);
+      setSession((current) => {
+        if (!current?.current_card || current.current_card.card_id !== updatedCard.card_id) {
+          return current;
+        }
+
+        return {
+          ...current,
+          current_card: {
+            ...current.current_card,
+            ...updatedCard,
+          },
+        };
+      });
+      return updatedCard;
+    } catch (saveError) {
+      setError(saveError.message);
+      return null;
+    } finally {
+      setIsSavingCard(false);
+    }
+  }
+
   if (status === 'loading') {
     return <section className="panel empty-state">Preparing your smart practice session...</section>;
   }
@@ -107,8 +211,9 @@ function PracticePage() {
       <section className="panel empty-state">
         <p>There was a problem loading smart practice.</p>
         <p>{error}</p>
-        <Link className="button button--secondary" to="/">
-          Back to home
+        <Link className="back-link back-link--home back-link--button" to="/">
+          <HomeIcon />
+          <span>Home</span>
         </Link>
       </section>
     );
@@ -120,8 +225,9 @@ function PracticePage() {
     <section className="review-screen">
       <div className="review-stage">
         <div className="practice-session-bar">
-          <Link className="back-link" to="/">
-            Back to home
+          <Link className="back-link back-link--home" to="/">
+            <HomeIcon />
+            <span>Home</span>
           </Link>
 
           <div className="practice-session-summary" aria-label="Smart practice summary">
@@ -138,7 +244,15 @@ function PracticePage() {
           <Flashcard
             card={session.current_card}
             isAnswerVisible={isAnswerVisible}
-            onReveal={() => setIsAnswerVisible((current) => !current)}
+            isSubmitting={isSubmitting}
+            hideRevealButton
+            hideRevealButtonOnMobile
+            isIdleHintVisible={isIdleHintVisible}
+            onReveal={() => setIsAnswerVisible(true)}
+            onToggleReveal={() => setIsAnswerVisible((current) => !current)}
+            onOpenDetails={() => setIsDetailsVisible(true)}
+            onReviewKnown={() => handleReview('known')}
+            onReviewUnknown={() => handleReview('unknown')}
           />
         ) : (
           <section className="panel empty-state practice-complete">
@@ -153,28 +267,13 @@ function PracticePage() {
           </section>
         )}
 
-        {session.current_card ? (
-          <div className="review-actions">
-            <p className="review-shortcuts">Up or down reveals. Left reviews again. Right marks known.</p>
-            <div className="action-row">
-              <button
-                className="button button--danger"
-                type="button"
-                onClick={() => handleReview('unknown')}
-                disabled={!isAnswerVisible || isSubmitting}
-              >
-                Needs another pass
-              </button>
-              <button
-                className="button button--primary"
-                type="button"
-                onClick={() => handleReview('known')}
-                disabled={!isAnswerVisible || isSubmitting}
-              >
-                I knew it
-              </button>
-            </div>
-          </div>
+        {session.current_card && isDetailsVisible ? (
+          <CardDetailsModal
+            card={session.current_card}
+            isPending={isSavingCard}
+            onClose={() => setIsDetailsVisible(false)}
+            onSave={handleSaveCard}
+          />
         ) : null}
       </div>
     </section>

@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 const AUTO_SPEECH_DEDUPE_WINDOW_MS = 750;
+const TAP_REVEAL_TOLERANCE_PX = 10;
+const SWIPE_REVIEW_THRESHOLD_PX = 72;
+const HORIZONTAL_SWIPE_RATIO = 1.2;
 let lastAutoSpeech = {
   key: '',
   at: 0,
@@ -12,6 +15,10 @@ function canUseSpeechSynthesis() {
 
 function normalizeSpeechText(text) {
   return typeof text === 'string' ? text.trim() : '';
+}
+
+function isInteractiveTarget(target) {
+  return target instanceof Element && Boolean(target.closest('button, a, input, select, textarea, label'));
 }
 
 function useTwoLineFit(targetRef, dependencies) {
@@ -95,16 +102,108 @@ function AudioIcon() {
   );
 }
 
-function Flashcard({ card, isAnswerVisible, onReveal }) {
-  const [isDetailsVisible, setIsDetailsVisible] = useState(false);
+function SwipeDirectionIcon({ direction }) {
+  const isLeft = direction === 'left';
+
+  return (
+    <svg aria-hidden="true" className="flashcard__swipe-icon" viewBox="0 0 20 20">
+      <path
+        d={isLeft ? 'M11.5 4.5 6 10l5.5 5.5' : 'M8.5 4.5 14 10l-5.5 5.5'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d={isLeft ? 'M14.25 10H6.5' : 'M5.75 10H13.5'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function TapRevealIcon() {
+  return (
+    <svg aria-hidden="true" className="flashcard__tap-icon" viewBox="0 0 20 20">
+      <path
+        d="M10 2.75v4.1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M7.2 4.3 8.8 6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M12.8 4.3 11.2 6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M7.75 9.2V6.8a1 1 0 1 1 2 0v2.1-3a1 1 0 1 1 2 0v3.35-.95a1 1 0 1 1 2 0v1.65-.45a1 1 0 1 1 2 0v3.05c0 2.65-1.9 4.55-4.55 4.55h-1.4c-1.35 0-2.28-.6-3.15-1.85L5.5 11.9a1 1 0 0 1 1.6-1.2Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function Flashcard({
+  card,
+  isAnswerVisible,
+  isSubmitting,
+  hideRevealButton = false,
+  hideRevealButtonOnMobile = false,
+  isIdleHintVisible = false,
+  onReveal,
+  onToggleReveal,
+  onOpenDetails,
+  onReviewKnown,
+  onReviewUnknown,
+}) {
   const activeUtteranceRef = useRef(null);
   const previousAnswerVisibleRef = useRef(isAnswerVisible);
   const promptHeadingRef = useRef(null);
   const answerHeadingRef = useRef(null);
+  const gestureStateRef = useRef({
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    tracking: false,
+  });
+  const [dragOffsetX, setDragOffsetX] = useState(0);
   const hasAnswerSpeech = canUseSpeechSynthesis() && Boolean(normalizeSpeechText(card.answer_en));
+  const swipeFeedback =
+    dragOffsetX >= SWIPE_REVIEW_THRESHOLD_PX ? 'known' : dragOffsetX <= -SWIPE_REVIEW_THRESHOLD_PX ? 'unknown' : '';
+  const showRevealHint = isIdleHintVisible && !isAnswerVisible;
+  const showSwipeHint = isIdleHintVisible && isAnswerVisible;
 
   useTwoLineFit(promptHeadingRef, [card.card_id, card.prompt_es]);
   useTwoLineFit(answerHeadingRef, [card.card_id, card.answer_en, isAnswerVisible]);
+
+  function resetGesture() {
+    gestureStateRef.current = {
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      tracking: false,
+    };
+    setDragOffsetX(0);
+  }
 
   function stopSpeech() {
     if (!canUseSpeechSynthesis()) {
@@ -149,12 +248,6 @@ function Flashcard({ card, isAnswerVisible, onReveal }) {
   }
 
   useEffect(() => {
-    if (!isAnswerVisible) {
-      setIsDetailsVisible(false);
-    }
-  }, [isAnswerVisible, card.card_id]);
-
-  useEffect(() => {
     stopSpeech();
   }, [card.card_id]);
 
@@ -177,6 +270,10 @@ function Flashcard({ card, isAnswerVisible, onReveal }) {
     stopSpeech();
   }, []);
 
+  useEffect(() => {
+    resetGesture();
+  }, [card.card_id, isAnswerVisible]);
+
   function handlePlayAnswerSpeech() {
     if (!hasAnswerSpeech) {
       return;
@@ -185,9 +282,147 @@ function Flashcard({ card, isAnswerVisible, onReveal }) {
     speakText(card.answer_en, 'en-US', `manual-answer:${card.card_id}:${Date.now()}`);
   }
 
+  function handlePointerDown(event) {
+    if (event.pointerType !== 'touch' || !event.isPrimary || isSubmitting || isInteractiveTarget(event.target)) {
+      return;
+    }
+
+    gestureStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      tracking: true,
+    };
+
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function handlePointerMove(event) {
+    const gestureState = gestureStateRef.current;
+
+    if (!gestureState.tracking || gestureState.pointerId !== event.pointerId || !isAnswerVisible) {
+      return;
+    }
+
+    const deltaX = event.clientX - gestureState.startX;
+    const deltaY = event.clientY - gestureState.startY;
+
+    if (Math.abs(deltaX) < TAP_REVEAL_TOLERANCE_PX && Math.abs(deltaY) < TAP_REVEAL_TOLERANCE_PX) {
+      return;
+    }
+
+    if (Math.abs(deltaX) <= Math.abs(deltaY) * HORIZONTAL_SWIPE_RATIO) {
+      return;
+    }
+
+    event.preventDefault();
+    setDragOffsetX(deltaX);
+  }
+
+  function handlePointerEnd(event) {
+    const gestureState = gestureStateRef.current;
+
+    if (!gestureState.tracking || gestureState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - gestureState.startX;
+    const deltaY = event.clientY - gestureState.startY;
+    const absoluteX = Math.abs(deltaX);
+    const absoluteY = Math.abs(deltaY);
+
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+
+    if (!isAnswerVisible) {
+      resetGesture();
+      if (absoluteX <= TAP_REVEAL_TOLERANCE_PX && absoluteY <= TAP_REVEAL_TOLERANCE_PX) {
+        onReveal();
+      }
+      return;
+    }
+
+    const isHorizontalSwipe = absoluteX >= SWIPE_REVIEW_THRESHOLD_PX && absoluteX > absoluteY * HORIZONTAL_SWIPE_RATIO;
+    resetGesture();
+
+    if (!isHorizontalSwipe) {
+      return;
+    }
+
+    if (deltaX > 0) {
+      onReviewKnown();
+      return;
+    }
+
+    onReviewUnknown();
+  }
+
+  function handlePointerCancel(event) {
+    if (gestureStateRef.current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    resetGesture();
+  }
+
+  function handleSurfaceClick(event) {
+    if (isAnswerVisible || isSubmitting || isInteractiveTarget(event.target)) {
+      return;
+    }
+
+    onReveal();
+  }
+
+  const gestureSurfaceClassName = [
+    'flashcard__gesture-surface',
+    dragOffsetX !== 0 ? 'flashcard__gesture-surface--dragging' : '',
+    swipeFeedback ? `flashcard__gesture-surface--${swipeFeedback}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <>
-      <section className="panel flashcard">
+    <section className="panel flashcard">
+      <div
+        aria-label={
+          isAnswerVisible
+            ? 'Flashcard answer shown. Swipe left for unknown or right for known on touch devices.'
+            : 'Flashcard prompt. Tap to reveal the answer on touch devices.'
+        }
+        className={gestureSurfaceClassName}
+        onClick={handleSurfaceClick}
+        onPointerCancel={handlePointerCancel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        role="presentation"
+        style={{
+          '--flashcard-swipe-rotate': `${dragOffsetX / 18}deg`,
+          '--flashcard-swipe-x': `${dragOffsetX}px`,
+        }}
+      >
+        {showRevealHint ? (
+          <div className="flashcard__reveal-hint" aria-hidden="true">
+            <span className="flashcard__reveal-pill">
+              <TapRevealIcon />
+              <span>Tap to reveal</span>
+            </span>
+          </div>
+        ) : null}
+
+        {isAnswerVisible ? (
+          <div className={`flashcard__swipe-feedback${showSwipeHint ? ' flashcard__swipe-feedback--visible' : ''}`} aria-hidden="true">
+            <span className="flashcard__swipe-pill flashcard__swipe-pill--unknown">
+              <SwipeDirectionIcon direction="left" />
+              <span>I didn't know it</span>
+            </span>
+            <span className="flashcard__swipe-pill flashcard__swipe-pill--known">
+              <span>I knew it</span>
+              <SwipeDirectionIcon direction="right" />
+            </span>
+          </div>
+        ) : null}
+
         <div className="flashcard__face flashcard__face--front">
           {card.section_name ? (
             <div className="flashcard__meta-row">
@@ -224,96 +459,32 @@ function Flashcard({ card, isAnswerVisible, onReveal }) {
               </div>
               {card.example_en ? <p className="flashcard__example flashcard__example--answer">{card.example_en}</p> : null}
               <button
-                aria-expanded={isDetailsVisible}
-                aria-label={isDetailsVisible ? 'Hide word details' : 'Show word details'}
+                aria-label="Show flashcard metadata"
                 className="info-button"
                 type="button"
-                onClick={() => setIsDetailsVisible(true)}
+                onClick={onOpenDetails}
               >
                 i
               </button>
             </div>
           ) : (
-            <h3 className="flashcard__placeholder">?</h3>
+            <>
+              <h3 className="flashcard__placeholder">?</h3>
+            </>
           )}
         </div>
+      </div>
 
-        <button className="button button--secondary flashcard__reveal" type="button" onClick={onReveal}>
+      {!hideRevealButton ? (
+        <button
+          className={`button button--secondary flashcard__reveal${hideRevealButtonOnMobile ? ' flashcard__reveal--mobile-hidden' : ''}`}
+          type="button"
+          onClick={onToggleReveal}
+        >
           {isAnswerVisible ? 'Hide answer' : 'Reveal answer'}
         </button>
-      </section>
-
-      {isDetailsVisible ? (
-        <div className="details-modal" role="dialog" aria-modal="true" aria-label="Word details">
-          <button
-            aria-label="Close word details"
-            className="details-modal__backdrop"
-            type="button"
-            onClick={() => setIsDetailsVisible(false)}
-          />
-          <div className="details-modal__panel">
-            <button
-              aria-label="Close word details"
-              className="details-modal__close"
-              type="button"
-              onClick={() => setIsDetailsVisible(false)}
-            >
-              x
-            </button>
-
-            <div className="details-modal__header">
-              <p className="flashcard__label">Word details</p>
-              <h3>{card.answer_en}</h3>
-            </div>
-
-            <div className="flashcard-details">
-              {card.part_of_speech ? (
-                <div>
-                  <span>Part of speech</span>
-                  <p>{card.part_of_speech}</p>
-                </div>
-              ) : null}
-
-              {card.definition_en ? (
-                <div>
-                  <span>Definition in English</span>
-                  <p>{card.definition_en}</p>
-                </div>
-              ) : null}
-
-              {card.main_translations_es?.length ? (
-                <div>
-                  <span>Main translations</span>
-                  <ul>
-                    {card.main_translations_es.map((translation) => (
-                      <li key={translation}>{translation}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {card.collocations?.length ? (
-                <div>
-                  <span>Collocations</span>
-                  <ul>
-                    {card.collocations.map((collocation) => (
-                      <li key={collocation}>{collocation}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {card.example_sentence ? (
-                <div>
-                  <span>Example sentence</span>
-                  <p>{card.example_sentence}</p>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
       ) : null}
-    </>
+    </section>
   );
 }
 
