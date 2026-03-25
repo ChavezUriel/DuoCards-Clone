@@ -65,13 +65,8 @@ function DeckCard({
         </svg>
       </button>
 
-      <div className="deck-card__content">
+        <div className="deck-card__content">
         <h3>{deck.title}</h3>
-        {isPending || isSelected ? (
-          <span className={`deck-card__selection-state ${isSelected ? 'deck-card__selection-state--selected' : 'deck-card__selection-state--inactive'}`}>
-            {isPending ? 'Updating...' : 'Selected for Smart Practice'}
-          </span>
-        ) : null}
       </div>
 
       <div className="deck-card__bottom">
