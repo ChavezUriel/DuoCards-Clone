@@ -480,7 +480,7 @@ function HomePage() {
       <section className="home-section home-section--secondary" ref={deckReviewSectionRef}>
         <div className="section-heading">
           <div>
-            <h2>Deck Review</h2>
+            <h2>Deck Selection</h2>
           </div>
 
           <div className="section-controls">

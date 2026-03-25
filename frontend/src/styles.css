@@ -876,6 +876,7 @@ a {
 }
 
 .home-section--secondary .section-heading {
+  align-items: center;
   margin-bottom: 0;
 }
 
