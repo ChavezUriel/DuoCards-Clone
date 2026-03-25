@@ -6,7 +6,6 @@ import Flashcard from '../components/Flashcard';
 import { loadPracticeSettings } from '../practiceSettings';
 
 const FIRST_IDLE_HINT_DELAY_MS = 10000;
-const REPEATED_IDLE_HINT_DELAY_MS = 20000;
 
 function HomeIcon() {
   return (
@@ -48,7 +47,7 @@ function PracticePage() {
       return;
     }
 
-    const delay = hasShownIdleHintRef.current ? REPEATED_IDLE_HINT_DELAY_MS : FIRST_IDLE_HINT_DELAY_MS;
+    const delay = FIRST_IDLE_HINT_DELAY_MS;
     idleHintTimeoutRef.current = window.setTimeout(() => {
       setIsIdleHintVisible(true);
       hasShownIdleHintRef.current = true;
