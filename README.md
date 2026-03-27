@@ -11,6 +11,7 @@ A small DuoCards-inspired MVP for Spanish speakers learning English.
 ## Features in this first version
 
 - Starter English decks seeded automatically in SQLite
+- Deck market with global home selection
 - Flashcard review flow with reveal-answer mechanic
 - Known / unknown tracking persisted locally
 - Per-deck progress summary
@@ -115,6 +116,8 @@ The frontend expects the API at `http://localhost:8000`.
 
 - `GET /api/health`
 - `GET /api/decks`
+- `GET /api/decks/market`
+- `PATCH /api/decks/{deck_id}/home-selection`
 - `GET /api/decks/{deck_id}/review`
 - `GET /api/decks/{deck_id}/progress`
 - `POST /api/reviews`

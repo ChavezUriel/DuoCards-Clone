@@ -151,7 +151,7 @@ function ReviewPage() {
         <p>There was a problem loading the review session.</p>
         <p>{error}</p>
         <Link className="button button--secondary" to="/">
-          Back to decks
+          Back to home
         </Link>
       </section>
     );
@@ -163,7 +163,7 @@ function ReviewPage() {
 
       <div className="review-stage">
         <Link className="back-link" to="/">
-          Back to decks
+          Back to home
         </Link>
 
         <Flashcard

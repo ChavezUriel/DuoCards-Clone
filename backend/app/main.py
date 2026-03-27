@@ -2,16 +2,24 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import sqlite3
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import get_connection, initialize_database
-from .practice import PracticeSettings, get_session_snapshot, start_or_resume_session, submit_session_review
+from .practice import (
+    PracticeSettings,
+    get_session_snapshot,
+    start_or_resume_session,
+    submit_session_review,
+)
 from .schemas import (
     CardUpdateRequest,
     CardVisibilityResult,
     CardVisibilityUpdate,
+    DeckHomeSelectionResult,
+    DeckHomeSelectionUpdate,
     DeckPreview,
     DeckPreviewCard,
     DeckProgress,
@@ -63,6 +71,7 @@ def list_decks() -> list[DeckSummary]:
             d.slug,
             d.title,
             d.description,
+            d.is_selected_on_home,
             d.is_enabled_in_smart_practice,
             COUNT(c.id) AS total_cards,
             COALESCE(SUM(CASE WHEN cp.last_result IS NOT NULL THEN 1 ELSE 0 END), 0) AS reviewed_cards,
@@ -71,7 +80,8 @@ def list_decks() -> list[DeckSummary]:
         FROM decks d
         LEFT JOIN cards c ON c.deck_id = d.id AND c.is_enabled = 1 AND c.generation_phase = 'refined'
         LEFT JOIN card_progress cp ON cp.card_id = c.id
-        GROUP BY d.id, d.slug, d.title, d.description, d.is_enabled_in_smart_practice
+        WHERE d.is_selected_on_home = 1
+        GROUP BY d.id, d.slug, d.title, d.description, d.is_selected_on_home, d.is_enabled_in_smart_practice
         ORDER BY d.id
     """
     with get_connection() as connection:
@@ -89,6 +99,55 @@ def list_decks() -> list[DeckSummary]:
                 slug=row["slug"],
                 title=row["title"],
                 description=row["description"],
+                is_selected_on_home=bool(row["is_selected_on_home"]),
+                is_enabled_in_smart_practice=bool(row["is_enabled_in_smart_practice"]),
+                total_cards=total_cards,
+                reviewed_cards=reviewed_cards,
+                known_cards=known_cards,
+                unknown_cards=row["unknown_cards"],
+                completion_ratio=completion_ratio,
+                is_completed=total_cards > 0 and known_cards == total_cards,
+            )
+        )
+    return decks
+
+
+@app.get("/api/decks/market", response_model=list[DeckSummary])
+def list_market_decks() -> list[DeckSummary]:
+    query = """
+        SELECT
+            d.id,
+            d.slug,
+            d.title,
+            d.description,
+            d.is_selected_on_home,
+            d.is_enabled_in_smart_practice,
+            COUNT(c.id) AS total_cards,
+            COALESCE(SUM(CASE WHEN cp.last_result IS NOT NULL THEN 1 ELSE 0 END), 0) AS reviewed_cards,
+            COALESCE(SUM(CASE WHEN cp.last_result = 'known' THEN 1 ELSE 0 END), 0) AS known_cards,
+            COALESCE(SUM(CASE WHEN cp.last_result = 'unknown' THEN 1 ELSE 0 END), 0) AS unknown_cards
+        FROM decks d
+        LEFT JOIN cards c ON c.deck_id = d.id AND c.is_enabled = 1 AND c.generation_phase = 'refined'
+        LEFT JOIN card_progress cp ON cp.card_id = c.id
+        GROUP BY d.id, d.slug, d.title, d.description, d.is_selected_on_home, d.is_enabled_in_smart_practice
+        ORDER BY d.id
+    """
+    with get_connection() as connection:
+        rows = connection.execute(query).fetchall()
+
+    decks: list[DeckSummary] = []
+    for row in rows:
+        total_cards = row["total_cards"]
+        reviewed_cards = row["reviewed_cards"]
+        known_cards = row["known_cards"]
+        completion_ratio = reviewed_cards / total_cards if total_cards else 0.0
+        decks.append(
+            DeckSummary(
+                id=row["id"],
+                slug=row["slug"],
+                title=row["title"],
+                description=row["description"],
+                is_selected_on_home=bool(row["is_selected_on_home"]),
                 is_enabled_in_smart_practice=bool(row["is_enabled_in_smart_practice"]),
                 total_cards=total_cards,
                 reviewed_cards=reviewed_cards,
@@ -103,7 +162,7 @@ def list_decks() -> list[DeckSummary]:
 
 @app.get("/api/decks/{deck_id}/review", response_model=ReviewCard)
 def get_review_card(deck_id: int) -> ReviewCard:
-    deck_exists_query = "SELECT 1 FROM decks WHERE id = ?"
+    deck_exists_query = "SELECT 1 FROM decks WHERE id = ? AND is_selected_on_home = 1"
     card_query = """
         SELECT
             c.id AS card_id,
@@ -130,7 +189,7 @@ def get_review_card(deck_id: int) -> ReviewCard:
         FROM cards c
         JOIN decks d ON d.id = c.deck_id
         LEFT JOIN card_progress cp ON cp.card_id = c.id
-        WHERE c.deck_id = ? AND c.is_enabled = 1 AND c.generation_phase = 'refined'
+        WHERE c.deck_id = ? AND c.is_enabled = 1 AND c.generation_phase = 'refined' AND d.is_selected_on_home = 1
         ORDER BY
             review_stage ASC,
             CASE WHEN cp.last_result = 'unknown' THEN COALESCE(cp.unknown_count, 0) * -1 ELSE 0 END ASC,
@@ -142,7 +201,7 @@ def get_review_card(deck_id: int) -> ReviewCard:
     with get_connection() as connection:
         deck = connection.execute(deck_exists_query, (deck_id,)).fetchone()
         if deck is None:
-            raise HTTPException(status_code=404, detail="Deck not found")
+            raise HTTPException(status_code=404, detail="Deck not found or not on home")
         row = connection.execute(card_query, (deck_id,)).fetchone()
 
     if row is None:
@@ -163,14 +222,14 @@ def get_deck_progress(deck_id: int) -> DeckProgress:
         FROM decks d
         LEFT JOIN cards c ON c.deck_id = d.id AND c.is_enabled = 1 AND c.generation_phase = 'refined'
         LEFT JOIN card_progress cp ON cp.card_id = c.id
-        WHERE d.id = ?
+        WHERE d.id = ? AND d.is_selected_on_home = 1
         GROUP BY d.id
     """
     with get_connection() as connection:
         row = connection.execute(query, (deck_id,)).fetchone()
 
     if row is None:
-        raise HTTPException(status_code=404, detail="Deck not found")
+        raise HTTPException(status_code=404, detail="Deck not found or not on home")
 
     total_cards = row["total_cards"]
     reviewed_cards = row["reviewed_cards"]
@@ -191,7 +250,7 @@ def get_deck_preview(deck_id: int) -> DeckPreview:
     deck_query = """
         SELECT id, title, description
         FROM decks
-        WHERE id = ?
+        WHERE id = ? AND is_selected_on_home = 1
     """
     cards_query = """
         SELECT
@@ -209,14 +268,14 @@ def get_deck_preview(deck_id: int) -> DeckPreview:
             COALESCE(c.section_name, d.title) AS section_name
         FROM cards c
         JOIN decks d ON d.id = c.deck_id
-        WHERE c.deck_id = ? AND c.generation_phase = 'refined'
+        WHERE c.deck_id = ? AND c.generation_phase = 'refined' AND d.is_selected_on_home = 1
         ORDER BY COALESCE(c.section_name, d.title) ASC, c.id ASC
     """
 
     with get_connection() as connection:
         deck_row = connection.execute(deck_query, (deck_id,)).fetchone()
         if deck_row is None:
-            raise HTTPException(status_code=404, detail="Deck not found")
+            raise HTTPException(status_code=404, detail="Deck not found or not on home")
 
         card_rows = connection.execute(cards_query, (deck_id,)).fetchall()
 
@@ -229,6 +288,50 @@ def get_deck_preview(deck_id: int) -> DeckPreview:
         total_cards=len(cards),
         cards=cards,
     )
+
+
+def _clear_pending_practice_cards_for_deck(
+    connection: sqlite3.Connection,
+    deck_id: int,
+    now: str,
+) -> None:
+    affected_sessions = connection.execute(
+        """
+        SELECT DISTINCT psc.session_id
+        FROM practice_session_cards psc
+        JOIN cards c ON c.id = psc.card_id
+        WHERE c.deck_id = ? AND psc.status = 'pending'
+        """,
+        (deck_id,),
+    ).fetchall()
+    connection.execute(
+        """
+        DELETE FROM practice_session_cards
+        WHERE id IN (
+            SELECT psc.id
+            FROM practice_session_cards psc
+            JOIN cards c ON c.id = psc.card_id
+            WHERE c.deck_id = ? AND psc.status = 'pending'
+        )
+        """,
+        (deck_id,),
+    )
+
+    for session_row in affected_sessions:
+        pending_total = connection.execute(
+            "SELECT COUNT(*) AS total FROM practice_session_cards WHERE session_id = ? AND status = 'pending'",
+            (session_row["session_id"],),
+        ).fetchone()["total"]
+        if pending_total == 0:
+            connection.execute(
+                "UPDATE practice_sessions SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ? AND status = 'active'",
+                (now, now, session_row["session_id"]),
+            )
+        else:
+            connection.execute(
+                "UPDATE practice_sessions SET updated_at = ? WHERE id = ? AND status = 'active'",
+                (now, session_row["session_id"]),
+            )
 
 
 @app.post("/api/reviews", response_model=ReviewResult)
@@ -277,7 +380,15 @@ def submit_review(payload: ReviewSubmission) -> ReviewResult:
                 last_reviewed_at = excluded.last_reviewed_at,
                 initial_mastered_at = excluded.initial_mastered_at
             """,
-            (payload.card_id, known_count, unknown_count, known_streak, payload.result, now, initial_mastered_at),
+            (
+                payload.card_id,
+                known_count,
+                unknown_count,
+                known_streak,
+                payload.result,
+                now,
+                initial_mastered_at,
+            ),
         )
         connection.commit()
 
@@ -289,17 +400,22 @@ def submit_review(payload: ReviewSubmission) -> ReviewResult:
         unknown_count=unknown_count,
     )
 
+
 @app.patch("/api/cards/{card_id}/visibility", response_model=CardVisibilityResult)
-def update_card_visibility(card_id: int, payload: CardVisibilityUpdate) -> CardVisibilityResult:
+def update_card_visibility(
+    card_id: int, payload: CardVisibilityUpdate
+) -> CardVisibilityResult:
     now = datetime.now(timezone.utc).isoformat()
 
     with get_connection() as connection:
         card_row = connection.execute(
-            "SELECT id, deck_id, is_enabled FROM cards WHERE id = ?",
+            "SELECT c.id, c.deck_id, c.is_enabled FROM cards c JOIN decks d ON d.id = c.deck_id AND d.is_selected_on_home = 1 WHERE c.id = ?",
             (card_id,),
         ).fetchone()
         if card_row is None:
-            raise HTTPException(status_code=404, detail="Card not found")
+            raise HTTPException(
+                status_code=404, detail="Card not found or deck not on home"
+            )
 
         next_enabled_value = 1 if payload.is_enabled else 0
         connection.execute(
@@ -308,30 +424,9 @@ def update_card_visibility(card_id: int, payload: CardVisibilityUpdate) -> CardV
         )
 
         if not payload.is_enabled:
-            affected_sessions = connection.execute(
-                "SELECT DISTINCT session_id FROM practice_session_cards WHERE card_id = ? AND status = 'pending'",
-                (card_id,),
-            ).fetchall()
-            connection.execute(
-                "DELETE FROM practice_session_cards WHERE card_id = ? AND status = 'pending'",
-                (card_id,),
+            _clear_pending_practice_cards_for_deck(
+                connection, deck_id=card_row["deck_id"], now=now
             )
-
-            for session_row in affected_sessions:
-                pending_total = connection.execute(
-                    "SELECT COUNT(*) AS total FROM practice_session_cards WHERE session_id = ? AND status = 'pending'",
-                    (session_row["session_id"],),
-                ).fetchone()["total"]
-                if pending_total == 0:
-                    connection.execute(
-                        "UPDATE practice_sessions SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ? AND status = 'active'",
-                        (now, now, session_row["session_id"]),
-                    )
-                else:
-                    connection.execute(
-                        "UPDATE practice_sessions SET updated_at = ? WHERE id = ? AND status = 'active'",
-                        (now, session_row["session_id"]),
-                    )
 
         connection.commit()
 
@@ -342,7 +437,43 @@ def update_card_visibility(card_id: int, payload: CardVisibilityUpdate) -> CardV
     )
 
 
-@app.patch("/api/decks/{deck_id}/smart-practice-inclusion", response_model=DeckSmartPracticeResult)
+@app.patch(
+    "/api/decks/{deck_id}/home-selection", response_model=DeckHomeSelectionResult
+)
+def update_deck_home_selection(
+    deck_id: int,
+    payload: DeckHomeSelectionUpdate,
+) -> DeckHomeSelectionResult:
+    now = datetime.now(timezone.utc).isoformat()
+
+    with get_connection() as connection:
+        deck_row = connection.execute(
+            "SELECT id, is_selected_on_home FROM decks WHERE id = ?",
+            (deck_id,),
+        ).fetchone()
+        if deck_row is None:
+            raise HTTPException(status_code=404, detail="Deck not found")
+
+        next_selected_value = 1 if payload.is_selected_on_home else 0
+        connection.execute(
+            "UPDATE decks SET is_selected_on_home = ? WHERE id = ?",
+            (next_selected_value, deck_id),
+        )
+
+        if not payload.is_selected_on_home:
+            _clear_pending_practice_cards_for_deck(connection, deck_id=deck_id, now=now)
+
+        connection.commit()
+
+    return DeckHomeSelectionResult(
+        deck_id=deck_id, is_selected_on_home=payload.is_selected_on_home
+    )
+
+
+@app.patch(
+    "/api/decks/{deck_id}/smart-practice-inclusion",
+    response_model=DeckSmartPracticeResult,
+)
 def update_deck_smart_practice_inclusion(
     deck_id: int,
     payload: DeckSmartPracticeUpdate,
@@ -351,11 +482,13 @@ def update_deck_smart_practice_inclusion(
 
     with get_connection() as connection:
         deck_row = connection.execute(
-            "SELECT id, is_enabled_in_smart_practice FROM decks WHERE id = ?",
+            "SELECT id, is_selected_on_home, is_enabled_in_smart_practice FROM decks WHERE id = ?",
             (deck_id,),
         ).fetchone()
         if deck_row is None:
-            raise HTTPException(status_code=404, detail="Deck not found")
+            raise HTTPException(status_code=404, detail="Deck not found or not on home")
+        if deck_row["is_selected_on_home"] == 0:
+            raise HTTPException(status_code=404, detail="Deck not found or not on home")
 
         next_enabled_value = 1 if payload.is_enabled_in_smart_practice else 0
         connection.execute(
@@ -364,43 +497,7 @@ def update_deck_smart_practice_inclusion(
         )
 
         if not payload.is_enabled_in_smart_practice:
-            affected_sessions = connection.execute(
-                """
-                SELECT DISTINCT psc.session_id
-                FROM practice_session_cards psc
-                JOIN cards c ON c.id = psc.card_id
-                WHERE c.deck_id = ? AND psc.status = 'pending'
-                """,
-                (deck_id,),
-            ).fetchall()
-            connection.execute(
-                """
-                DELETE FROM practice_session_cards
-                WHERE id IN (
-                    SELECT psc.id
-                    FROM practice_session_cards psc
-                    JOIN cards c ON c.id = psc.card_id
-                    WHERE c.deck_id = ? AND psc.status = 'pending'
-                )
-                """,
-                (deck_id,),
-            )
-
-            for session_row in affected_sessions:
-                pending_total = connection.execute(
-                    "SELECT COUNT(*) AS total FROM practice_session_cards WHERE session_id = ? AND status = 'pending'",
-                    (session_row["session_id"],),
-                ).fetchone()["total"]
-                if pending_total == 0:
-                    connection.execute(
-                        "UPDATE practice_sessions SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ? AND status = 'active'",
-                        (now, now, session_row["session_id"]),
-                    )
-                else:
-                    connection.execute(
-                        "UPDATE practice_sessions SET updated_at = ? WHERE id = ? AND status = 'active'",
-                        (now, session_row["session_id"]),
-                    )
+            _clear_pending_practice_cards_for_deck(connection, deck_id=deck_id, now=now)
 
         connection.commit()
 
@@ -414,11 +511,13 @@ def update_deck_smart_practice_inclusion(
 def update_card(card_id: int, payload: CardUpdateRequest) -> DeckPreviewCard:
     with get_connection() as connection:
         existing_card = connection.execute(
-            "SELECT id FROM cards WHERE id = ?",
+            "SELECT c.id FROM cards c JOIN decks d ON d.id = c.deck_id AND d.is_selected_on_home = 1 WHERE c.id = ?",
             (card_id,),
         ).fetchone()
         if existing_card is None:
-            raise HTTPException(status_code=404, detail="Card not found")
+            raise HTTPException(
+                status_code=404, detail="Card not found or deck not on home"
+            )
 
         connection.execute(
             """
@@ -442,8 +541,13 @@ def update_card(card_id: int, payload: CardUpdateRequest) -> DeckPreviewCard:
                 _normalize_optional_text(payload.section_name),
                 _normalize_optional_text(payload.part_of_speech),
                 _normalize_optional_text(payload.definition_en),
-                json.dumps(_normalize_text_items(payload.main_translations_es), ensure_ascii=False),
-                json.dumps(_normalize_text_items(payload.collocations), ensure_ascii=False),
+                json.dumps(
+                    _normalize_text_items(payload.main_translations_es),
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    _normalize_text_items(payload.collocations), ensure_ascii=False
+                ),
                 _normalize_optional_text(payload.example_sentence),
                 _normalize_optional_text(payload.example_es),
                 _normalize_optional_text(payload.example_en),
@@ -478,7 +582,9 @@ def update_card(card_id: int, payload: CardUpdateRequest) -> DeckPreviewCard:
 
 
 @app.post("/api/practice/sessions", response_model=SmartPracticeSession)
-def start_smart_practice_session(payload: SmartPracticeStartRequest) -> SmartPracticeSession:
+def start_smart_practice_session(
+    payload: SmartPracticeStartRequest,
+) -> SmartPracticeSession:
     settings = PracticeSettings(
         new_block_size=payload.settings.new_block_size,
         review_batch_size=payload.settings.review_batch_size,
@@ -509,14 +615,22 @@ def get_smart_practice_session(session_id: int) -> SmartPracticeSession:
     return _build_smart_practice_session(snapshot)
 
 
-@app.post("/api/practice/sessions/{session_id}/reviews", response_model=SmartPracticeReviewResult)
+@app.post(
+    "/api/practice/sessions/{session_id}/reviews",
+    response_model=SmartPracticeReviewResult,
+)
 def submit_smart_practice_review(
     session_id: int,
     payload: SmartPracticeReviewSubmission,
 ) -> SmartPracticeReviewResult:
     with get_connection() as connection:
         try:
-            submit_session_review(connection, session_id=session_id, card_id=payload.card_id, result=payload.result)
+            submit_session_review(
+                connection,
+                session_id=session_id,
+                card_id=payload.card_id,
+                result=payload.result,
+            )
             snapshot = get_session_snapshot(connection, session_id)
             connection.commit()
         except ValueError as exc:
@@ -542,7 +656,9 @@ def _decode_json_list(value: str | None) -> list[str]:
 def _normalize_required_text(value: str, field_name: str) -> str:
     normalized = _normalize_optional_text(value)
     if normalized is None:
-        raise HTTPException(status_code=422, detail=f"{field_name} must be a non-empty string")
+        raise HTTPException(
+            status_code=422, detail=f"{field_name} must be a non-empty string"
+        )
     return normalized
 
 

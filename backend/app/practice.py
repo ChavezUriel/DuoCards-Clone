@@ -19,7 +19,9 @@ class PracticeSettings:
     focus_mode: FocusMode = "auto"
 
 
-def start_or_resume_session(connection: sqlite3.Connection, settings: PracticeSettings) -> int:
+def start_or_resume_session(
+    connection: sqlite3.Connection, settings: PracticeSettings
+) -> int:
     active_row = connection.execute(
         "SELECT id FROM practice_sessions WHERE status = 'active' ORDER BY updated_at DESC, id DESC LIMIT 1"
     ).fetchone()
@@ -53,7 +55,9 @@ def start_or_resume_session(connection: sqlite3.Connection, settings: PracticeSe
             created_at,
         ),
     )
-    session_id = cursor.lastrowid
+    if cursor.lastrowid is None:
+        raise RuntimeError("Failed to create practice session")
+    session_id = int(cursor.lastrowid)
 
     if mode == "new_material":
         cards = _select_new_material_cards(connection, settings)
@@ -79,7 +83,9 @@ def start_or_resume_session(connection: sqlite3.Connection, settings: PracticeSe
     return session_id
 
 
-def get_session_snapshot(connection: sqlite3.Connection, session_id: int) -> dict[str, object] | None:
+def get_session_snapshot(
+    connection: sqlite3.Connection, session_id: int
+) -> dict[str, object] | None:
     summary = connection.execute(
         """
         SELECT
@@ -128,6 +134,7 @@ def get_session_snapshot(connection: sqlite3.Connection, session_id: int) -> dic
             AND psc.status = 'pending'
             AND c.is_enabled = 1
             AND c.generation_phase = 'refined'
+            AND d.is_selected_on_home = 1
             AND d.is_enabled_in_smart_practice = 1
         ORDER BY psc.queue_position ASC
         LIMIT 1
@@ -225,7 +232,9 @@ def submit_session_review(
     return progress
 
 
-def _choose_session_mode(connection: sqlite3.Connection, settings: PracticeSettings) -> PracticeMode:
+def _choose_session_mode(
+    connection: sqlite3.Connection, settings: PracticeSettings
+) -> PracticeMode:
     counts = connection.execute(
         """
         SELECT
@@ -234,7 +243,7 @@ def _choose_session_mode(connection: sqlite3.Connection, settings: PracticeSetti
         FROM cards c
         JOIN decks d ON d.id = c.deck_id
         LEFT JOIN card_progress cp ON cp.card_id = c.id
-        WHERE c.is_enabled = 1 AND c.generation_phase = 'refined' AND d.is_enabled_in_smart_practice = 1
+        WHERE c.is_enabled = 1 AND c.generation_phase = 'refined' AND d.is_selected_on_home = 1 AND d.is_enabled_in_smart_practice = 1
         """
     ).fetchone()
     unmastered_count = counts["unmastered_count"]
@@ -256,7 +265,9 @@ def _choose_session_mode(connection: sqlite3.Connection, settings: PracticeSetti
                 "SELECT mode FROM practice_sessions WHERE status != 'active' ORDER BY updated_at DESC, id DESC LIMIT 1"
             ).fetchone()
             last_mode = last_mode_row["mode"] if last_mode_row is not None else None
-            if last_mode == "new_material" and learned_count >= max(10, settings.review_batch_size // 2):
+            if last_mode == "new_material" and learned_count >= max(
+                10, settings.review_batch_size // 2
+            ):
                 return "review"
             if last_mode == "review":
                 return "new_material"
@@ -271,7 +282,9 @@ def _choose_session_mode(connection: sqlite3.Connection, settings: PracticeSetti
     raise ValueError("No cards are available for smart practice")
 
 
-def _select_new_material_cards(connection: sqlite3.Connection, settings: PracticeSettings) -> list[sqlite3.Row]:
+def _select_new_material_cards(
+    connection: sqlite3.Connection, settings: PracticeSettings
+) -> list[sqlite3.Row]:
     rows = connection.execute(
         """
         SELECT
@@ -288,15 +301,20 @@ def _select_new_material_cards(connection: sqlite3.Connection, settings: Practic
         LEFT JOIN card_progress cp ON cp.card_id = c.id
         WHERE c.is_enabled = 1
             AND c.generation_phase = 'refined'
+            AND d.is_selected_on_home = 1
             AND d.is_enabled_in_smart_practice = 1
             AND (cp.initial_mastered_at IS NULL OR cp.card_id IS NULL)
         ORDER BY c.id ASC
         """
     ).fetchall()
-    return _pick_random_rows(rows, limit=settings.new_block_size, intensity=settings.interleaving_intensity)
+    return _pick_random_rows(
+        rows, limit=settings.new_block_size, intensity=settings.interleaving_intensity
+    )
 
 
-def _select_review_cards(connection: sqlite3.Connection, settings: PracticeSettings) -> list[sqlite3.Row]:
+def _select_review_cards(
+    connection: sqlite3.Connection, settings: PracticeSettings
+) -> list[sqlite3.Row]:
     rows = connection.execute(
         """
         SELECT
@@ -313,12 +331,17 @@ def _select_review_cards(connection: sqlite3.Connection, settings: PracticeSetti
         JOIN card_progress cp ON cp.card_id = c.id
         WHERE c.is_enabled = 1
             AND c.generation_phase = 'refined'
+            AND d.is_selected_on_home = 1
             AND d.is_enabled_in_smart_practice = 1
             AND cp.initial_mastered_at IS NOT NULL
         ORDER BY c.id ASC
         """
     ).fetchall()
-    return _pick_random_rows(rows, limit=settings.review_batch_size, intensity=settings.interleaving_intensity)
+    return _pick_random_rows(
+        rows,
+        limit=settings.review_batch_size,
+        intensity=settings.interleaving_intensity,
+    )
 
 
 def _pick_random_rows(
@@ -347,8 +370,14 @@ def _update_card_progress(
     ).fetchone()
     known_count = existing["known_count"] if existing is not None else 0
     unknown_count = existing["unknown_count"] if existing is not None else 0
-    known_streak = existing["known_streak"] if existing is not None and "known_streak" in existing.keys() else 0
-    initial_mastered_at = existing["initial_mastered_at"] if existing is not None else None
+    known_streak = (
+        existing["known_streak"]
+        if existing is not None and "known_streak" in existing.keys()
+        else 0
+    )
+    initial_mastered_at = (
+        existing["initial_mastered_at"] if existing is not None else None
+    )
     now = _utc_now_iso()
 
     if result == "known":
@@ -380,7 +409,15 @@ def _update_card_progress(
             last_reviewed_at = excluded.last_reviewed_at,
             initial_mastered_at = excluded.initial_mastered_at
         """,
-        (card_id, known_count, unknown_count, known_streak, result, now, initial_mastered_at),
+        (
+            card_id,
+            known_count,
+            unknown_count,
+            known_streak,
+            result,
+            now,
+            initial_mastered_at,
+        ),
     )
 
     return {

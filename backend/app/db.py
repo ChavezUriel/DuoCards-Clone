@@ -27,6 +27,7 @@ class DeckWriteResult:
     deleted_cards: int
     total_cards: int
 
+
 SEED_DECKS: list[dict[str, Any]] = [
     {
         "slug": "basics",
@@ -50,7 +51,11 @@ SEED_DECKS: list[dict[str, Any]] = [
                 "part_of_speech": "expression",
                 "definition_en": "A polite expression used to show gratitude.",
                 "main_translations_es": ["gracias", "muchas gracias"],
-                "collocations": ["thank you very much", "thank you for", "say thank you"],
+                "collocations": [
+                    "thank you very much",
+                    "thank you for",
+                    "say thank you",
+                ],
                 "example_sentence": "Thank you for coming today.",
                 "example_es": "Gracias por tu ayuda.",
                 "example_en": "Thank you for your help.",
@@ -72,7 +77,11 @@ SEED_DECKS: list[dict[str, Any]] = [
                 "part_of_speech": "expression",
                 "definition_en": "A greeting used in the early part of the day.",
                 "main_translations_es": ["buenos días"],
-                "collocations": ["say good morning", "good morning everyone", "good morning sir"],
+                "collocations": [
+                    "say good morning",
+                    "good morning everyone",
+                    "good morning sir",
+                ],
                 "example_sentence": "Good morning, how was your weekend?",
                 "example_es": "Buenos días, profesora.",
                 "example_en": "Good morning, teacher.",
@@ -83,7 +92,11 @@ SEED_DECKS: list[dict[str, Any]] = [
                 "part_of_speech": "question",
                 "definition_en": "A question used to ask for the price of something.",
                 "main_translations_es": ["¿cuánto cuesta?", "¿qué precio tiene?"],
-                "collocations": ["how much does it cost", "cost too much", "cost a lot"],
+                "collocations": [
+                    "how much does it cost",
+                    "cost too much",
+                    "cost a lot",
+                ],
                 "example_sentence": "How much does it cost to travel by train?",
                 "example_es": "¿Cuánto cuesta este libro?",
                 "example_en": "How much does this book cost?",
@@ -163,7 +176,11 @@ SEED_DECKS: list[dict[str, Any]] = [
                 "part_of_speech": "noun",
                 "definition_en": "A place where airplanes arrive and leave.",
                 "main_translations_es": ["aeropuerto"],
-                "collocations": ["airport terminal", "airport bus", "go to the airport"],
+                "collocations": [
+                    "airport terminal",
+                    "airport bus",
+                    "go to the airport",
+                ],
                 "example_sentence": "We arrived at the airport two hours early.",
                 "example_es": "El aeropuerto está lejos del centro.",
                 "example_en": "The airport is far from downtown.",
@@ -196,7 +213,11 @@ SEED_DECKS: list[dict[str, Any]] = [
                 "part_of_speech": "noun",
                 "definition_en": "A case used for carrying clothes and personal items when traveling.",
                 "main_translations_es": ["maleta"],
-                "collocations": ["pack a suitcase", "heavy suitcase", "carry a suitcase"],
+                "collocations": [
+                    "pack a suitcase",
+                    "heavy suitcase",
+                    "carry a suitcase",
+                ],
                 "example_sentence": "Her suitcase is too heavy to lift.",
                 "example_es": "Mi maleta es negra.",
                 "example_en": "My suitcase is black.",
@@ -225,6 +246,7 @@ CREATE TABLE IF NOT EXISTS decks (
     slug TEXT NOT NULL UNIQUE,
     title TEXT NOT NULL,
     description TEXT NOT NULL,
+    is_selected_on_home INTEGER NOT NULL DEFAULT 1 CHECK(is_selected_on_home IN (0, 1)),
     is_enabled_in_smart_practice INTEGER NOT NULL DEFAULT 1 CHECK(is_enabled_in_smart_practice IN (0, 1)),
     language_from TEXT NOT NULL DEFAULT 'es',
     language_to TEXT NOT NULL DEFAULT 'en'
@@ -310,9 +332,16 @@ def initialize_database() -> None:
 
 def _migrate_decks_table(connection: sqlite3.Connection) -> None:
     columns = {
-        row["name"]
-        for row in connection.execute("PRAGMA table_info(decks)").fetchall()
+        row["name"] for row in connection.execute("PRAGMA table_info(decks)").fetchall()
     }
+    if "is_selected_on_home" not in columns:
+        connection.execute(
+            """
+            ALTER TABLE decks
+            ADD COLUMN is_selected_on_home INTEGER NOT NULL DEFAULT 1
+            CHECK(is_selected_on_home IN (0, 1))
+            """
+        )
     if "is_enabled_in_smart_practice" not in columns:
         connection.execute(
             """
@@ -338,7 +367,9 @@ def _load_expansion_decks() -> list[dict[str, Any]]:
         if not isinstance(payload, list):
             raise ValueError(f"{path.name} must contain a list of deck payloads")
         if not all(isinstance(deck, dict) for deck in payload):
-            raise ValueError(f"Each deck expansion payload in {path.name} must be an object")
+            raise ValueError(
+                f"Each deck expansion payload in {path.name} must be an object"
+            )
         decks.extend(payload)
     return decks
 
@@ -360,21 +391,26 @@ def upsert_deck(
     if created_deck:
         cursor = connection.execute(
             """
-            INSERT INTO decks (slug, title, description, language_from, language_to)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO decks (slug, title, description, is_selected_on_home, language_from, language_to)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 normalized_deck["slug"],
                 normalized_deck["title"],
                 normalized_deck["description"],
+                1,
                 normalized_deck["language_from"],
                 normalized_deck["language_to"],
             ),
         )
-        deck_id = cursor.lastrowid
+        if cursor.lastrowid is None:
+            raise RuntimeError("Failed to create deck")
+        deck_id = int(cursor.lastrowid)
     else:
         if on_existing == "fail":
-            raise ValueError(f"Deck with slug '{normalized_deck['slug']}' already exists")
+            raise ValueError(
+                f"Deck with slug '{normalized_deck['slug']}' already exists"
+            )
 
         deck_id = deck_row["id"]
         connection.execute(
@@ -392,7 +428,9 @@ def upsert_deck(
             ),
         )
         if on_existing == "replace":
-            delete_cursor = connection.execute("DELETE FROM cards WHERE deck_id = ?", (deck_id,))
+            delete_cursor = connection.execute(
+                "DELETE FROM cards WHERE deck_id = ?", (deck_id,)
+            )
             deleted_cards = delete_cursor.rowcount if delete_cursor.rowcount >= 0 else 0
 
     inserted_cards = 0
@@ -407,7 +445,9 @@ def upsert_deck(
             )
         seen_pairs.add(pair)
 
-        serialized_translations = json.dumps(card["main_translations_es"], ensure_ascii=False)
+        serialized_translations = json.dumps(
+            card["main_translations_es"], ensure_ascii=False
+        )
         serialized_collocations = json.dumps(card["collocations"], ensure_ascii=False)
         existing_card = connection.execute(
             """
@@ -512,25 +552,37 @@ def _normalize_deck_payload(deck: dict[str, Any]) -> dict[str, Any]:
         "slug": slug,
         "title": title,
         "description": description,
-        "language_from": _optional_text(deck.get("language_from")) or DEFAULT_LANGUAGE_FROM,
+        "language_from": _optional_text(deck.get("language_from"))
+        or DEFAULT_LANGUAGE_FROM,
         "language_to": _optional_text(deck.get("language_to")) or DEFAULT_LANGUAGE_TO,
-        "cards": [_normalize_card_payload(card, default_section_name=title) for card in cards],
+        "cards": [
+            _normalize_card_payload(card, default_section_name=title) for card in cards
+        ],
     }
 
 
-def _normalize_card_payload(card: Any, *, default_section_name: str | None = None) -> dict[str, Any]:
+def _normalize_card_payload(
+    card: Any, *, default_section_name: str | None = None
+) -> dict[str, Any]:
     if not isinstance(card, dict):
         raise ValueError("Each card must be an object")
 
-    spanish = _require_text(card.get("spanish") or card.get("prompt_es"), "card.spanish")
-    english = _require_text(card.get("english") or card.get("answer_en"), "card.english")
+    spanish = _require_text(
+        card.get("spanish") or card.get("prompt_es"), "card.spanish"
+    )
+    english = _require_text(
+        card.get("english") or card.get("answer_en"), "card.english"
+    )
 
     return {
         "spanish": spanish,
         "english": english,
         "generation_phase": _normalize_generation_phase(card.get("generation_phase")),
-        "generation_metadata": _normalize_generation_metadata(card.get("generation_metadata")),
-        "section_name": _optional_text(card.get("section_name")) or default_section_name,
+        "generation_metadata": _normalize_generation_metadata(
+            card.get("generation_metadata")
+        ),
+        "section_name": _optional_text(card.get("section_name"))
+        or default_section_name,
         "part_of_speech": _optional_text(card.get("part_of_speech")),
         "definition_en": _optional_text(card.get("definition_en")),
         "main_translations_es": _normalize_text_list(card.get("main_translations_es")),
@@ -607,8 +659,7 @@ def _normalize_generation_metadata(value: Any) -> str:
 
 def _migrate_cards_table(connection: sqlite3.Connection) -> None:
     columns = {
-        row["name"]
-        for row in connection.execute("PRAGMA table_info(cards)").fetchall()
+        row["name"] for row in connection.execute("PRAGMA table_info(cards)").fetchall()
     }
     migrations = {
         "is_enabled": "ALTER TABLE cards ADD COLUMN is_enabled INTEGER NOT NULL DEFAULT 1 CHECK(is_enabled IN (0, 1))",

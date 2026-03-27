@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchDeckPreview, fetchDecks, updateDeckSmartPracticeInclusion } from '../api';
+import { fetchDeckPreview, fetchHomeDecks, updateDeckSmartPracticeInclusion } from '../api';
 import DeckCard from '../components/DeckCard';
 import { loadPracticeSettings, savePracticeSettings } from '../practiceSettings';
 
@@ -206,7 +206,7 @@ function HomePage() {
 
     async function loadDecks() {
       try {
-        const nextDecks = await fetchDecks();
+        const nextDecks = await fetchHomeDecks();
         if (!cancelled) {
           setDecks(sortDecksBySmartPractice(nextDecks));
           setStatus('ready');
@@ -323,11 +323,23 @@ function HomePage() {
   }
 
   if (status === 'loading') {
-    return <section className="panel empty-state">Loading starter decks...</section>;
+    return <section className="panel empty-state">Loading your home decks...</section>;
   }
 
   if (status === 'error') {
     return <section className="panel empty-state">Unable to load decks: {error}</section>;
+  }
+
+  if (decks.length === 0) {
+    return (
+      <section className="panel empty-state">
+        <h2>No decks on home</h2>
+        <p>Open the deck market and add decks to bring them back here.</p>
+        <Link className="button button--primary" to="/market">
+          Open market
+        </Link>
+      </section>
+    );
   }
 
   return (
@@ -480,10 +492,13 @@ function HomePage() {
       <section className="home-section home-section--secondary" ref={deckReviewSectionRef}>
         <div className="section-heading">
           <div>
-            <h2>Deck Selection</h2>
+            <h2>Home Decks</h2>
           </div>
 
           <div className="section-controls">
+            <Link to="/market" className="button button--secondary">
+              Open market
+            </Link>
             <label className="deck-search" aria-label="Search decks">
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
@@ -493,13 +508,13 @@ function HomePage() {
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search decks"
+                placeholder="Search home decks"
               />
             </label>
 
-            <label className="section-toggle" aria-label="Toggle Smart Practice sampling for all decks">
+            <label className="section-toggle" aria-label="Toggle Smart Practice sampling for all home decks">
               <span className="section-toggle__copy">
-                <strong>All decks</strong>
+                <strong>All home decks</strong>
                 <small>{enabledDeckCount} of {decks.length} enabled</small>
               </span>
               <button
@@ -507,7 +522,7 @@ function HomePage() {
                 type="button"
                 role="switch"
                 aria-checked={areAllDecksEnabledInSmartPractice}
-                aria-label={areAllDecksEnabledInSmartPractice ? 'Disable all decks for Smart Practice sampling' : 'Enable all decks for Smart Practice sampling'}
+                aria-label={areAllDecksEnabledInSmartPractice ? 'Disable all home decks for Smart Practice sampling' : 'Enable all home decks for Smart Practice sampling'}
                 onClick={handleToggleAllDecks}
                 disabled={hasPendingDeckUpdates || decks.length === 0}
               >
@@ -525,6 +540,7 @@ function HomePage() {
               key={deck.id}
               deck={deck}
               isPending={pendingDeckIds.includes(deck.id)}
+              variant="home"
               onToggleSmartPractice={handleToggleSmartPractice}
               isSearchDimmed={Boolean(normalizedSearchQuery) && !searchDidMatch}
               searchMatchReasons={searchMatchReasons}

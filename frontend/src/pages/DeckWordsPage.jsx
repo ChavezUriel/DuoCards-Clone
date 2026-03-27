@@ -56,7 +56,7 @@ function DeckWordsPage() {
         <p>There was a problem loading the deck words.</p>
         <p>{error}</p>
         <Link className="button button--secondary" to="/">
-          Back to decks
+          Back to home
         </Link>
       </section>
     );
@@ -130,7 +130,7 @@ function DeckWordsPage() {
     <section className="panel deck-preview-page">
       <div className="deck-preview-page__toolbar">
         <Link className="back-link" to="/">
-          Back to decks
+          Back to home
         </Link>
         <Link className="button button--secondary" to={`/review/${preview.deck_id}`}>
           Start review

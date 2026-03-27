@@ -22,10 +22,25 @@ export function fetchDecks() {
   return request('/api/decks');
 }
 
+export function fetchHomeDecks() {
+  return request('/api/decks');
+}
+
+export function fetchMarketDecks() {
+  return request('/api/decks/market');
+}
+
 export function updateDeckSmartPracticeInclusion(deckId, isEnabledInSmartPractice) {
   return request(`/api/decks/${deckId}/smart-practice-inclusion`, {
     method: 'PATCH',
     body: JSON.stringify({ is_enabled_in_smart_practice: isEnabledInSmartPractice }),
+  });
+}
+
+export function updateDeckHomeSelection(deckId, isSelectedOnHome) {
+  return request(`/api/decks/${deckId}/home-selection`, {
+    method: 'PATCH',
+    body: JSON.stringify({ is_selected_on_home: isSelectedOnHome }),
   });
 }
 

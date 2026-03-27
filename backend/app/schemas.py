@@ -11,6 +11,7 @@ class DeckSummary(BaseModel):
     slug: str
     title: str
     description: str
+    is_selected_on_home: bool = True
     is_enabled_in_smart_practice: bool = True
     total_cards: int
     reviewed_cards: int
@@ -84,9 +85,11 @@ class DeckPreview(BaseModel):
     deck_description: str
     total_cards: int
     cards: list[DeckPreviewCard]
-    
+
+
 class CardVisibilityUpdate(BaseModel):
     is_enabled: bool
+
 
 class CardVisibilityResult(BaseModel):
     card_id: int
@@ -101,6 +104,15 @@ class DeckSmartPracticeUpdate(BaseModel):
 class DeckSmartPracticeResult(BaseModel):
     deck_id: int
     is_enabled_in_smart_practice: bool
+
+
+class DeckHomeSelectionUpdate(BaseModel):
+    is_selected_on_home: bool
+
+
+class DeckHomeSelectionResult(BaseModel):
+    deck_id: int
+    is_selected_on_home: bool
 
 
 class CardUpdateRequest(BaseModel):
