@@ -1,11 +1,29 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useLocation } from 'react-router-dom';
 import { fetchDeckPreview, updateCard, updateCardVisibility } from '../api';
 import CardDetailsModal from '../components/CardDetailsModal';
 
 const GRID_COLUMNS = 4;
 const GRID_ROWS = 5;
 const PAGE_SIZE = GRID_COLUMNS * GRID_ROWS;
+
+function HomeIcon() {
+  return (
+    <svg aria-hidden="true" className="back-link__icon" viewBox="0 0 24 24">
+      <path d="M4 10.5 12 4l8 6.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.5 9.75V20h11V9.75" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 20v-5.25h4V20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg aria-hidden="true" className="back-link__icon" viewBox="0 0 24 24">
+      <path d="M15 6 9 12l6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 function DeckWordsPage() {
   const { deckId } = useParams();
@@ -55,12 +73,18 @@ function DeckWordsPage() {
       <section className="panel empty-state">
         <p>There was a problem loading the deck words.</p>
         <p>{error}</p>
-        <Link className="button button--secondary" to="/">
-          Back to home
+        <Link className="back-link back-link--home back-link--button" to="/">
+          <HomeIcon />
+          <span>Back to home</span>
         </Link>
       </section>
     );
   }
+
+  const location = useLocation();
+  const from = location?.state?.from;
+  const backPath = from === 'market' ? '/market' : '/';
+  const backLabel = from === 'market' ? 'Back to market' : 'Back home';
 
   const totalPages = Math.max(1, Math.ceil(preview.cards.length / PAGE_SIZE));
   const pageStart = (currentPage - 1) * PAGE_SIZE;
@@ -129,8 +153,9 @@ function DeckWordsPage() {
   return (
     <section className="panel deck-preview-page">
       <div className="deck-preview-page__toolbar">
-        <Link className="back-link" to="/">
-          Back to home
+        <Link className="back-link back-link--home back-link--button" to={backPath}>
+          {from === 'market' ? <BackIcon /> : <HomeIcon />}
+          <span>{backLabel}</span>
         </Link>
         <Link className="button button--secondary" to={`/review/${preview.deck_id}`}>
           Start review

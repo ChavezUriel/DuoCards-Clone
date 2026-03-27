@@ -23,7 +23,7 @@ function DeckCard({
       : 'deck-card--inactive';
 
   function handleOpenDeck() {
-    navigate(`/decks/${deck.id}/words`);
+    navigate(`/decks/${deck.id}/words`, { state: { from: variant } });
   }
 
   function handleTogglePractice() {
