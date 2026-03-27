@@ -252,8 +252,6 @@ def get_deck_preview(deck_id: int) -> DeckPreview:
         FROM decks
         WHERE id = ?
     """
-    print("DECK QUERY:", deck_query)
-
     cards_query = """
         SELECT
             c.id AS card_id,
