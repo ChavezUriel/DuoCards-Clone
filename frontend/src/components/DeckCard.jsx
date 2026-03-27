@@ -132,13 +132,27 @@ function DeckCard({
         {variant === 'market' ? (
           <div className="deck-card__actions">
             <button
-              className={`deck-card__action-button ${isOnHome ? 'deck-card__action-button--danger' : 'deck-card__action-button--primary'}`}
+              className={`deck-card__action-button ${isOnHome ? 'deck-card__action-button--on' : 'deck-card__action-button--neutral'}`}
               type="button"
               disabled={isPending}
               aria-pressed={isOnHome}
-              onClick={() => onToggleHome?.(deck.id, !isOnHome)}
+              aria-label={isOnHome ? 'Remove from home' : 'Add to home'}
+              title={isOnHome ? 'Remove from home' : 'Add to home'}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleHome?.(deck.id, !isOnHome);
+              }}
             >
-              {isOnHome ? 'Remove from home' : 'Add to home'}
+              {isOnHome ? (
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </svg>
+              )}
+              <span className="sr-only">{isOnHome ? 'Remove from home' : 'Add to home'}</span>
             </button>
           </div>
         ) : null}

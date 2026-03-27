@@ -30,6 +30,19 @@ a {
   font: inherit;
 }
 
+/* Screen-reader only utility */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 #root {
   min-height: 100vh;
   min-height: 100dvh;
@@ -380,7 +393,53 @@ a {
 }
 
 .deck-card--market .deck-card__action-button {
-  min-width: 12rem;
+  /* Minimal icon-style action button for Market cards */
+  min-width: initial;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 111, 80, 0.12);
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--primary-dark);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.deck-card--market .deck-card__action-button svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.deck-card--market .deck-card__action-button--neutral:hover:not(:disabled),
+.deck-card--market .deck-card__action-button--neutral:focus-visible {
+  background: rgba(31, 111, 80, 0.08);
+  transform: translateY(-1px);
+  border-color: rgba(31, 111, 80, 0.16);
+}
+
+.deck-card--market .deck-card__action-button--on {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.deck-card--market .deck-card__action-button--on svg {
+  stroke: #fff;
+  fill: none;
+}
+
+.deck-card--market .deck-card__action-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.deck-card--market .deck-card__action-button:focus-visible {
+  outline: 3px solid rgba(31, 111, 80, 0.18);
+  outline-offset: 2px;
 }
 
 .deck-card--market .deck-card__actions {

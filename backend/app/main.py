@@ -250,8 +250,10 @@ def get_deck_preview(deck_id: int) -> DeckPreview:
     deck_query = """
         SELECT id, title, description
         FROM decks
-        WHERE id = ? AND is_selected_on_home = 1
+        WHERE id = ?
     """
+    print("DECK QUERY:", deck_query)
+
     cards_query = """
         SELECT
             c.id AS card_id,
@@ -268,7 +270,7 @@ def get_deck_preview(deck_id: int) -> DeckPreview:
             COALESCE(c.section_name, d.title) AS section_name
         FROM cards c
         JOIN decks d ON d.id = c.deck_id
-        WHERE c.deck_id = ? AND c.generation_phase = 'refined' AND d.is_selected_on_home = 1
+        WHERE c.deck_id = ? AND c.generation_phase = 'refined'
         ORDER BY COALESCE(c.section_name, d.title) ASC, c.id ASC
     """
 
@@ -409,13 +411,11 @@ def update_card_visibility(
 
     with get_connection() as connection:
         card_row = connection.execute(
-            "SELECT c.id, c.deck_id, c.is_enabled FROM cards c JOIN decks d ON d.id = c.deck_id AND d.is_selected_on_home = 1 WHERE c.id = ?",
+            "SELECT c.id, c.deck_id, c.is_enabled FROM cards c WHERE c.id = ?",
             (card_id,),
         ).fetchone()
         if card_row is None:
-            raise HTTPException(
-                status_code=404, detail="Card not found or deck not on home"
-            )
+            raise HTTPException(status_code=404, detail="Card not found")
 
         next_enabled_value = 1 if payload.is_enabled else 0
         connection.execute(
@@ -511,13 +511,11 @@ def update_deck_smart_practice_inclusion(
 def update_card(card_id: int, payload: CardUpdateRequest) -> DeckPreviewCard:
     with get_connection() as connection:
         existing_card = connection.execute(
-            "SELECT c.id FROM cards c JOIN decks d ON d.id = c.deck_id AND d.is_selected_on_home = 1 WHERE c.id = ?",
+            "SELECT c.id FROM cards c WHERE c.id = ?",
             (card_id,),
         ).fetchone()
         if existing_card is None:
-            raise HTTPException(
-                status_code=404, detail="Card not found or deck not on home"
-            )
+            raise HTTPException(status_code=404, detail="Card not found")
 
         connection.execute(
             """

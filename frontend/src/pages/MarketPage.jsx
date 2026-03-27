@@ -79,7 +79,9 @@ function MarketPage() {
 
     try {
       await updateDeckHomeSelection(deckId, isSelectedOnHome);
-      setDecks((current) => sortDecks(current.map((deck) => (deck.id === deckId ? { ...deck, is_selected_on_home: isSelectedOnHome } : deck))));
+      // Update selection state but do NOT re-sort while the market page is open.
+      // The ordering should be generated when the market screen is opened.
+      setDecks((current) => current.map((deck) => (deck.id === deckId ? { ...deck, is_selected_on_home: isSelectedOnHome } : deck)));
     } catch (requestError) {
       setError(requestError.message);
     } finally {
