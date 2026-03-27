@@ -119,6 +119,10 @@ a {
   margin-bottom: 1rem;
 }
 
+.section-heading > div .back-link {
+  margin-bottom: 0.6rem;
+}
+
 .section-controls {
   display: flex;
   align-items: center;

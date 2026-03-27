@@ -3,6 +3,16 @@ import { Link } from 'react-router-dom';
 import { fetchMarketDecks, updateDeckHomeSelection } from '../api';
 import DeckCard from '../components/DeckCard';
 
+function HomeIcon() {
+  return (
+    <svg aria-hidden="true" className="back-link__icon" viewBox="0 0 24 24">
+      <path d="M4 10.5 12 4l8 6.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.5 9.75V20h11V9.75" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 20v-5.25h4V20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function normalizeSearchText(value) {
   return value
     .toLowerCase()
@@ -101,15 +111,15 @@ function MarketPage() {
     <section className="home-section home-section--secondary">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Deck market</p>
+          <Link to="/" className="back-link back-link--home back-link--button">
+            <HomeIcon />
+            <span>Home</span>
+          </Link>
           <h2>Choose decks for home</h2>
           <p className="hero-copy">Select decks you want on your home screen. You can remove them later.</p>
         </div>
 
         <div className="section-controls">
-          <Link to="/" className="button button--secondary">
-            Back home
-          </Link>
           <label className="deck-search" aria-label="Search market decks">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
