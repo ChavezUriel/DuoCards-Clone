@@ -8,6 +8,13 @@ import ReviewPage from './pages/ReviewPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 
+function PrivateRoute({ children, token }) {
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
 function App() {
   const location = useLocation();
   const [token, setToken] = useState(localStorage.getItem('access_token'));
@@ -51,13 +58,13 @@ function App() {
       </header>
       <main className={`page-content ${isFocusedRoute ? 'page-content--review' : ''}`}>
         <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/market" element={<MarketPage />} />
-          <Route path="/decks/:deckId/words" element={<DeckWordsPage />} />
-          <Route path="/practice" element={<PracticePage />} />
-          <Route path="/review/:deckId" element={<ReviewPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/" element={<PrivateRoute token={token}><HomePage /></PrivateRoute>} />
+          <Route path="/market" element={<PrivateRoute token={token}><MarketPage /></PrivateRoute>} />
+          <Route path="/decks/:deckId/words" element={<PrivateRoute token={token}><DeckWordsPage /></PrivateRoute>} />
+          <Route path="/practice" element={<PrivateRoute token={token}><PracticePage /></PrivateRoute>} />
+          <Route path="/review/:deckId" element={<PrivateRoute token={token}><ReviewPage /></PrivateRoute>} />
+          <Route path="/login" element={token ? <Navigate to="/" replace /> : <LoginPage />} />
+          <Route path="/register" element={token ? <Navigate to="/" replace /> : <RegisterPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
