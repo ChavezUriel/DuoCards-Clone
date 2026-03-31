@@ -16,7 +16,7 @@ function LoginPage() {
       await login(formData.email, formData.password);
       navigate('/');
     } catch (err) {
-      setError(err.message || 'Error al iniciar sesión');
+      setError(err.message || 'Login failed');
     } finally {
       setIsLoading(false);
     }
@@ -29,40 +29,40 @@ function LoginPage() {
   return (
     <section className="panel auth-panel">
       <div className="auth-panel__content">
-        <h1>Iniciar sesión</h1>
-        <p className="hero-copy">Accede a tu cuenta para sincronizar tus decks y progreso.</p>
+        <h1>Login</h1>
+        <p className="hero-copy">Sign in to your account to sync your decks and progress.</p>
 
         {error && <div className="deck-grid__status deck-grid__status--error">{error}</div>}
 
         <form className="login-form" onSubmit={handleSubmit}>
           <label className="login-field">
-            <span className="eyebrow">Correo electrónico</span>
-            <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="tu@ejemplo.com" aria-label="Correo electrónico" required />
+            <span className="eyebrow">Email Address</span>
+            <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="you@example.com" aria-label="Email address" required />
           </label>
 
           <label className="login-field">
-            <span className="eyebrow">Contraseña</span>
-            <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="Contraseña" aria-label="Contraseña" required />
+            <span className="eyebrow">Password</span>
+            <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="Password" aria-label="Password" required />
           </label>
 
           <div className="login-row">
             <label className="login-remember">
               <input type="checkbox" name="remember" />
-              <span>Recordarme</span>
+              <span>Remember me</span>
             </label>
 
-            <Link to="/" className="back-link">¿Olvidaste tu contraseña?</Link>
+            <Link to="/" className="back-link">Forgot your password?</Link>
           </div>
 
           <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#6b7058' }}>
-            ¿No tienes cuenta? <Link to="/register" className="back-link" style={{ display: 'inline' }}>Regístrate ahora</Link>
+            Don't have an account? <Link to="/register" className="back-link" style={{ display: 'inline' }}>Sign up now</Link>
           </div>
 
           <div className="login-actions">
             <button className="button button--primary" type="submit" disabled={isLoading}>
-              {isLoading ? 'Iniciando...' : 'Iniciar sesión'}
+              {isLoading ? 'Signing in...' : 'Log in'}
             </button>
-            <Link to="/" className="button button--secondary">Volver</Link>
+            <Link to="/" className="button button--secondary">Back</Link>
           </div>
         </form>
       </div>

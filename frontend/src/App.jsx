@@ -38,14 +38,14 @@ function App() {
   let headerContent = null;
 
   if (location.pathname === '/login') {
-    headerContent = <Link to="/register" className="back-link">Crear cuenta</Link>;
+    headerContent = <Link to="/register" className="back-link">Create account</Link>;
   } else if (location.pathname === '/register') {
-    headerContent = <Link to="/login" className="back-link">Iniciar sesión</Link>;
+    headerContent = <Link to="/login" className="back-link">Login</Link>;
   } else if (!isFocusedRoute) {
     if (token) {
-      headerContent = <button onClick={handleLogout} className="back-link" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Cerrar sesión</button>;
+      headerContent = <button onClick={handleLogout} className="back-link" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Logout</button>;
     } else {
-      headerContent = <Link to="/login" className="back-link">Iniciar sesión</Link>;
+      headerContent = <Link to="/login" className="back-link">Login</Link>;
     }
   }
 
