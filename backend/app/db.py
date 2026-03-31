@@ -249,7 +249,11 @@ CREATE TABLE IF NOT EXISTS decks (
     is_selected_on_home INTEGER NOT NULL DEFAULT 1 CHECK(is_selected_on_home IN (0, 1)),
     is_enabled_in_smart_practice INTEGER NOT NULL DEFAULT 1 CHECK(is_enabled_in_smart_practice IN (0, 1)),
     language_from TEXT NOT NULL DEFAULT 'es',
-    language_to TEXT NOT NULL DEFAULT 'en'
+    language_to TEXT NOT NULL DEFAULT 'en',
+    user_id INTEGER,
+    base_deck_id INTEGER,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    FOREIGN KEY (base_deck_id) REFERENCES decks (id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS cards (
@@ -291,6 +295,7 @@ CREATE TABLE IF NOT EXISTS practice_sessions (
     new_block_size INTEGER NOT NULL,
     review_batch_size INTEGER NOT NULL,
     interleaving_intensity TEXT NOT NULL CHECK(interleaving_intensity IN ('low', 'medium', 'high')),
+    user_id INTEGER NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     completed_at TEXT
@@ -334,6 +339,7 @@ def initialize_database() -> None:
         _migrate_cards_table(connection)
         _migrate_card_progress_table(connection)
         _migrate_users_table(connection)
+        _migrate_practice_sessions_table(connection)
         _seed_database(connection)
         connection.commit()
 
@@ -346,6 +352,13 @@ def _migrate_users_table(connection: sqlite3.Connection) -> None:
     if "hashed_password" not in columns and "password_hash" in columns:
         # We can just rename it conceptually, or add it, but since SQLite requires a new table, we'll just map it in Python. Let's rename the column if possible, but SQLite doesn't support RENAME COLUMN in very old versions. Assuming we are on modern SQLite:
         connection.execute("ALTER TABLE users RENAME COLUMN password_hash TO hashed_password")
+
+def _migrate_practice_sessions_table(connection: sqlite3.Connection) -> None:
+    columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(practice_sessions)").fetchall()
+    }
+    if "user_id" not in columns:
+        connection.execute("ALTER TABLE practice_sessions ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id) ON DELETE CASCADE")
 
 def _migrate_decks_table(connection: sqlite3.Connection) -> None:
     columns = {
@@ -367,6 +380,10 @@ def _migrate_decks_table(connection: sqlite3.Connection) -> None:
             CHECK(is_enabled_in_smart_practice IN (0, 1))
             """
         )
+    if "user_id" not in columns:
+        connection.execute("ALTER TABLE decks ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE")
+    if "base_deck_id" not in columns:
+        connection.execute("ALTER TABLE decks ADD COLUMN base_deck_id INTEGER REFERENCES decks(id) ON DELETE SET NULL")
 
 
 def _seed_database(connection: sqlite3.Connection) -> None:

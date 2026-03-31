@@ -20,15 +20,16 @@ class PracticeSettings:
 
 
 def start_or_resume_session(
-    connection: sqlite3.Connection, settings: PracticeSettings
+    connection: sqlite3.Connection, settings: PracticeSettings, user_id: int
 ) -> int:
     active_row = connection.execute(
-        "SELECT id FROM practice_sessions WHERE status = 'active' ORDER BY updated_at DESC, id DESC LIMIT 1"
+        "SELECT id FROM practice_sessions WHERE status = 'active' AND user_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1",
+        (user_id,)
     ).fetchone()
     if active_row is not None:
         return active_row["id"]
 
-    mode = _choose_session_mode(connection, settings)
+    mode = _choose_session_mode(connection, settings, user_id)
     created_at = _utc_now_iso()
     cursor = connection.execute(
         """
@@ -40,10 +41,11 @@ def start_or_resume_session(
             new_block_size,
             review_batch_size,
             interleaving_intensity,
+            user_id,
             created_at,
             updated_at
         )
-        VALUES ('active', 'global', ?, ?, ?, ?, ?, ?, ?)
+        VALUES ('active', 'global', ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             mode,
@@ -51,6 +53,7 @@ def start_or_resume_session(
             settings.new_block_size,
             settings.review_batch_size,
             settings.interleaving_intensity,
+            user_id,
             created_at,
             created_at,
         ),
@@ -60,9 +63,9 @@ def start_or_resume_session(
     session_id = int(cursor.lastrowid)
 
     if mode == "new_material":
-        cards = _select_new_material_cards(connection, settings)
+        cards = _select_new_material_cards(connection, settings, user_id)
     else:
-        cards = _select_review_cards(connection, settings)
+        cards = _select_review_cards(connection, settings, user_id)
 
     if not cards:
         connection.execute(
@@ -84,7 +87,7 @@ def start_or_resume_session(
 
 
 def get_session_snapshot(
-    connection: sqlite3.Connection, session_id: int
+    connection: sqlite3.Connection, session_id: int, user_id: int
 ) -> dict[str, object] | None:
     summary = connection.execute(
         """
@@ -101,10 +104,10 @@ def get_session_snapshot(
             COALESCE(SUM(CASE WHEN psc.status = 'pending' THEN 1 ELSE 0 END), 0) AS remaining_cards
         FROM practice_sessions ps
         LEFT JOIN practice_session_cards psc ON psc.session_id = ps.id
-        WHERE ps.id = ?
+        WHERE ps.id = ? AND ps.user_id = ?
         GROUP BY ps.id
         """,
-        (session_id,),
+        (session_id, user_id),
     ).fetchone()
 
     if summary is None:
@@ -163,10 +166,11 @@ def submit_session_review(
     session_id: int,
     card_id: int,
     result: Literal["known", "unknown"],
+    user_id: int,
 ) -> dict[str, int | str | None]:
     session = connection.execute(
-        "SELECT id, mode, status FROM practice_sessions WHERE id = ?",
-        (session_id,),
+        "SELECT id, mode, status FROM practice_sessions WHERE id = ? AND user_id = ?",
+        (session_id, user_id),
     ).fetchone()
     if session is None:
         raise ValueError("Smart practice session not found")
@@ -233,7 +237,7 @@ def submit_session_review(
 
 
 def _choose_session_mode(
-    connection: sqlite3.Connection, settings: PracticeSettings
+    connection: sqlite3.Connection, settings: PracticeSettings, user_id: int
 ) -> PracticeMode:
     counts = connection.execute(
         """
@@ -243,8 +247,9 @@ def _choose_session_mode(
         FROM cards c
         JOIN decks d ON d.id = c.deck_id
         LEFT JOIN card_progress cp ON cp.card_id = c.id
-        WHERE c.is_enabled = 1 AND c.generation_phase = 'refined' AND d.is_selected_on_home = 1 AND d.is_enabled_in_smart_practice = 1
-        """
+        WHERE c.is_enabled = 1 AND c.generation_phase = 'refined' AND d.is_selected_on_home = 1 AND d.is_enabled_in_smart_practice = 1 AND d.user_id = ?
+        """,
+        (user_id,)
     ).fetchone()
     unmastered_count = counts["unmastered_count"]
     learned_count = counts["learned_count"]
@@ -262,7 +267,8 @@ def _choose_session_mode(
     else:
         if unmastered_count > 0 and learned_count > 0:
             last_mode_row = connection.execute(
-                "SELECT mode FROM practice_sessions WHERE status != 'active' ORDER BY updated_at DESC, id DESC LIMIT 1"
+                "SELECT mode FROM practice_sessions WHERE status != 'active' AND user_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1",
+                (user_id,)
             ).fetchone()
             last_mode = last_mode_row["mode"] if last_mode_row is not None else None
             if last_mode == "new_material" and learned_count >= max(
@@ -283,7 +289,7 @@ def _choose_session_mode(
 
 
 def _select_new_material_cards(
-    connection: sqlite3.Connection, settings: PracticeSettings
+    connection: sqlite3.Connection, settings: PracticeSettings, user_id: int
 ) -> list[sqlite3.Row]:
     rows = connection.execute(
         """
@@ -303,9 +309,11 @@ def _select_new_material_cards(
             AND c.generation_phase = 'refined'
             AND d.is_selected_on_home = 1
             AND d.is_enabled_in_smart_practice = 1
+            AND d.user_id = ?
             AND (cp.initial_mastered_at IS NULL OR cp.card_id IS NULL)
         ORDER BY c.id ASC
-        """
+        """,
+        (user_id,)
     ).fetchall()
     return _pick_random_rows(
         rows, limit=settings.new_block_size, intensity=settings.interleaving_intensity
@@ -313,7 +321,7 @@ def _select_new_material_cards(
 
 
 def _select_review_cards(
-    connection: sqlite3.Connection, settings: PracticeSettings
+    connection: sqlite3.Connection, settings: PracticeSettings, user_id: int
 ) -> list[sqlite3.Row]:
     rows = connection.execute(
         """
@@ -333,9 +341,11 @@ def _select_review_cards(
             AND c.generation_phase = 'refined'
             AND d.is_selected_on_home = 1
             AND d.is_enabled_in_smart_practice = 1
+            AND d.user_id = ?
             AND cp.initial_mastered_at IS NOT NULL
         ORDER BY c.id ASC
-        """
+        """,
+        (user_id,)
     ).fetchall()
     return _pick_random_rows(
         rows,

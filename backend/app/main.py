@@ -99,8 +99,7 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     access_token = auth.create_access_token(data={"sub": user_row["email"]})
     return {"access_token": access_token, "token_type": "bearer"}
 
-@app.get("/api/auth/me", response_model=UserResponse)
-def read_users_me(email: str = Depends(auth.get_current_user_email)):
+def get_current_user(email: str = Depends(auth.get_current_user_email)) -> UserResponse:
     with get_connection() as connection:
         user_row = connection.execute(
             "SELECT id, email, full_name FROM users WHERE email = ?",
@@ -112,13 +111,17 @@ def read_users_me(email: str = Depends(auth.get_current_user_email)):
         
     return UserResponse(id=user_row["id"], email=user_row["email"], full_name=user_row["full_name"])
 
+@app.get("/api/auth/me", response_model=UserResponse)
+def read_users_me(current_user: UserResponse = Depends(get_current_user)):
+    return current_user
+
 @app.get("/api/health", response_model=HealthResponse)
 def health_check() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
 @app.get("/api/decks", response_model=list[DeckSummary])
-def list_decks() -> list[DeckSummary]:
+def list_decks(current_user: UserResponse = Depends(get_current_user)) -> list[DeckSummary]:
     query = """
         SELECT
             d.id,
@@ -134,12 +137,12 @@ def list_decks() -> list[DeckSummary]:
         FROM decks d
         LEFT JOIN cards c ON c.deck_id = d.id AND c.is_enabled = 1 AND c.generation_phase = 'refined'
         LEFT JOIN card_progress cp ON cp.card_id = c.id
-        WHERE d.is_selected_on_home = 1
+        WHERE d.is_selected_on_home = 1 AND d.user_id = ?
         GROUP BY d.id, d.slug, d.title, d.description, d.is_selected_on_home, d.is_enabled_in_smart_practice
         ORDER BY d.id
     """
     with get_connection() as connection:
-        rows = connection.execute(query).fetchall()
+        rows = connection.execute(query, (current_user.id,)).fetchall()
 
     decks: list[DeckSummary] = []
     for row in rows:
@@ -167,27 +170,29 @@ def list_decks() -> list[DeckSummary]:
 
 
 @app.get("/api/decks/market", response_model=list[DeckSummary])
-def list_market_decks() -> list[DeckSummary]:
+def list_market_decks(current_user: UserResponse = Depends(get_current_user)) -> list[DeckSummary]:
     query = """
         SELECT
             d.id,
             d.slug,
             d.title,
             d.description,
-            d.is_selected_on_home,
-            d.is_enabled_in_smart_practice,
-            COUNT(c.id) AS total_cards,
+            COALESCE(ud.is_selected_on_home, 0) AS is_selected_on_home,
+            COALESCE(ud.is_enabled_in_smart_practice, d.is_enabled_in_smart_practice) AS is_enabled_in_smart_practice,
+            (SELECT COUNT(*) FROM cards bc WHERE bc.deck_id = d.id AND bc.is_enabled = 1 AND bc.generation_phase = 'refined') AS total_cards,
             COALESCE(SUM(CASE WHEN cp.last_result IS NOT NULL THEN 1 ELSE 0 END), 0) AS reviewed_cards,
             COALESCE(SUM(CASE WHEN cp.last_result = 'known' THEN 1 ELSE 0 END), 0) AS known_cards,
             COALESCE(SUM(CASE WHEN cp.last_result = 'unknown' THEN 1 ELSE 0 END), 0) AS unknown_cards
         FROM decks d
-        LEFT JOIN cards c ON c.deck_id = d.id AND c.is_enabled = 1 AND c.generation_phase = 'refined'
-        LEFT JOIN card_progress cp ON cp.card_id = c.id
-        GROUP BY d.id, d.slug, d.title, d.description, d.is_selected_on_home, d.is_enabled_in_smart_practice
+        LEFT JOIN decks ud ON ud.base_deck_id = d.id AND ud.user_id = ?
+        LEFT JOIN cards uc ON uc.deck_id = ud.id AND uc.is_enabled = 1 AND uc.generation_phase = 'refined'
+        LEFT JOIN card_progress cp ON cp.card_id = uc.id
+        WHERE d.user_id IS NULL
+        GROUP BY d.id, d.slug, d.title, d.description, ud.is_selected_on_home, ud.is_enabled_in_smart_practice, d.is_enabled_in_smart_practice
         ORDER BY d.id
     """
     with get_connection() as connection:
-        rows = connection.execute(query).fetchall()
+        rows = connection.execute(query, (current_user.id,)).fetchall()
 
     decks: list[DeckSummary] = []
     for row in rows:
@@ -215,8 +220,8 @@ def list_market_decks() -> list[DeckSummary]:
 
 
 @app.get("/api/decks/{deck_id}/review", response_model=ReviewCard)
-def get_review_card(deck_id: int) -> ReviewCard:
-    deck_exists_query = "SELECT 1 FROM decks WHERE id = ? AND is_selected_on_home = 1"
+def get_review_card(deck_id: int, current_user: UserResponse = Depends(get_current_user)) -> ReviewCard:
+    deck_exists_query = "SELECT 1 FROM decks WHERE id = ? AND is_selected_on_home = 1 AND user_id = ?"
     card_query = """
         SELECT
             c.id AS card_id,
@@ -243,7 +248,7 @@ def get_review_card(deck_id: int) -> ReviewCard:
         FROM cards c
         JOIN decks d ON d.id = c.deck_id
         LEFT JOIN card_progress cp ON cp.card_id = c.id
-        WHERE c.deck_id = ? AND c.is_enabled = 1 AND c.generation_phase = 'refined' AND d.is_selected_on_home = 1
+        WHERE c.deck_id = ? AND c.is_enabled = 1 AND c.generation_phase = 'refined'
         ORDER BY
             review_stage ASC,
             CASE WHEN cp.last_result = 'unknown' THEN COALESCE(cp.unknown_count, 0) * -1 ELSE 0 END ASC,
@@ -253,7 +258,7 @@ def get_review_card(deck_id: int) -> ReviewCard:
         LIMIT 1
     """
     with get_connection() as connection:
-        deck = connection.execute(deck_exists_query, (deck_id,)).fetchone()
+        deck = connection.execute(deck_exists_query, (deck_id, current_user.id)).fetchone()
         if deck is None:
             raise HTTPException(status_code=404, detail="Deck not found or not on home")
         row = connection.execute(card_query, (deck_id,)).fetchone()
@@ -265,7 +270,7 @@ def get_review_card(deck_id: int) -> ReviewCard:
 
 
 @app.get("/api/decks/{deck_id}/progress", response_model=DeckProgress)
-def get_deck_progress(deck_id: int) -> DeckProgress:
+def get_deck_progress(deck_id: int, current_user: UserResponse = Depends(get_current_user)) -> DeckProgress:
     query = """
         SELECT
             d.id AS deck_id,
@@ -276,11 +281,11 @@ def get_deck_progress(deck_id: int) -> DeckProgress:
         FROM decks d
         LEFT JOIN cards c ON c.deck_id = d.id AND c.is_enabled = 1 AND c.generation_phase = 'refined'
         LEFT JOIN card_progress cp ON cp.card_id = c.id
-        WHERE d.id = ? AND d.is_selected_on_home = 1
+        WHERE d.id = ? AND d.is_selected_on_home = 1 AND d.user_id = ?
         GROUP BY d.id
     """
     with get_connection() as connection:
-        row = connection.execute(query, (deck_id,)).fetchone()
+        row = connection.execute(query, (deck_id, current_user.id)).fetchone()
 
     if row is None:
         raise HTTPException(status_code=404, detail="Deck not found or not on home")
@@ -300,11 +305,11 @@ def get_deck_progress(deck_id: int) -> DeckProgress:
 
 
 @app.get("/api/decks/{deck_id}/preview", response_model=DeckPreview)
-def get_deck_preview(deck_id: int) -> DeckPreview:
+def get_deck_preview(deck_id: int, current_user: UserResponse = Depends(get_current_user)) -> DeckPreview:
     deck_query = """
         SELECT id, title, description
         FROM decks
-        WHERE id = ?
+        WHERE id = ? AND (user_id = ? OR user_id IS NULL)
     """
     cards_query = """
         SELECT
@@ -327,7 +332,7 @@ def get_deck_preview(deck_id: int) -> DeckPreview:
     """
 
     with get_connection() as connection:
-        deck_row = connection.execute(deck_query, (deck_id,)).fetchone()
+        deck_row = connection.execute(deck_query, (deck_id, current_user.id)).fetchone()
         if deck_row is None:
             raise HTTPException(status_code=404, detail="Deck not found or not on home")
 
@@ -389,15 +394,21 @@ def _clear_pending_practice_cards_for_deck(
 
 
 @app.post("/api/reviews", response_model=ReviewResult)
-def submit_review(payload: ReviewSubmission) -> ReviewResult:
+def submit_review(payload: ReviewSubmission, current_user: UserResponse = Depends(get_current_user)) -> ReviewResult:
     now = datetime.now(timezone.utc).isoformat()
-    card_query = "SELECT id FROM cards WHERE id = ? AND is_enabled = 1 AND generation_phase = 'refined'"
+    card_query = """
+        SELECT c.id, d.user_id 
+        FROM cards c JOIN decks d ON d.id = c.deck_id 
+        WHERE c.id = ? AND c.is_enabled = 1 AND c.generation_phase = 'refined'
+    """
     progress_query = "SELECT known_count, unknown_count, known_streak, initial_mastered_at FROM card_progress WHERE card_id = ?"
 
     with get_connection() as connection:
         card = connection.execute(card_query, (payload.card_id,)).fetchone()
         if card is None:
             raise HTTPException(status_code=404, detail="Card not found")
+        if card["user_id"] != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to review this card")
 
         existing = connection.execute(progress_query, (payload.card_id,)).fetchone()
         known_count = existing["known_count"] if existing else 0
@@ -457,17 +468,23 @@ def submit_review(payload: ReviewSubmission) -> ReviewResult:
 
 @app.patch("/api/cards/{card_id}/visibility", response_model=CardVisibilityResult)
 def update_card_visibility(
-    card_id: int, payload: CardVisibilityUpdate
+    card_id: int, payload: CardVisibilityUpdate, current_user: UserResponse = Depends(get_current_user)
 ) -> CardVisibilityResult:
     now = datetime.now(timezone.utc).isoformat()
 
     with get_connection() as connection:
         card_row = connection.execute(
-            "SELECT c.id, c.deck_id, c.is_enabled FROM cards c WHERE c.id = ?",
+            """
+            SELECT c.id, c.deck_id, c.is_enabled, d.user_id 
+            FROM cards c JOIN decks d ON d.id = c.deck_id 
+            WHERE c.id = ?
+            """,
             (card_id,),
         ).fetchone()
         if card_row is None:
             raise HTTPException(status_code=404, detail="Card not found")
+        if card_row["user_id"] != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to modify this card")
 
         next_enabled_value = 1 if payload.is_enabled else 0
         connection.execute(
@@ -489,31 +506,85 @@ def update_card_visibility(
     )
 
 
+def _duplicate_base_deck_to_user(connection: sqlite3.Connection, base_deck_id: int, user_id: int) -> int:
+    base_deck = connection.execute(
+        "SELECT slug, title, description, language_from, language_to FROM decks WHERE id = ?",
+        (base_deck_id,)
+    ).fetchone()
+    if base_deck is None:
+        raise HTTPException(status_code=404, detail="Base deck not found")
+
+    new_slug = f"{base_deck['slug']}-user-{user_id}"
+
+    cursor = connection.execute(
+        """
+        INSERT INTO decks (slug, title, description, is_selected_on_home, is_enabled_in_smart_practice, language_from, language_to, user_id, base_deck_id)
+        VALUES (?, ?, ?, 0, 0, ?, ?, ?, ?)
+        """,
+        (new_slug, base_deck["title"], base_deck["description"], base_deck["language_from"], base_deck["language_to"], user_id, base_deck_id)
+    )
+    new_deck_id = int(cursor.lastrowid)
+
+    connection.execute(
+        """
+        INSERT INTO cards (
+            deck_id, spanish_text, english_text, is_enabled, generation_phase, 
+            generation_metadata, section_name, part_of_speech, definition_en, 
+            main_translations_es, collocations, example_sentence, example_es, example_en
+        )
+        SELECT 
+            ?, spanish_text, english_text, is_enabled, generation_phase, 
+            generation_metadata, section_name, part_of_speech, definition_en, 
+            main_translations_es, collocations, example_sentence, example_es, example_en
+        FROM cards
+        WHERE deck_id = ?
+        """,
+        (new_deck_id, base_deck_id)
+    )
+    return new_deck_id
+
+
 @app.patch(
     "/api/decks/{deck_id}/home-selection", response_model=DeckHomeSelectionResult
 )
 def update_deck_home_selection(
     deck_id: int,
     payload: DeckHomeSelectionUpdate,
+    current_user: UserResponse = Depends(get_current_user),
 ) -> DeckHomeSelectionResult:
     now = datetime.now(timezone.utc).isoformat()
 
     with get_connection() as connection:
         deck_row = connection.execute(
-            "SELECT id, is_selected_on_home FROM decks WHERE id = ?",
+            "SELECT id, user_id, is_selected_on_home FROM decks WHERE id = ?",
             (deck_id,),
         ).fetchone()
         if deck_row is None:
             raise HTTPException(status_code=404, detail="Deck not found")
+            
+        target_deck_id = deck_id
+        if deck_row["user_id"] is None:
+            user_deck = connection.execute(
+                "SELECT id FROM decks WHERE user_id = ? AND base_deck_id = ?",
+                (current_user.id, deck_id)
+            ).fetchone()
+            if user_deck:
+                target_deck_id = user_deck["id"]
+            else:
+                if not payload.is_selected_on_home:
+                    return DeckHomeSelectionResult(deck_id=deck_id, is_selected_on_home=False)
+                target_deck_id = _duplicate_base_deck_to_user(connection, deck_id, current_user.id)
+        elif deck_row["user_id"] != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to modify this deck")
 
         next_selected_value = 1 if payload.is_selected_on_home else 0
         connection.execute(
             "UPDATE decks SET is_selected_on_home = ? WHERE id = ?",
-            (next_selected_value, deck_id),
+            (next_selected_value, target_deck_id),
         )
 
         if not payload.is_selected_on_home:
-            _clear_pending_practice_cards_for_deck(connection, deck_id=deck_id, now=now)
+            _clear_pending_practice_cards_for_deck(connection, deck_id=target_deck_id, now=now)
 
         connection.commit()
 
@@ -529,27 +600,44 @@ def update_deck_home_selection(
 def update_deck_smart_practice_inclusion(
     deck_id: int,
     payload: DeckSmartPracticeUpdate,
+    current_user: UserResponse = Depends(get_current_user),
 ) -> DeckSmartPracticeResult:
     now = datetime.now(timezone.utc).isoformat()
 
     with get_connection() as connection:
         deck_row = connection.execute(
-            "SELECT id, is_selected_on_home, is_enabled_in_smart_practice FROM decks WHERE id = ?",
+            "SELECT id, user_id, is_selected_on_home, is_enabled_in_smart_practice FROM decks WHERE id = ?",
             (deck_id,),
         ).fetchone()
         if deck_row is None:
-            raise HTTPException(status_code=404, detail="Deck not found or not on home")
+            raise HTTPException(status_code=404, detail="Deck not found")
+        
+        target_deck_id = deck_id
+        if deck_row["user_id"] is None:
+            user_deck = connection.execute(
+                "SELECT id, is_selected_on_home FROM decks WHERE user_id = ? AND base_deck_id = ?",
+                (current_user.id, deck_id)
+            ).fetchone()
+            if user_deck:
+                target_deck_id = user_deck["id"]
+                deck_row = user_deck
+            else:
+                target_deck_id = _duplicate_base_deck_to_user(connection, deck_id, current_user.id)
+                deck_row = {"is_selected_on_home": 1}
+        elif deck_row["user_id"] != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to modify this deck")
+
         if deck_row["is_selected_on_home"] == 0:
-            raise HTTPException(status_code=404, detail="Deck not found or not on home")
+            raise HTTPException(status_code=404, detail="Deck not selected on home")
 
         next_enabled_value = 1 if payload.is_enabled_in_smart_practice else 0
         connection.execute(
             "UPDATE decks SET is_enabled_in_smart_practice = ? WHERE id = ?",
-            (next_enabled_value, deck_id),
+            (next_enabled_value, target_deck_id),
         )
 
         if not payload.is_enabled_in_smart_practice:
-            _clear_pending_practice_cards_for_deck(connection, deck_id=deck_id, now=now)
+            _clear_pending_practice_cards_for_deck(connection, deck_id=target_deck_id, now=now)
 
         connection.commit()
 
@@ -560,14 +648,16 @@ def update_deck_smart_practice_inclusion(
 
 
 @app.patch("/api/cards/{card_id}", response_model=DeckPreviewCard)
-def update_card(card_id: int, payload: CardUpdateRequest) -> DeckPreviewCard:
+def update_card(card_id: int, payload: CardUpdateRequest, current_user: UserResponse = Depends(get_current_user)) -> DeckPreviewCard:
     with get_connection() as connection:
         existing_card = connection.execute(
-            "SELECT c.id FROM cards c WHERE c.id = ?",
+            "SELECT c.id, d.user_id FROM cards c JOIN decks d ON d.id = c.deck_id WHERE c.id = ?",
             (card_id,),
         ).fetchone()
         if existing_card is None:
             raise HTTPException(status_code=404, detail="Card not found")
+        if existing_card["user_id"] != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to modify this card")
 
         connection.execute(
             """
@@ -634,6 +724,7 @@ def update_card(card_id: int, payload: CardUpdateRequest) -> DeckPreviewCard:
 @app.post("/api/practice/sessions", response_model=SmartPracticeSession)
 def start_smart_practice_session(
     payload: SmartPracticeStartRequest,
+    current_user: UserResponse = Depends(get_current_user)
 ) -> SmartPracticeSession:
     settings = PracticeSettings(
         new_block_size=payload.settings.new_block_size,
@@ -643,12 +734,12 @@ def start_smart_practice_session(
     )
     with get_connection() as connection:
         try:
-            session_id = start_or_resume_session(connection, settings)
+            session_id = start_or_resume_session(connection, settings, current_user.id)
             connection.commit()
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-        snapshot = get_session_snapshot(connection, session_id)
+        snapshot = get_session_snapshot(connection, session_id, current_user.id)
 
     if snapshot is None:
         raise HTTPException(status_code=404, detail="Smart practice session not found")
@@ -656,9 +747,9 @@ def start_smart_practice_session(
 
 
 @app.get("/api/practice/sessions/{session_id}", response_model=SmartPracticeSession)
-def get_smart_practice_session(session_id: int) -> SmartPracticeSession:
+def get_smart_practice_session(session_id: int, current_user: UserResponse = Depends(get_current_user)) -> SmartPracticeSession:
     with get_connection() as connection:
-        snapshot = get_session_snapshot(connection, session_id)
+        snapshot = get_session_snapshot(connection, session_id, current_user.id)
 
     if snapshot is None:
         raise HTTPException(status_code=404, detail="Smart practice session not found")
@@ -672,6 +763,7 @@ def get_smart_practice_session(session_id: int) -> SmartPracticeSession:
 def submit_smart_practice_review(
     session_id: int,
     payload: SmartPracticeReviewSubmission,
+    current_user: UserResponse = Depends(get_current_user)
 ) -> SmartPracticeReviewResult:
     with get_connection() as connection:
         try:
@@ -680,8 +772,9 @@ def submit_smart_practice_review(
                 session_id=session_id,
                 card_id=payload.card_id,
                 result=payload.result,
+                user_id=current_user.id
             )
-            snapshot = get_session_snapshot(connection, session_id)
+            snapshot = get_session_snapshot(connection, session_id, current_user.id)
             connection.commit()
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
