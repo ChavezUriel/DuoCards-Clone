@@ -164,3 +164,18 @@ class SmartPracticeReviewSubmission(BaseModel):
 
 class SmartPracticeReviewResult(BaseModel):
     session: SmartPracticeSession
+
+
+class UserCreate(BaseModel):
+    email: str = Field(min_length=3)
+    full_name: str = Field(min_length=1)
+    password: str = Field(min_length=6)
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    full_name: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str

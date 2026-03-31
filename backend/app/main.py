@@ -4,10 +4,12 @@ from datetime import datetime, timezone
 import json
 import sqlite3
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordRequestForm
 
 from .db import get_connection, initialize_database
+from . import auth
 from .practice import (
     PracticeSettings,
     get_session_snapshot,
@@ -35,6 +37,9 @@ from .schemas import (
     SmartPracticeSession,
     SmartPracticeSessionSummary,
     SmartPracticeStartRequest,
+    Token,
+    UserCreate,
+    UserResponse,
 )
 
 app = FastAPI(title="DuoCards Clone API", version="0.1.0")
@@ -57,6 +62,55 @@ app.add_middleware(
 def startup_event() -> None:
     initialize_database()
 
+@app.post("/api/auth/register", response_model=UserResponse)
+def register_user(user: UserCreate):
+    with get_connection() as connection:
+        existing_user = connection.execute(
+            "SELECT id FROM users WHERE email = ?", (user.email,)
+        ).fetchone()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        hashed_password = auth.get_password_hash(user.password)
+        cursor = connection.execute(
+            "INSERT INTO users (email, full_name, hashed_password) VALUES (?, ?, ?)",
+            (user.email, user.full_name, hashed_password)
+        )
+        connection.commit()
+        user_id = cursor.lastrowid
+        
+        return UserResponse(id=user_id, email=user.email, full_name=user.full_name)
+
+@app.post("/api/auth/token", response_model=Token)
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    with get_connection() as connection:
+        user_row = connection.execute(
+            "SELECT id, email, full_name, hashed_password FROM users WHERE email = ?",
+            (form_data.username,)
+        ).fetchone()
+        
+    if not user_row or not auth.verify_password(form_data.password, user_row["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    access_token = auth.create_access_token(data={"sub": user_row["email"]})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/api/auth/me", response_model=UserResponse)
+def read_users_me(email: str = Depends(auth.get_current_user_email)):
+    with get_connection() as connection:
+        user_row = connection.execute(
+            "SELECT id, email, full_name FROM users WHERE email = ?",
+            (email,)
+        ).fetchone()
+    
+    if user_row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    return UserResponse(id=user_row["id"], email=user_row["email"], full_name=user_row["full_name"])
 
 @app.get("/api/health", response_model=HealthResponse)
 def health_check() -> HealthResponse:

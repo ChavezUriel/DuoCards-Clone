@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation, Link } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import MarketPage from './pages/MarketPage';
@@ -9,6 +10,18 @@ import RegisterPage from './pages/RegisterPage';
 
 function App() {
   const location = useLocation();
+  const [token, setToken] = useState(localStorage.getItem('access_token'));
+
+  // Update token when location changes (in case it changed after login)
+  useEffect(() => {
+    setToken(localStorage.getItem('access_token'));
+  }, [location.pathname]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    setToken(null);
+  };
+
   const isFocusedRoute =
     location.pathname.startsWith('/review/') ||
     location.pathname === '/practice' ||
@@ -22,7 +35,11 @@ function App() {
   } else if (location.pathname === '/register') {
     headerContent = <Link to="/login" className="back-link">Iniciar sesión</Link>;
   } else if (!isFocusedRoute) {
-    headerContent = <Link to="/login" className="back-link">Iniciar sesión</Link>;
+    if (token) {
+      headerContent = <button onClick={handleLogout} className="back-link" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Cerrar sesión</button>;
+    } else {
+      headerContent = <Link to="/login" className="back-link">Iniciar sesión</Link>;
+    }
   }
 
   return (

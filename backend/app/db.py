@@ -310,6 +310,13 @@ CREATE TABLE IF NOT EXISTS practice_session_cards (
     UNIQUE(session_id, card_id),
     UNIQUE(session_id, queue_position)
 );
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    full_name TEXT NOT NULL,
+    hashed_password TEXT NOT NULL
+);
 """
 
 
@@ -326,9 +333,19 @@ def initialize_database() -> None:
         _migrate_decks_table(connection)
         _migrate_cards_table(connection)
         _migrate_card_progress_table(connection)
+        _migrate_users_table(connection)
         _seed_database(connection)
         connection.commit()
 
+def _migrate_users_table(connection: sqlite3.Connection) -> None:
+    columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(users)").fetchall()
+    }
+    if "full_name" not in columns:
+        connection.execute("ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT 'User'")
+    if "hashed_password" not in columns and "password_hash" in columns:
+        # We can just rename it conceptually, or add it, but since SQLite requires a new table, we'll just map it in Python. Let's rename the column if possible, but SQLite doesn't support RENAME COLUMN in very old versions. Assuming we are on modern SQLite:
+        connection.execute("ALTER TABLE users RENAME COLUMN password_hash TO hashed_password")
 
 def _migrate_decks_table(connection: sqlite3.Connection) -> None:
     columns = {

@@ -1,12 +1,36 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
+export function getAuthToken() {
+  return localStorage.getItem('access_token');
+}
+
+export function setAuthToken(token) {
+  if (token) {
+    localStorage.setItem('access_token', token);
+  } else {
+    localStorage.removeItem('access_token');
+  }
+}
+
 async function request(path, options = {}, baseUrl = API_BASE_URL) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+  };
+
+  const token = getAuthToken();
+  if (token && !options.noAuth) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  // Remove Content-Type if we're sending FormData
+  if (options.body instanceof FormData) {
+    delete headers['Content-Type'];
+  }
+
   const response = await fetch(`${baseUrl}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
     ...options,
+    headers,
   });
 
   if (!response.ok) {
@@ -16,6 +40,33 @@ async function request(path, options = {}, baseUrl = API_BASE_URL) {
   }
 
   return response.json();
+}
+
+export function login(email, password) {
+  const formData = new FormData();
+  formData.append('username', email);
+  formData.append('password', password);
+  
+  return request('/api/auth/token', {
+    method: 'POST',
+    body: formData,
+    noAuth: true,
+  }).then(data => {
+    setAuthToken(data.access_token);
+    return data;
+  });
+}
+
+export function register(email, fullName, password) {
+  return request('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ email, full_name: fullName, password }),
+    noAuth: true,
+  });
+}
+
+export function fetchMe() {
+  return request('/api/auth/me');
 }
 
 export function fetchDecks() {
