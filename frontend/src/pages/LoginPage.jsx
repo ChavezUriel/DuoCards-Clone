@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { login } from '../api';
+import { login, loginWithGoogle } from '../api';
+import GoogleButton from '../components/GoogleButton';
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -22,6 +23,16 @@ function LoginPage() {
     }
   };
 
+  const handleGoogle = async () => {
+    try {
+      setError('');
+      await loginWithGoogle();
+      // Redirects to Google; the session is established on return.
+    } catch (err) {
+      setError(err.message || 'Google sign-in failed');
+    }
+  };
+
   const handleChange = (e) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -33,6 +44,9 @@ function LoginPage() {
         <p className="hero-copy">Sign in to your account to sync your decks and progress.</p>
 
         {error && <div className="deck-grid__status deck-grid__status--error">{error}</div>}
+
+        <GoogleButton onClick={handleGoogle} label="Continue with Google" />
+        <div className="auth-divider"><span>or</span></div>
 
         <form className="login-form" onSubmit={handleSubmit}>
           <label className="login-field">
@@ -51,7 +65,7 @@ function LoginPage() {
               <span>Remember me</span>
             </label>
 
-            <Link to="/" className="back-link">Forgot your password?</Link>
+            <Link to="/forgot-password" className="back-link">Forgot your password?</Link>
           </div>
 
           <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#6b7058' }}>

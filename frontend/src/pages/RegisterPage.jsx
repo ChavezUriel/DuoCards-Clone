@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { register, login } from '../api';
+import { register, loginWithGoogle } from '../api';
+import GoogleButton from '../components/GoogleButton';
 
 function RegisterPage() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ name: '', email: '', password: '', confirmPassword: '' });
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -18,14 +20,28 @@ function RegisterPage() {
     try {
       setIsLoading(true);
       setError('');
-      await register(formData.email, formData.name, formData.password);
-      // Auto-login after registration
-      await login(formData.email, formData.password);
-      navigate('/');
+      setInfo('');
+      const data = await register(formData.email, formData.name, formData.password);
+      if (data.session) {
+        // Email confirmation is disabled — the user is signed in immediately.
+        navigate('/');
+      } else {
+        // Email confirmation is enabled — prompt the user to confirm.
+        setInfo('Account created. Check your email to confirm your address, then log in.');
+      }
     } catch (err) {
       setError(err.message || 'Registration failed');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGoogle = async () => {
+    try {
+      setError('');
+      await loginWithGoogle();
+    } catch (err) {
+      setError(err.message || 'Google sign-in failed');
     }
   };
 
@@ -40,6 +56,10 @@ function RegisterPage() {
         <p className="hero-copy">Sign up to save your progress and access your decks from any device.</p>
 
         {error && <div className="deck-grid__status deck-grid__status--error">{error}</div>}
+        {info && <div className="deck-grid__status">{info}</div>}
+
+        <GoogleButton onClick={handleGoogle} label="Sign up with Google" />
+        <div className="auth-divider"><span>or</span></div>
 
         <form className="login-form" onSubmit={handleSubmit}>
           <label className="login-field">
