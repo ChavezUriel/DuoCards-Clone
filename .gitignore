@@ -1,7 +1,11 @@
-backend/data/*.db
-backend/.venv/
+# Dependencies
+node_modules/
 frontend/node_modules/
+
+# Build output
 frontend/dist/
-__pycache__/
-*.pyc
+dist/
+
+# Local env files
 .env
+*.local

@@ -1,132 +1,155 @@
 # DuoCards Clone
 
-A small DuoCards-inspired MVP for Spanish speakers learning English.
+A DuoCards-inspired MVP for Spanish speakers learning English, deployed on **Supabase**.
 
 ## Stack
 
-- Frontend: React + Vite
-- Backend: FastAPI
-- Database: SQLite
+- **Frontend:** React + Vite, talking directly to Supabase.
+- **Auth:** Supabase Auth (email/password, password recovery, Google SSO).
+- **Database + API:** Supabase Postgres. All application logic lives in PL/pgSQL
+  RPC functions guarded by Row-Level Security — there is no separate API server.
 
-## Features in this first version
+> The original FastAPI + SQLite backend and the offline AI deck generator have
+> been **removed** in favor of Supabase. They remain in git history if needed.
 
-- Starter English decks seeded automatically in SQLite
-- Deck market with global home selection
-- Flashcard review flow with reveal-answer mechanic
-- Known / unknown tracking persisted locally
-- Per-deck progress summary
-- Backend API designed so a future mobile client can reuse it
+## Architecture
 
-## Project structure
+```
+React (supabase-js)
+   │  auth: signUp / signInWithPassword / OAuth / resetPasswordForEmail
+   │  data: supabase.rpc('get_home_decks'), ('submit_review'), …
+   ▼
+Supabase
+   ├─ Auth (auth.users)                → users, sessions, OAuth, recovery
+   ├─ Postgres tables (+ RLS)          → profiles, decks, cards, card_progress,
+   │                                      practice_sessions, practice_session_cards
+   └─ SECURITY DEFINER RPC functions   → faithful port of every old endpoint
+                                          + the smart-practice algorithm
+```
 
-- `frontend/`: React app
-- `backend/`: FastAPI app and SQLite bootstrap
+Each former FastAPI endpoint is now a Postgres function that returns the same
+JSON shape the frontend already consumed, so the page components were untouched —
+only `src/api.js` (now calls `supabase.rpc`) and the auth pages changed.
 
-## Run locally
+| Old endpoint | RPC function |
+| --- | --- |
+| `GET /api/decks` | `get_home_decks()` |
+| `GET /api/decks/market` | `get_market_decks()` |
+| `GET /api/decks/{id}/review` | `get_review_card(p_deck_id)` |
+| `GET /api/decks/{id}/progress` | `get_deck_progress(p_deck_id)` |
+| `GET /api/decks/{id}/preview` | `get_deck_preview(p_deck_id)` |
+| `POST /api/reviews` | `submit_review(p_card_id, p_result)` |
+| `PATCH /api/cards/{id}/visibility` | `update_card_visibility(...)` |
+| `PATCH /api/cards/{id}` | `update_card(...)` |
+| `PATCH /api/decks/{id}/home-selection` | `update_deck_home_selection(...)` |
+| `PATCH /api/decks/{id}/smart-practice-inclusion` | `update_deck_smart_practice_inclusion(...)` |
+| `POST /api/practice/sessions` | `start_smart_practice_session(...)` |
+| `GET /api/practice/sessions/{id}` | `get_smart_practice_session(p_session_id)` |
+| `POST /api/practice/sessions/{id}/reviews` | `submit_smart_practice_review(...)` |
 
-### Backend
+## Database setup
+
+The schema, RLS policies, RPC functions, and grants live in
+[`supabase/migrations/`](supabase/migrations) and have already been applied to
+the project. To reproduce on another project, apply them in order
+(`0001` → `0005`), then load the starter decks (see below).
+
+The starter decks (10 global decks, ~1,066 cards) are compiled from the source
+data in [`supabase/seed_data/`](supabase/seed_data) into
+[`supabase/seed.sql`](supabase/seed.sql):
 
 ```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+# regenerate seed.sql from supabase/seed_data/*.json (only needed if the source changes)
+node supabase/scripts/generate_seed.cjs
+
+# load the global starter decks (idempotent — safe to re-run)
+psql "<your Supabase connection string>" -f supabase/seed.sql
 ```
 
-### Generator service
+Get the connection string from the Supabase dashboard → **Connect** → "Session
+pooler" (or "Direct connection"). The seed is idempotent: decks use
+`on conflict (slug) do nothing` and cards are only inserted into empty decks.
 
-The generator service writes directly into the same SQLite database as the main API.
+## Required Supabase dashboard configuration
 
-By default it uses local Ollama. You can also use OpenAI models by setting `model_provider: openai` in the spec, choosing an OpenAI model name in `model`, and sending an `api_key` in the request body or setting `OPENAI_API_KEY` in the environment.
+A few things must be configured in the dashboard (they are not code):
 
-The default Ollama model order still prefers `qwen3.5:latest`, then `gemma3:4b`, then `llama3.1:latest`. The larger `gpt-oss:20b` model is still supported if you specify it in a spec file.
+1. **Auth URLs** — Authentication → URL Configuration:
+   - **Site URL:** your app origin (e.g. `http://localhost:5173` for dev, or your
+     deployed URL).
+   - **Redirect URLs:** add `http://localhost:5173/**` and your production
+     `https://.../**`. Password-reset links redirect to `/reset-password`; OAuth
+     returns to the app origin — both must be allow-listed.
+2. **Google SSO** — Authentication → Providers → Google: enable it and paste a
+   Google Cloud OAuth **Client ID** and **Client Secret**. Add Supabase's
+   callback URL (`https://<ref>.supabase.co/auth/v1/callback`) as an authorized
+   redirect URI in Google Cloud.
+3. **Email confirmation** — Authentication → Providers → Email → "Confirm email":
+   - **On (recommended for production):** after sign-up the user must click the
+     confirmation email before logging in. The register page shows a "check your
+     email" message in this case.
+   - **Off:** sign-up logs the user in immediately (matches the old app's
+     instant-register behavior).
 
-```powershell
-cd backend
-pip install -r requirements.txt
-uvicorn generator_app.main:app --reload --port 8001
-```
-
-With Ollama running locally, or with an OpenAI API key available, you can validate or generate a deck from one of the spec files in `backend/generator_specs/`.
-
-Use `smoke_test_cafe.yaml` for a quick validation pass before trying larger specs.
-
-Use `batch_beginner_bundle.yaml` to validate or generate multiple deck specs from a single file.
-
-Example preview request:
-
-```powershell
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/decks/preview -ContentType 'application/json' -Body '{"spec_path":"beginner_travel_food.yaml"}'
-```
-
-If a file contains multiple decks, pass a slug when previewing a single one:
-
-```powershell
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/decks/preview -ContentType 'application/json' -Body '{"spec_path":"batch_beginner_bundle.yaml","slug":"ai-batch-cafe-basics"}'
-```
-
-Example generate-and-insert request:
-
-```powershell
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/decks/generate -ContentType 'application/json' -Body '{"spec_path":"beginner_travel_food.yaml"}'
-```
-
-Example batch generate request:
-
-```powershell
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/decks/generate-batch -ContentType 'application/json' -Body '{"spec_path":"batch_beginner_bundle.yaml"}'
-```
-
-Example OpenAI spec fragment:
-
-```yaml
-deck:
-	slug: ai-openai-cafe
-	title: OpenAI Cafe
-	description: Cafe vocabulary generated with OpenAI.
-	topic: cafe
-	difficulty: beginner
-	desired_card_count: 8
-	batch_size: 8
-	model_provider: openai
-	model: gpt-4.1-mini
-	fallback_models:
-		- gpt-4o-mini
-	overwrite_mode: replace
-```
-
-Example OpenAI generate request:
-
-```powershell
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/decks/generate -ContentType 'application/json' -Body '{"spec_path":"my_openai_spec.yaml","api_key":"YOUR_OPENAI_API_KEY"}'
-```
-
-### Frontend
+## Run the frontend
 
 ```powershell
 cd frontend
 npm install
+copy .env.example .env   # then fill in your values
 npm run dev
 ```
 
-The frontend expects the API at `http://localhost:8000`.
+`frontend/.env` needs:
 
-## API endpoints
+```
+VITE_SUPABASE_URL=https://<your-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_...   # publishable key (or legacy anon key)
+```
 
-- `GET /api/health`
-- `GET /api/decks`
-- `GET /api/decks/market`
-- `PATCH /api/decks/{deck_id}/home-selection`
-- `GET /api/decks/{deck_id}/review`
-- `GET /api/decks/{deck_id}/progress`
-- `POST /api/reviews`
+The publishable/anon key is designed to be shipped in the client bundle; RLS and
+the `authenticated`-only RPC grants are what protect the data.
 
-## Generator endpoints
+## Auth flows
 
-- `GET /health`
-- `GET /specs`
-- `POST /specs/validate`
-- `POST /decks/preview`
-- `POST /decks/generate`
-- `POST /decks/generate-batch`
+- **Register:** `/register` → `supabase.auth.signUp` (full name stored in user
+  metadata; a `profiles` row is created by a DB trigger).
+- **Login:** `/login` → `supabase.auth.signInWithPassword`, or **Continue with
+  Google**.
+- **Forgot password:** `/forgot-password` → `resetPasswordForEmail`; the emailed
+  link lands on `/reset-password`, which calls `supabase.auth.updateUser`.
+- **Single sign-on:** Google via `signInWithOAuth`.
+
+## Deploying to Vercel
+
+The frontend is a static Vite SPA. [`frontend/vercel.json`](frontend/vercel.json)
+adds the SPA-fallback rewrite so deep links (e.g. the `/reset-password` link from
+a recovery email) resolve on refresh.
+
+1. Import the repo at [vercel.com/new](https://vercel.com/new).
+2. **Root Directory:** `frontend` (the Vite preset auto-detects build
+   `npm run build` and output `dist`).
+3. **Environment Variables** (Production + Preview):
+   - `VITE_SUPABASE_URL` = `https://mrvgvltjqararcrswrho.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` = your publishable key (`sb_publishable_...`)
+4. Deploy, then take the resulting URL (e.g. `https://your-app.vercel.app`) and:
+   - **Supabase** → Authentication → URL Configuration: set **Site URL** to that
+     origin and add `https://your-app.vercel.app/**` to **Redirect URLs**
+     (required for password-reset and OAuth redirects).
+   - **Google Cloud** OAuth client (if using SSO): add the origin to authorized
+     JavaScript origins.
+5. Smoke-test: register, log in, run a forgot-password round-trip, and hard-refresh
+   `/market` to confirm the SPA fallback.
+
+Pushes to the default branch auto-deploy; PRs get preview URLs (add those preview
+domains to Supabase Redirect URLs too if you want auth to work on previews).
+
+## Notes
+
+- The original FastAPI + SQLite backend and the offline AI deck generator were
+  removed in favor of Supabase (still in git history). Starter-deck source data
+  lives in [`supabase/seed_data/`](supabase/seed_data) and compiles to `seed.sql`
+  via [`generate_seed.cjs`](supabase/scripts/generate_seed.cjs).
+- ⚠️ **Rotate the OpenAI key.** The repo's root `.env` (gitignored, not committed)
+  held a real `OPEN_AI_API_KEY` used by the now-removed generator. Revoke it in
+  the OpenAI dashboard and delete the file — nothing uses it anymore.
