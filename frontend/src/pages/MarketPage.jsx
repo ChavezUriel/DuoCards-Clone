@@ -100,50 +100,47 @@ function MarketPage() {
   }
 
   if (status === 'loading') {
-    return <section className="panel empty-state">Loading deck market...</section>;
+    return <p className="h-empty-state">Loading deck market…</p>;
   }
 
   if (status === 'error') {
-    return <section className="panel empty-state">Unable to load market: {error}</section>;
+    return <p className="h-empty-state h-empty-state--error">Unable to load market: {error}</p>;
   }
 
   return (
-    <section className="home-section home-section--secondary">
-      <div className="section-heading">
-        <div>
-          <Link to="/" className="back-link back-link--home back-link--button">
+    <section className="h-market">
+      <div className="h-market__head">
+        <div className="h-market__head-left">
+          <Link to="/" className="back-link back-link--home back-link--button h-market__back">
             <HomeIcon />
             <span>Home</span>
           </Link>
-          <h2>Choose decks for home</h2>
-          <p className="hero-copy">Select decks you want on your home screen. You can remove them later.</p>
+          <p className="h-market__kicker">DECK MARKET</p>
+          <h1 className="h-market__title">Find your next deck.</h1>
+          <p className="h-market__copy">Add decks to your home screen to bring them into rotation. You can remove them later.</p>
         </div>
 
-        <div className="section-controls">
-          <label className="deck-search" aria-label="Search market decks">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-              <path d="m16 16 4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search market"
-            />
-          </label>
-        </div>
+        <label className="h-deck-search h-market__search" aria-label="Search market decks">
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" style={{ flexShrink: 0, color: 'var(--muted)' }}>
+            <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
+            <path d="m16 16 4 4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          </svg>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search the market"
+          />
+        </label>
       </div>
 
       {visibleDecks.length === 0 ? (
-        <section className="panel empty-state">
+        <div className="h-empty-panel panel">
           <p>{decks.length === 0 ? 'All decks are already on your home screen.' : 'No market decks match your search.'}</p>
-          <Link to="/" className="button button--primary">
-            Back home
-          </Link>
-        </section>
+          <Link to="/" className="button button--primary">Back home</Link>
+        </div>
       ) : (
-        <div className="deck-grid">
+        <div className="h-market-grid">
           {visibleDecks.map((deck) => (
             <DeckCard
               key={deck.id}

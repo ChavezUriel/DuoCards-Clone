@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { login, loginWithGoogle } from '../api';
-import GoogleButton from '../components/GoogleButton';
+import AuthBrandPanel from '../components/AuthBrandPanel';
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -27,7 +27,6 @@ function LoginPage() {
     try {
       setError('');
       await loginWithGoogle();
-      // Redirects to Google; the session is established on return.
     } catch (err) {
       setError(err.message || 'Google sign-in failed');
     }
@@ -38,49 +37,65 @@ function LoginPage() {
   };
 
   return (
-    <section className="panel auth-panel">
-      <div className="auth-panel__content">
-        <h1>Login</h1>
-        <p className="hero-copy">Sign in to your account to sync your decks and progress.</p>
+    <div className="login-split">
+      <AuthBrandPanel />
 
-        {error && <div className="deck-grid__status deck-grid__status--error">{error}</div>}
+      <div className="login-split__right">
+        <h1 className="login-heading">Welcome back</h1>
+        <p className="login-subheading">Pick up your streak where you left it.</p>
 
-        <GoogleButton onClick={handleGoogle} label="Continue with Google" />
+        {error && <p className="login-error">{error}</p>}
+
+        <form onSubmit={handleSubmit} className="login-form-heron">
+          <label className="login-label-mono" htmlFor="login-email">EMAIL</label>
+          <input
+            id="login-email"
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="you@email.com"
+            className="login-input-heron"
+            required
+          />
+
+          <div className="login-password-header">
+            <label className="login-label-mono" htmlFor="login-password">PASSWORD</label>
+            <Link to="/forgot-password" className="login-forgot">Forgot?</Link>
+          </div>
+          <input
+            id="login-password"
+            type="password"
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            placeholder="••••••••"
+            className="login-input-heron"
+            required
+          />
+
+          <button type="submit" className="login-cta" disabled={isLoading}>
+            {isLoading ? 'Signing in…' : 'Continue'}
+          </button>
+        </form>
+
         <div className="auth-divider"><span>or</span></div>
 
-        <form className="login-form" onSubmit={handleSubmit}>
-          <label className="login-field">
-            <span className="eyebrow">Email Address</span>
-            <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="you@example.com" aria-label="Email address" required />
-          </label>
+        <button type="button" onClick={handleGoogle} className="button button--google">
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#4285F4" d="M22.5 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2.1-1.9 3.2-4.8 3.2-7.8Z" />
+            <path fill="#34A853" d="M12 23c2.9 0 5.4-1 7.2-2.6l-3.6-2.7c-1 .7-2.3 1.1-3.6 1.1-2.8 0-5.1-1.9-6-4.4H2.3v2.8A11 11 0 0 0 12 23Z" />
+            <path fill="#FBBC05" d="M6 14.4a6.6 6.6 0 0 1 0-4.2V7.4H2.3a11 11 0 0 0 0 9.8L6 14.4Z" />
+            <path fill="#EA4335" d="M12 5.6c1.6 0 3 .5 4.1 1.6l3.1-3.1A11 11 0 0 0 2.3 7.4L6 10.2c.9-2.6 3.2-4.6 6-4.6Z" />
+          </svg>
+          Continue with Google
+        </button>
 
-          <label className="login-field">
-            <span className="eyebrow">Password</span>
-            <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="Password" aria-label="Password" required />
-          </label>
-
-          <div className="login-row">
-            <label className="login-remember">
-              <input type="checkbox" name="remember" />
-              <span>Remember me</span>
-            </label>
-
-            <Link to="/forgot-password" className="back-link">Forgot your password?</Link>
-          </div>
-
-          <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#6b7058' }}>
-            Don't have an account? <Link to="/register" className="back-link" style={{ display: 'inline' }}>Sign up now</Link>
-          </div>
-
-          <div className="login-actions">
-            <button className="button button--primary" type="submit" disabled={isLoading}>
-              {isLoading ? 'Signing in...' : 'Log in'}
-            </button>
-            <Link to="/" className="button button--secondary">Back</Link>
-          </div>
-        </form>
+        <p className="login-signup-prompt">
+          New here? <Link to="/register" className="login-signup-link">Create an account</Link>
+        </p>
       </div>
-    </section>
+    </div>
   );
 }
 

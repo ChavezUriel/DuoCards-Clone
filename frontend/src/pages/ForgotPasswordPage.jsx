@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { requestPasswordReset } from '../api';
+import AuthBrandPanel from '../components/AuthBrandPanel';
 
 function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -23,50 +24,53 @@ function ForgotPasswordPage() {
   };
 
   return (
-    <section className="panel auth-panel">
-      <div className="auth-panel__content">
-        <h1>Reset your password</h1>
+    <div className="login-split">
+      <AuthBrandPanel
+        quote='"Lose a word, find it again. The river always returns what matters."'
+        tagline="A QUIET WAY TO LEARN ENGLISH"
+      />
 
+      <div className="login-split__right">
         {sent ? (
           <>
-            <p className="hero-copy">
+            <h1 className="login-heading">Check your inbox</h1>
+            <p className="login-body">
               If an account exists for <strong>{email}</strong>, we've sent a link to reset your
-              password. Check your inbox and follow the link to choose a new password.
+              password. Follow it to choose a new one.
             </p>
-            <div className="login-actions">
-              <Link to="/login" className="button button--primary">Back to login</Link>
-            </div>
+            <Link to="/login" className="login-cta">Back to login</Link>
           </>
         ) : (
           <>
-            <p className="hero-copy">Enter your email and we'll send you a link to reset your password.</p>
+            <h1 className="login-heading">Reset your password</h1>
+            <p className="login-subheading">We'll email you a link to choose a new one.</p>
 
-            {error && <div className="deck-grid__status deck-grid__status--error">{error}</div>}
+            {error && <p className="login-error">{error}</p>}
 
-            <form className="login-form" onSubmit={handleSubmit}>
-              <label className="login-field">
-                <span className="eyebrow">Email Address</span>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  aria-label="Email address"
-                  required
-                />
-              </label>
+            <form onSubmit={handleSubmit} className="login-form-heron">
+              <label className="login-label-mono" htmlFor="forgot-email">EMAIL</label>
+              <input
+                id="forgot-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@email.com"
+                className="login-input-heron"
+                required
+              />
 
-              <div className="login-actions">
-                <button className="button button--primary" type="submit" disabled={isLoading}>
-                  {isLoading ? 'Sending...' : 'Send reset link'}
-                </button>
-                <Link to="/login" className="button button--secondary">Back</Link>
-              </div>
+              <button type="submit" className="login-cta" disabled={isLoading}>
+                {isLoading ? 'Sending…' : 'Send reset link'}
+              </button>
             </form>
+
+            <p className="login-signup-prompt">
+              Remembered it? <Link to="/login" className="login-signup-link">Back to login</Link>
+            </p>
           </>
         )}
       </div>
-    </section>
+    </div>
   );
 }
 

@@ -16,11 +16,6 @@ function DeckCard({
   const navigate = useNavigate();
   const isPracticeEnabled = Boolean(deck.is_enabled_in_smart_practice);
   const isOnHome = Boolean(deck.is_selected_on_home);
-  const cardStateClass = variant === 'market'
-    ? 'deck-card--market'
-    : isPracticeEnabled
-      ? 'deck-card--selected'
-      : 'deck-card--inactive';
 
   function handleOpenDeck() {
     navigate(`/decks/${deck.id}/words`, { state: { from: variant } });
@@ -39,54 +34,32 @@ function DeckCard({
     }
   }
 
-  return (
-    <article
-      className={`panel deck-card ${cardStateClass} ${variant === 'home' ? 'deck-card--home' : ''} ${isSearchDimmed ? 'deck-card--search-dimmed' : ''}`}
-      role={variant === 'home' ? 'button' : undefined}
-      tabIndex={variant === 'home' ? 0 : undefined}
-      aria-pressed={variant === 'home' ? isPracticeEnabled : undefined}
-      onClick={handleTogglePractice}
-      onKeyDown={handleKeyDown}
-    >
-      {variant === 'home' || variant === 'market' ? (
-        <button
-          className="deck-card__explore-button"
-          type="button"
-          aria-label={`Open ${deck.title} deck explorer`}
-          title="Open deck explorer"
-          onClick={(event) => {
-            event.stopPropagation();
-            handleOpenDeck();
-          }}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          <svg fill="#000000" viewBox="0 0 36 36" version="1.1" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
-            <g id="SVGRepo_bgCarrier" strokeWidth="0" />
-            <g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round" />
-            <g id="SVGRepo_iconCarrier">
-              <title>Deck Cards Explorer</title>
-              <path className="clr-i-outline clr-i-outline-path-1" d="M15,17H4a2,2,0,0,1-2-2V8A2,2,0,0,1,4,6H15a2,2,0,0,1,2,2v7A2,2,0,0,1,15,17ZM4,8v7H15V8Z" />
-              <path className="clr-i-outline clr-i-outline-path-2" d="M32,17H21a2,2,0,0,1-2-2V8a2,2,0,0,1,2-2H32a2,2,0,0,1,2,2v7A2,2,0,0,1,32,17ZM21,8v7H32V8Z" />
-              <path className="clr-i-outline clr-i-outline-path-3" d="M15,30H4a2,2,0,0,1-2-2V21a2,2,0,0,1,2-2H15a2,2,0,0,1,2,2v7A2,2,0,0,1,15,30ZM4,21v7H15V21Z" />
-              <path className="clr-i-outline clr-i-outline-path-4" d="M32,30H21a2,2,0,0,1-2-2V21a2,2,0,0,1,2-2H32a2,2,0,0,1,2,2v7A2,2,0,0,1,32,30ZM21,21v7H32V21Z" />
-              <rect x="0" y="0" width="36" height="36" fillOpacity="0" />
-            </g>
-          </svg>
-        </button>
-      ) : null}
+  /* ── Home variant (Heron design) ────────────────────────────── */
+  if (variant === 'home') {
+    const pct = percentage(deck.completion_ratio);
+    const dueLabel = deck.unknown_cards > 0 ? `${deck.unknown_cards} due` : 'Fresh';
 
-      <div className="deck-card__content">
-        <div className="deck-card__content-top">
-          <div>
-            <h3>{deck.title}</h3>
-          </div>
+    return (
+      <article
+        className={[
+          'h-deck-card',
+          !isPracticeEnabled ? 'h-deck-card--inactive' : '',
+          isSearchDimmed ? 'deck-card--search-dimmed' : '',
+          isPending ? 'h-deck-card--pending' : '',
+        ].filter(Boolean).join(' ')}
+        role="button"
+        tabIndex={0}
+        aria-pressed={isPracticeEnabled}
+        aria-busy={isPending}
+        onClick={handleTogglePractice}
+        onKeyDown={handleKeyDown}
+      >
+        <div className="h-deck-card__top">
+          <div className="h-deck-card__title">{deck.title}</div>
+          <div className="h-deck-card__due">{dueLabel}</div>
         </div>
 
-        {variant === 'market' ? <p className="deck-card__market-description">{deck.description}</p> : null}
-      </div>
-
-      <div className="deck-card__bottom">
-        {searchMatchReasons.length > 0 ? (
+        {searchMatchReasons.length > 0 && (
           <div className="deck-card__match-reasons" aria-label={`Search matches for ${deck.title}`}>
             {searchMatchReasons.map((reason) => (
               <span key={reason} className="deck-card__match-badge">
@@ -98,65 +71,116 @@ function DeckCard({
               </span>
             ))}
           </div>
-        ) : null}
+        )}
 
-        <div className="deck-card__progress-block">
-          {variant === 'home' && deck.description ? (
-            <div className="deck-card__description-overlay">
-              <div className="deck-card__description-surface">
-                <p className="deck-card__description">{deck.description}</p>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="deck-card__progress-meta" aria-label={`Progress for ${deck.title}`}>
-            <div>
-              <span className="deck-card__progress-label">Seen</span>
-              <strong>{deck.reviewed_cards}</strong>
-            </div>
-            <div>
-              <span className="deck-card__progress-label">Revisit</span>
-              <strong>{deck.unknown_cards}</strong>
-            </div>
-            <div>
-              <span className="deck-card__progress-label">Total</span>
-              <strong>{deck.total_cards}</strong>
-            </div>
+        <div className="h-deck-card__bottom">
+          <div className="h-deck-card__stats">
+            <span>{deck.total_cards} cards</span>
+            <span className="h-deck-card__pct">{pct}%</span>
           </div>
-
-          <div className="progress-track" aria-hidden="true">
-            <div className="progress-fill" style={{ width: `${percentage(deck.completion_ratio)}%` }} />
+          <div className="h-progress-track" aria-hidden="true">
+            <div className="h-progress-fill" style={{ width: `${pct}%` }} />
           </div>
         </div>
 
-        {variant === 'market' ? (
-          <div className="deck-card__actions">
-            <button
-              className={`deck-card__action-button ${isOnHome ? 'deck-card__action-button--on' : 'deck-card__action-button--neutral'}`}
-              type="button"
-              disabled={isPending}
-              aria-pressed={isOnHome}
-              aria-label={isOnHome ? 'Remove from home' : 'Add to home'}
-              title={isOnHome ? 'Remove from home' : 'Add to home'}
-              onClick={(event) => {
-                event.stopPropagation();
-                onToggleHome?.(deck.id, !isOnHome);
-              }}
-            >
-              {isOnHome ? (
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                </svg>
-              )}
-              <span className="sr-only">{isOnHome ? 'Remove from home' : 'Add to home'}</span>
-            </button>
-          </div>
-        ) : null}
+        <button
+          className="deck-card__explore-button"
+          type="button"
+          aria-label={`Open ${deck.title} deck explorer`}
+          title="Open deck explorer"
+          onClick={(e) => { e.stopPropagation(); handleOpenDeck(); }}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <svg fill="currentColor" viewBox="0 0 36 36" aria-hidden="true">
+            <path d="M15,17H4a2,2,0,0,1-2-2V8A2,2,0,0,1,4,6H15a2,2,0,0,1,2,2v7A2,2,0,0,1,15,17ZM4,8v7H15V8Z" />
+            <path d="M32,17H21a2,2,0,0,1-2-2V8a2,2,0,0,1,2-2H32a2,2,0,0,1,2,2v7A2,2,0,0,1,32,17ZM21,8v7H32V8Z" />
+            <path d="M15,30H4a2,2,0,0,1-2-2V21a2,2,0,0,1,2-2H15a2,2,0,0,1,2,2v7A2,2,0,0,1,15,30ZM4,21v7H15V21Z" />
+            <path d="M32,30H21a2,2,0,0,1-2-2V21a2,2,0,0,1,2-2H32a2,2,0,0,1,2,2v7A2,2,0,0,1,32,30ZM21,21v7H32V21Z" />
+          </svg>
+        </button>
+      </article>
+    );
+  }
+
+  /* ── Market variant (Heron design) ──────────────────────────── */
+  const marketPct = percentage(deck.completion_ratio);
+
+  return (
+    <article
+      className={`h-market-card ${isSearchDimmed ? 'h-market-card--search-dimmed' : ''}`}
+    >
+      <button
+        className="h-market-card__explore"
+        type="button"
+        aria-label={`Open ${deck.title} deck explorer`}
+        title="Open deck explorer"
+        onClick={(e) => { e.stopPropagation(); handleOpenDeck(); }}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <svg fill="currentColor" viewBox="0 0 36 36" aria-hidden="true">
+          <path d="M15,17H4a2,2,0,0,1-2-2V8A2,2,0,0,1,4,6H15a2,2,0,0,1,2,2v7A2,2,0,0,1,15,17ZM4,8v7H15V8Z" />
+          <path d="M32,17H21a2,2,0,0,1-2-2V8a2,2,0,0,1,2-2H32a2,2,0,0,1,2,2v7A2,2,0,0,1,32,17ZM21,8v7H32V8Z" />
+          <path d="M15,30H4a2,2,0,0,1-2-2V21a2,2,0,0,1,2-2H15a2,2,0,0,1,2,2v7A2,2,0,0,1,15,30ZM4,21v7H15V21Z" />
+          <path d="M32,30H21a2,2,0,0,1-2-2V21a2,2,0,0,1,2-2H32a2,2,0,0,1,2,2v7A2,2,0,0,1,32,30ZM21,21v7H32V21Z" />
+        </svg>
+      </button>
+
+      <div className="h-market-card__top">
+        <div>
+          <div className="h-market-card__title">{deck.title}</div>
+          <div className="h-market-card__meta">{deck.total_cards} CARDS</div>
+        </div>
       </div>
+
+      {searchMatchReasons.length > 0 && (
+        <div className="deck-card__match-reasons" aria-label={`Search matches for ${deck.title}`}>
+          {searchMatchReasons.map((reason) => (
+            <span key={reason} className="deck-card__match-badge">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+                <path d="m16 16 4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              <span>{reason}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <p className="h-market-card__desc">{deck.description}</p>
+
+      <div className="h-market-card__progress" aria-label={`Progress for ${deck.title}`}>
+        <div className="h-market-card__progress-meta">
+          <span>{deck.reviewed_cards} of {deck.total_cards} seen</span>
+          <span className="h-market-card__progress-pct">{marketPct}%</span>
+        </div>
+        <div className="h-progress-track" aria-hidden="true">
+          <div className="h-progress-fill" style={{ width: `${marketPct}%` }} />
+        </div>
+      </div>
+
+      <button
+        className={`h-market-card__add ${isOnHome ? 'h-market-card__add--on' : ''}`}
+        type="button"
+        disabled={isPending}
+        aria-pressed={isOnHome}
+        onClick={(e) => { e.stopPropagation(); onToggleHome?.(deck.id, !isOnHome); }}
+      >
+        {isOnHome ? (
+          <>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+            On home
+          </>
+        ) : (
+          <>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+            Add to home
+          </>
+        )}
+      </button>
     </article>
   );
 }

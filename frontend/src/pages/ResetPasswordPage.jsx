@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { updatePassword } from '../api';
+import AuthBrandPanel from '../components/AuthBrandPanel';
 
 function ResetPasswordPage() {
   const [ready, setReady] = useState(false);
@@ -53,56 +54,82 @@ function ResetPasswordPage() {
 
   let body;
   if (!ready) {
-    body = <p className="hero-copy">Validating your reset link…</p>;
+    body = (
+      <>
+        <h1 className="login-heading">One moment</h1>
+        <p className="login-body">Validating your reset link…</p>
+      </>
+    );
   } else if (done) {
     body = (
       <>
-        <p className="hero-copy">Your password has been updated. You're signed in.</p>
-        <div className="login-actions">
-          <Link to="/" className="button button--primary">Go to your decks</Link>
-        </div>
+        <h1 className="login-heading">Password updated</h1>
+        <p className="login-body">You're signed in and ready to go.</p>
+        <Link to="/" className="login-cta">Go to your decks</Link>
       </>
     );
   } else if (!hasRecoverySession) {
     body = (
       <>
-        <p className="hero-copy">This reset link is invalid or has expired.</p>
-        <div className="login-actions">
-          <Link to="/forgot-password" className="button button--primary">Request a new link</Link>
-        </div>
+        <h1 className="login-heading">Link expired</h1>
+        <p className="login-body">This reset link is invalid or has expired.</p>
+        <Link to="/forgot-password" className="login-cta">Request a new link</Link>
       </>
     );
   } else {
     body = (
       <>
-        <p className="hero-copy">Choose a new password for your account.</p>
-        {error && <div className="deck-grid__status deck-grid__status--error">{error}</div>}
-        <form className="login-form" onSubmit={handleSubmit}>
-          <label className="login-field">
-            <span className="eyebrow">New Password</span>
-            <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="Minimum 6 characters" aria-label="New password" required minLength="6" />
-          </label>
-          <label className="login-field">
-            <span className="eyebrow">Confirm Password</span>
-            <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} placeholder="Repeat your new password" aria-label="Confirm new password" required minLength="6" />
-          </label>
-          <div className="login-actions">
-            <button className="button button--primary" type="submit" disabled={isLoading}>
-              {isLoading ? 'Updating...' : 'Update password'}
-            </button>
-          </div>
+        <h1 className="login-heading">Set a new password</h1>
+        <p className="login-subheading">Choose a new password for your account.</p>
+
+        {error && <p className="login-error">{error}</p>}
+
+        <form onSubmit={handleSubmit} className="login-form-heron">
+          <label className="login-label-mono" htmlFor="reset-password">NEW PASSWORD</label>
+          <input
+            id="reset-password"
+            type="password"
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            placeholder="Minimum 6 characters"
+            className="login-input-heron"
+            required
+            minLength="6"
+          />
+
+          <label className="login-label-mono" htmlFor="reset-confirm">CONFIRM PASSWORD</label>
+          <input
+            id="reset-confirm"
+            type="password"
+            name="confirmPassword"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            placeholder="Repeat your new password"
+            className="login-input-heron"
+            required
+            minLength="6"
+          />
+
+          <button type="submit" className="login-cta" disabled={isLoading}>
+            {isLoading ? 'Updating…' : 'Update password'}
+          </button>
         </form>
       </>
     );
   }
 
   return (
-    <section className="panel auth-panel">
-      <div className="auth-panel__content">
-        <h1>Set a new password</h1>
+    <div className="login-split">
+      <AuthBrandPanel
+        quote='"A fresh start is just another still morning by the water."'
+        tagline="A QUIET WAY TO LEARN ENGLISH"
+      />
+
+      <div className="login-split__right">
         {body}
       </div>
-    </section>
+    </div>
   );
 }
 
