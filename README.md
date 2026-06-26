@@ -9,8 +9,9 @@ A DuoCards-inspired MVP for Spanish speakers learning English, deployed on **Sup
 - **Database + API:** Supabase Postgres. All application logic lives in PL/pgSQL
   RPC functions guarded by Row-Level Security — there is no separate API server.
 
-> The original FastAPI + SQLite backend and the offline AI deck generator have
-> been **removed** in favor of Supabase. They remain in git history if needed.
+> The original FastAPI + SQLite backend has been **removed** in favor of Supabase
+> (still in git history). The AI deck generator has been reimplemented as a Node
+> CLI on Ollama — see [Generating & enriching decks with AI](#generating--enriching-decks-with-ai-ollama).
 
 ## Architecture
 
@@ -69,6 +70,38 @@ psql "<your Supabase connection string>" -f supabase/seed.sql
 Get the connection string from the Supabase dashboard → **Connect** → "Session
 pooler" (or "Direct connection"). The seed is idempotent: decks use
 `on conflict (slug) do nothing` and cards are only inserted into empty decks.
+
+## Generating & enriching decks with AI (Ollama)
+
+[`supabase/scripts/generate_cards.cjs`](supabase/scripts/generate_cards.cjs)
+generates new decks and enriches existing ones using a local
+[Ollama](https://ollama.com) model (`gpt-oss:20b`). Because the model is light,
+each card is built with several small, focused prompts (draft → lexical →
+equivalents → examples) and validated, with only the failing sub-prompt re-run
+on repair. Output is written to `supabase/seed_data/*.json`, so the normal
+`generate_seed.cjs → seed.sql` flow applies it — no service key needed.
+
+```powershell
+# prerequisites: Ollama running locally + the model pulled
+ollama pull gpt-oss:20b
+
+# create a new deck from a topic spec (see supabase/scripts/specs/example.json)
+node supabase/scripts/generate_cards.cjs generate --spec supabase/scripts/specs/example.json
+
+# fill missing metadata on an existing seed_data deck (draft -> enriched)
+node supabase/scripts/generate_cards.cjs enrich --slug travel --only-missing
+
+# validate a deck and report quality issues (add --repair to fix in place)
+node supabase/scripts/generate_cards.cjs review --slug basics
+
+# then recompile and load
+node supabase/scripts/generate_seed.cjs
+psql "<your Supabase connection string>" -f supabase/seed.sql
+```
+
+Useful flags: `--preview` (print, don't write), `--limit N` (cap cards for cheap
+test runs), `--max-repairs N` (repair attempts per card). Override the endpoint
+or model with the `OLLAMA_BASE_URL` / `OLLAMA_MODEL` environment variables.
 
 ## Required Supabase dashboard configuration
 
@@ -146,10 +179,12 @@ domains to Supabase Redirect URLs too if you want auth to work on previews).
 
 ## Notes
 
-- The original FastAPI + SQLite backend and the offline AI deck generator were
-  removed in favor of Supabase (still in git history). Starter-deck source data
-  lives in [`supabase/seed_data/`](supabase/seed_data) and compiles to `seed.sql`
-  via [`generate_seed.cjs`](supabase/scripts/generate_seed.cjs).
+- The original FastAPI + SQLite backend was removed in favor of Supabase (still
+  in git history). Starter-deck source data lives in
+  [`supabase/seed_data/`](supabase/seed_data) and compiles to `seed.sql` via
+  [`generate_seed.cjs`](supabase/scripts/generate_seed.cjs). New decks can be
+  generated/enriched with [`generate_cards.cjs`](supabase/scripts/generate_cards.cjs)
+  (Ollama `gpt-oss:20b`).
 - ⚠️ **Rotate the OpenAI key.** The repo's root `.env` (gitignored, not committed)
   held a real `OPEN_AI_API_KEY` used by the now-removed generator. Revoke it in
   the OpenAI dashboard and delete the file — nothing uses it anymore.
