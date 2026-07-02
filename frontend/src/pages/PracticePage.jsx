@@ -18,7 +18,31 @@ function HomeIcon() {
 }
 
 function modeLabel(mode) {
-  return mode === 'new_material' ? 'New Material' : 'Review Stack';
+  if (mode === 'new_material') return 'New Material';
+  if (mode === 'mixed') return 'Mixed Practice';
+  return 'Review Stack';
+}
+
+function feedbackMessage(feedback) {
+  if (!feedback) {
+    return '';
+  }
+
+  if (feedback.repeats_in_session) {
+    return feedback.result === 'known' ? 'Almost there — one more pass this session.' : 'No problem — it comes back this session.';
+  }
+
+  const days = feedback.interval_days;
+  if (!days || days < 1) {
+    return 'Scheduled for review soon.';
+  }
+  if (days === 1) {
+    return 'Next review tomorrow.';
+  }
+  if (days >= 60) {
+    return `Locked in — next review in ${Math.round(days / 30)} months.`;
+  }
+  return `Next review in ${days} days.`;
 }
 
 function PracticePage() {
@@ -30,8 +54,16 @@ function PracticePage() {
   const [isDetailsVisible, setIsDetailsVisible] = useState(false);
   const [isSavingCard, setIsSavingCard] = useState(false);
   const [isIdleHintVisible, setIsIdleHintVisible] = useState(false);
+  const [reviewFeedback, setReviewFeedback] = useState(null);
   const idleHintTimeoutRef = useRef(null);
   const hasShownIdleHintRef = useRef(false);
+  const feedbackTimeoutRef = useRef(null);
+
+  useEffect(() => () => {
+    if (feedbackTimeoutRef.current) {
+      window.clearTimeout(feedbackTimeoutRef.current);
+    }
+  }, []);
 
   function clearIdleHintTimer() {
     if (idleHintTimeoutRef.current) {
@@ -167,6 +199,17 @@ function PracticePage() {
       const response = await submitSmartPracticeReview(session.summary.session_id, session.current_card.card_id, result);
       setSession(response.session);
       setIsAnswerVisible(false);
+
+      if (response.review_feedback) {
+        setReviewFeedback(response.review_feedback);
+        if (feedbackTimeoutRef.current) {
+          window.clearTimeout(feedbackTimeoutRef.current);
+        }
+        feedbackTimeoutRef.current = window.setTimeout(() => {
+          setReviewFeedback(null);
+          feedbackTimeoutRef.current = null;
+        }, 2200);
+      }
     } catch (submitError) {
       setError(submitError.message);
       setStatus('error');
@@ -239,11 +282,28 @@ function PracticePage() {
             <span className="practice-session-summary__mode">{modeLabel(summary.mode)}</span>
             <div className="practice-session-summary__stats">
               <span>{summary.completed_cards} done</span>
-              <span>{summary.remaining_cards} left</span>
+              {summary.mode === 'mixed' ? (
+                <>
+                  <span>{summary.remaining_new} new</span>
+                  <span>{summary.remaining_review} review</span>
+                </>
+              ) : (
+                <span>{summary.remaining_cards} left</span>
+              )}
               <span>{summary.interleaving_intensity}</span>
             </div>
           </div>
         </div>
+
+        {reviewFeedback ? (
+          <div
+            className={`practice-feedback-toast practice-feedback-toast--${reviewFeedback.result}`}
+            role="status"
+            aria-live="polite"
+          >
+            {feedbackMessage(reviewFeedback)}
+          </div>
+        ) : null}
 
         {session.current_card ? (
           <Flashcard

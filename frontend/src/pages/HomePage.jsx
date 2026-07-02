@@ -1,8 +1,38 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchDeckPreview, fetchHomeDecks, updateDeckSmartPracticeInclusion } from '../api';
+import { fetchDeckPreview, fetchDueSummary, fetchHomeDecks, updateDeckSmartPracticeInclusion } from '../api';
 import DeckCard from '../components/DeckCard';
+import {
+  isNotificationSupported,
+  loadReminderSettings,
+  maybeNotifyDueCards,
+  requestNotificationPermission,
+  saveReminderSettings,
+} from '../notifications';
 import { loadPracticeSettings, savePracticeSettings } from '../practiceSettings';
+
+function formatNextDue(nextDueAt) {
+  if (!nextDueAt) {
+    return null;
+  }
+
+  const dueDate = new Date(nextDueAt);
+  if (Number.isNaN(dueDate.getTime())) {
+    return null;
+  }
+
+  const hoursAway = (dueDate.getTime() - Date.now()) / 3_600_000;
+  if (hoursAway <= 0) {
+    return 'now';
+  }
+  if (hoursAway < 1) {
+    return 'in less than an hour';
+  }
+  if (hoursAway < 24) {
+    return `in ${Math.round(hoursAway)} h`;
+  }
+  return `in ${Math.round(hoursAway / 24)} d`;
+}
 
 function uniqueDeckIds(deckIds) {
   return [...new Set(deckIds)];
@@ -99,6 +129,8 @@ function HomePage() {
   const [actionError, setActionError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [deckWordIndexById, setDeckWordIndexById] = useState({});
+  const [dueSummary, setDueSummary] = useState(null);
+  const [reminderSettings, setReminderSettings] = useState(() => loadReminderSettings());
   const deckReviewSectionRef = useRef(null);
 
   const areAllDecksEnabledInSmartPractice = decks.length > 0 && decks.every((d) => d.is_enabled_in_smart_practice);
@@ -143,6 +175,44 @@ function HomePage() {
     loadDecks();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadDueSummary() {
+      try {
+        const summary = await fetchDueSummary();
+        if (!cancelled) {
+          setDueSummary(summary);
+          maybeNotifyDueCards(summary);
+        }
+      } catch {
+        // The due strip is progressive enhancement; the page works without it.
+      }
+    }
+    loadDueSummary();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function handleToggleReminder() {
+    if (reminderSettings.enabled) {
+      const nextSettings = { ...reminderSettings, enabled: false };
+      setReminderSettings(nextSettings);
+      saveReminderSettings(nextSettings);
+      return;
+    }
+
+    const permission = await requestNotificationPermission();
+    if (permission !== 'granted') {
+      return;
+    }
+
+    const nextSettings = { ...reminderSettings, enabled: true };
+    setReminderSettings(nextSettings);
+    saveReminderSettings(nextSettings);
+    if (dueSummary) {
+      maybeNotifyDueCards(dueSummary);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -247,8 +317,37 @@ function HomePage() {
             <p className="h-hero__copy">
               Surface the right cards at the right moment — each session stays focused and worth showing up for.
             </p>
+            {isNotificationSupported() ? (
+              <button
+                type="button"
+                className={`h-reminder-toggle${reminderSettings.enabled ? ' h-reminder-toggle--on' : ''}`}
+                onClick={handleToggleReminder}
+                aria-pressed={reminderSettings.enabled}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                  <path
+                    d="M12 3.5a5.5 5.5 0 0 0-5.5 5.5c0 3.6-1 5-1.9 6h14.8c-.9-1-1.9-2.4-1.9-6A5.5 5.5 0 0 0 12 3.5Z"
+                    fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
+                  />
+                  <path d="M10 18.5a2 2 0 0 0 4 0" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                </svg>
+                <span>{reminderSettings.enabled ? 'Daily reminder on' : 'Remind me when cards are due'}</span>
+              </button>
+            ) : null}
           </div>
           <div className="h-glance-grid">
+            <Link
+              className={`h-glance-card h-glance-card--link${(dueSummary?.due_now ?? 0) > 0 ? ' h-glance-card--due' : ''}`}
+              to="/practice"
+              onClick={() => updateSettings({ focus_mode: 'review' })}
+            >
+              <div className="h-glance-card__value">{dueSummary ? dueSummary.due_now : '–'}</div>
+              <div className="h-glance-card__label">
+                {dueSummary && dueSummary.due_now === 0 && dueSummary.next_due_at
+                  ? `due · next ${formatNextDue(dueSummary.next_due_at)}`
+                  : 'cards due now'}
+              </div>
+            </Link>
             <button type="button" className="h-glance-card" onClick={handleScrollToDeckReview}>
               <div className="h-glance-card__value">{enabledDeckCount}</div>
               <div className="h-glance-card__label">decks in rotation</div>
@@ -316,7 +415,11 @@ function HomePage() {
           <span className="h-action-kicker h-action-kicker--muted">SESSION</span>
           <div>
             <div className="h-action-secondary__title">Review</div>
-            <p className="h-action-secondary__copy">Settle the cards that are due back today.</p>
+            <p className="h-action-secondary__copy">
+              {(dueSummary?.due_now ?? 0) > 0
+                ? `${dueSummary.due_now} card${dueSummary.due_now === 1 ? '' : 's'} due now — clear them before they fade.`
+                : 'Settle the cards that are due back today.'}
+            </p>
           </div>
         </Link>
       </div>
@@ -382,6 +485,7 @@ function HomePage() {
               <ul>
                 <li>New blocks unlock only after each card reaches an initial 2-streak mastery threshold.</li>
                 <li>Review misses go back to the end of the queue instead of repeating immediately.</li>
+                <li>Mastered cards are scheduled with spaced repetition (FSRS) and come back just before you would forget them.</li>
               </ul>
             </div>
           </div>

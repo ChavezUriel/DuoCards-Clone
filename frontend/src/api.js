@@ -138,7 +138,15 @@ export function updateCard(cardId, payload) {
     p_example_sentence: payload.example_sentence ?? null,
     p_example_es: payload.example_es ?? null,
     p_example_en: payload.example_en ?? null,
+    p_mnemonic_en: payload.mnemonic_en ?? null,
   });
+}
+
+// ===========================================================================
+// Spaced repetition
+// ===========================================================================
+export function fetchDueSummary() {
+  return rpc('get_due_summary');
 }
 
 // ===========================================================================

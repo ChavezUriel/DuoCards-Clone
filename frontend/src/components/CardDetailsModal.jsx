@@ -43,6 +43,7 @@ function CardDetailsModal({
       example_sentence: nullableText(formValues.example_sentence),
       example_es: nullableText(formValues.example_es),
       example_en: nullableText(formValues.example_en),
+      mnemonic_en: nullableText(formValues.mnemonic_en),
     });
 
     if (savedCard) {
@@ -188,6 +189,15 @@ function CardDetailsModal({
               <p>{card.example_en || 'Not set'}</p>
             )}
           </div>
+
+          <div>
+            <span>Memory hook</span>
+            {isEditing ? (
+              <textarea value={formValues.mnemonic_en} onChange={(event) => updateField('mnemonic_en', event.target.value)} rows={2} />
+            ) : (
+              <p>{card.mnemonic_en || 'Not set'}</p>
+            )}
+          </div>
         </div>
 
         {saveError ? <p className="details-modal__status details-modal__status--error">{saveError}</p> : null}
@@ -265,6 +275,7 @@ function buildFormValues(card) {
     example_sentence: card.example_sentence ?? '',
     example_es: card.example_es ?? '',
     example_en: card.example_en ?? '',
+    mnemonic_en: card.mnemonic_en ?? '',
   };
 }
 
