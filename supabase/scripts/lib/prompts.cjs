@@ -10,6 +10,7 @@ const PROMPT_VERSIONS = {
   lexical: 'enrich-lexical-v1',
   equivalents: 'enrich-equivalents-v1',
   examples: 'enrich-examples-v1',
+  mnemonic: 'enrich-mnemonic-v1',
 };
 
 function deckContext(spec) {
@@ -142,6 +143,27 @@ function examplesPrompt(card, issues) {
   return { system, user, temperature: 0.2 };
 }
 
+// ---- Stage 3d: mnemonic (mnemonic_en) --------------------------------------
+// Keyword-method memory hook: evidence-based elaborative encoding for vocab.
+function mnemonicPrompt(card, issues) {
+  const system =
+    'You write short keyword-method memory hooks that help Spanish speakers remember an English word. Return JSON only.';
+  const user = JSON.stringify(withIssues({
+    task: 'Write one memory hook that links the English answer to the Spanish prompt.',
+    card: { spanish: card.spanish_text, english: card.english_text },
+    required_output: { mnemonic_en: 'string' },
+    rules: [
+      'mnemonic_en is ONE short English sentence (max ~20 words).',
+      'Link the SOUND or SPELLING of the English answer to the meaning of the Spanish prompt (keyword method), or give a vivid image or association.',
+      'It may quote the Spanish word for the sound link, but the sentence itself is English.',
+      'Make it concrete and visual; avoid generic advice like "practice this word".',
+      'No inverted punctuation (¿ ¡) and no quotation-mark clutter.',
+      'Return JSON only, no commentary or markdown.',
+    ],
+  }, issues));
+  return { system, user, temperature: 0.5 };
+}
+
 module.exports = {
   PROMPT_VERSIONS,
   blueprintPrompt,
@@ -149,4 +171,5 @@ module.exports = {
   lexicalPrompt,
   equivalentsPrompt,
   examplesPrompt,
+  mnemonicPrompt,
 };

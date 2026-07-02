@@ -40,6 +40,7 @@ function normCard(card, deckTitle) {
     example_sentence: optText(card.example_sentence),
     example_es: optText(card.example_es),
     example_en: optText(card.example_en),
+    mnemonic_en: optText(card.mnemonic_en),
   };
 }
 

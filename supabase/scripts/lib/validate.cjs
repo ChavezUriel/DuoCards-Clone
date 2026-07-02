@@ -10,7 +10,7 @@ function isBlank(v) {
 }
 
 function validateCard(card) {
-  const issues = { lexical: [], equivalents: [], examples: [], card: [] };
+  const issues = { lexical: [], equivalents: [], examples: [], mnemonic: [], card: [] };
 
   // --- card-level ---
   if (isBlank(card.spanish_text)) issues.card.push('spanish_text is empty');
@@ -51,6 +51,15 @@ function validateCard(card) {
   if (!isBlank(card.example_es) && !isBlank(card.example_en) &&
       card.example_es.trim().toLowerCase() === card.example_en.trim().toLowerCase()) {
     issues.examples.push('example_es and example_en must be different sentences');
+  }
+
+  // --- mnemonic (mnemonic_en) ---
+  if (isBlank(card.mnemonic_en)) {
+    issues.mnemonic.push('mnemonic_en is required');
+  } else if (INVERTED_PUNCT.test(card.mnemonic_en)) {
+    issues.mnemonic.push('mnemonic_en must be English (no ¿ or ¡)');
+  } else if (String(card.mnemonic_en).length > 220) {
+    issues.mnemonic.push('mnemonic_en must be one short sentence (max 220 chars)');
   }
 
   return issues;

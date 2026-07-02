@@ -27,7 +27,7 @@ const fs = require('fs');
 const path = require('path');
 const { chatJson, MODEL, BASE_URL } = require('./lib/ollama.cjs');
 const {
-  blueprintPrompt, wordSetPrompt, lexicalPrompt, equivalentsPrompt, examplesPrompt, PROMPT_VERSIONS,
+  blueprintPrompt, wordSetPrompt, lexicalPrompt, equivalentsPrompt, examplesPrompt, mnemonicPrompt, PROMPT_VERSIONS,
 } = require('./lib/prompts.cjs');
 const { validateCard, hasIssues, flatten } = require('./lib/validate.cjs');
 const { optText, normList, normCard, pairKey } = require('./lib/cards.cjs');
@@ -107,6 +107,7 @@ function toSeedCard(card) {
   if (optText(card.example_en)) out.example_sentence = card.example_en;
   if (optText(card.example_es)) out.example_es = card.example_es;
   if (optText(card.example_en)) out.example_en = card.example_en;
+  if (optText(card.mnemonic_en)) out.mnemonic_en = card.mnemonic_en;
   return out;
 }
 
@@ -168,29 +169,27 @@ function applyExamples(card, resp) {
   card.example_es = optText(resp.example_es);
   card.example_en = optText(resp.example_en);
 }
+function applyMnemonic(card, resp) {
+  card.mnemonic_en = optText(resp.mnemonic_en);
+}
 
-// Enrich a single draft card with 3 focused sub-prompts + targeted repair.
+// Enrich a single card with up to 4 focused sub-prompts + targeted repair.
+// Only the sub-prompts whose fields are missing/invalid run: fresh drafts get
+// the full pipeline, while already-enriched cards just fill the gaps (e.g. a
+// newly added mnemonic) without overwriting curated metadata.
 async function enrichCard(draft, maxRepairs) {
-  const card = {
-    spanish_text: draft.spanish_text,
-    english_text: draft.english_text,
-    section_name: draft.section_name || null,
-  };
+  const card = { ...draft };
 
-  // First pass: run all three sub-prompts.
-  applyLexical(card, await runPrompt(lexicalPrompt(card)));
-  applyEquivalents(card, await runPrompt(equivalentsPrompt(card)));
-  applyExamples(card, await runPrompt(examplesPrompt(card)));
-
-  // Repair loop: re-run only the failing sub-prompt(s).
-  for (let attempt = 0; attempt < maxRepairs; attempt++) {
+  for (let attempt = 0; attempt <= maxRepairs; attempt++) {
     const issues = validateCard(card);
     if (!hasIssues(issues)) break;
-    if (issues.lexical.length) applyLexical(card, await runPrompt(lexicalPrompt(card, issues.lexical)));
-    if (issues.equivalents.length) applyEquivalents(card, await runPrompt(equivalentsPrompt(card, issues.equivalents)));
-    if (issues.examples.length) applyExamples(card, await runPrompt(examplesPrompt(card, issues.examples)));
-    // card-level issues (spanish/english) cannot be fixed by enrichment; stop trying.
+    // card-level issues (spanish/english) cannot be fixed by enrichment.
     if (issues.card.length) break;
+    const hint = (arr) => (attempt === 0 ? undefined : arr);
+    if (issues.lexical.length) applyLexical(card, await runPrompt(lexicalPrompt(card, hint(issues.lexical))));
+    if (issues.equivalents.length) applyEquivalents(card, await runPrompt(equivalentsPrompt(card, hint(issues.equivalents))));
+    if (issues.examples.length) applyExamples(card, await runPrompt(examplesPrompt(card, hint(issues.examples))));
+    if (issues.mnemonic.length) applyMnemonic(card, await runPrompt(mnemonicPrompt(card, hint(issues.mnemonic))));
   }
 
   return { card, issues: validateCard(card) };
