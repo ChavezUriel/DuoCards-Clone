@@ -9,3 +9,8 @@ dist/
 # Local env files
 .env
 *.local
+
+# Supabase CLI local artifacts (link/version state)
+supabase/.temp/
+supabase/.branches/
+supabase/supabase/
