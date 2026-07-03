@@ -11,6 +11,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import SettingsPage from './pages/SettingsPage';
 
 function PrivateRoute({ children, session }) {
   if (!session) {
@@ -61,13 +62,20 @@ function App() {
   } else if (!isFocusedRoute) {
     if (session) {
       headerContent = (
-        <button
-          onClick={handleLogout}
-          className="back-link"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-        >
-          Logout
-        </button>
+        <nav className="app-header__links" aria-label="Account">
+          {location.pathname === '/settings' ? (
+            <Link to="/" className="back-link">Home</Link>
+          ) : (
+            <Link to="/settings" className="back-link">Settings</Link>
+          )}
+          <button
+            onClick={handleLogout}
+            className="back-link"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            Logout
+          </button>
+        </nav>
       );
     } else {
       headerContent = <Link to="/login" className="back-link">Login</Link>;
@@ -99,6 +107,7 @@ function App() {
           <Route path="/decks/:deckId/words" element={<PrivateRoute session={session}><DeckWordsPage /></PrivateRoute>} />
           <Route path="/practice" element={<PrivateRoute session={session}><PracticePage /></PrivateRoute>} />
           <Route path="/review/:deckId" element={<PrivateRoute session={session}><ReviewPage /></PrivateRoute>} />
+          <Route path="/settings" element={<PrivateRoute session={session}><SettingsPage /></PrivateRoute>} />
           <Route path="/login" element={session ? <Navigate to="/" replace /> : <LoginPage />} />
           <Route path="/register" element={session ? <Navigate to="/" replace /> : <RegisterPage />} />
           <Route path="/forgot-password" element={session ? <Navigate to="/" replace /> : <ForgotPasswordPage />} />

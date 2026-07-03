@@ -18,6 +18,9 @@
 //   --repair         (review) Re-run failing sub-prompts and rewrite the deck.
 //   --max-repairs N  Repair attempts per card (default 2).
 //   --out <file>     (generate) Output file (default: deck_expansions_generated.json).
+//   --checkpoint N   (enrich/generate) Persist the deck file every N enriched
+//                   cards so an interrupted run can be resumed without losing
+//                   progress. Default 10; 0 disables checkpoint writes.
 //
 // Quality strategy: light model => many small focused prompts. Each card is
 // enriched with 3 separate sub-prompts (lexical / equivalents / examples), then
@@ -35,6 +38,10 @@ const SEED_DECKS = require('./lib/seed_decks.cjs');
 
 const DATA_DIR = path.resolve(__dirname, '../seed_data');
 const GENERATED_FILE = path.join(DATA_DIR, 'deck_expansions_generated.json');
+
+// Persist the deck file every N enriched cards so an interrupted (--only-missing)
+// run can be resumed without losing progress. 0 = only write at the very end.
+const DEFAULT_CHECKPOINT = 10;
 
 // ---------------------------------------------------------------------------
 // arg parsing
@@ -93,6 +100,16 @@ function upsertDeckFile(file, deckEntry) {
   const idx = arr.findIndex((d) => optText(d.slug) === deckEntry.slug);
   if (idx === -1) arr.push(deckEntry); else arr[idx] = deckEntry;
   fs.writeFileSync(file, JSON.stringify(arr, null, 2) + '\n', 'utf8');
+}
+
+// Atomic checkpoint write: serialize the deck to its resolved file. Used by
+// enrich/generate every --checkpoint cards so a Ctrl+C keeps the work done so
+// far. Writes to a tmp file first then renames, so a crash mid-write never
+// corrupts the on-disk deck.
+function flushResolved(resolved) {
+  const tmp = resolved.file + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(resolved.array, null, 2) + '\n', 'utf8');
+  fs.renameSync(tmp, resolved.file);
 }
 
 // Enriched working card (spanish_text/...) -> seed-JSON card (spanish/english/...).
@@ -217,21 +234,69 @@ async function cmdGenerate(flags) {
   const limit = flags.limit ? Number(flags.limit) : null;
   const totalTarget = limit || Number(spec.target_card_count) || 20;
   const maxRepairs = flags['max-repairs'] !== undefined ? Number(flags['max-repairs']) : 2;
+  const checkpoint = ('checkpoint' in flags) ? Number(flags.checkpoint) : DEFAULT_CHECKPOINT;
+  const writeCheckpoints = !flags.preview && checkpoint > 0;
+  const outFile = flags.out
+    ? (path.isAbsolute(flags.out) ? flags.out : path.resolve(process.cwd(), flags.out))
+    : GENERATED_FILE;
 
   log(`\nGenerating deck "${spec.slug}" (${MODEL} @ ${BASE_URL}), target ${totalTarget} card(s).`);
   const sections = await buildBlueprint(spec);
   const drafts = await generateWordSet(spec, sections, totalTarget);
   log(`Drafted ${drafts.length} card(s). Enriching (3 sub-prompts each)...`);
+  if (writeCheckpoints) log(`Checkpointing to ${path.basename(outFile)} every ${checkpoint} card(s) — safe to Ctrl+C.`);
 
-  const enriched = [];
+  // Re-seed from a previous interrupted run if the output file already has
+  // cards for this slug: an existing enriched card skips its own draft, so
+  // re-running picks up where it left off.
+  const prior = resolveDeck(spec.slug);
+  let enriched = [];
+  if (prior && prior.source === 'file' && Array.isArray(prior.deck.cards) && prior.deck.cards.length) {
+    enriched = prior.deck.cards.map((c) => normCard(c, spec.title));
+    log(`Resuming: ${enriched.length} already-enriched card(s) found in ${path.basename(prior.file)}.`);
+  }
+
+  // Map each draft by pairKey; remove ones already enriched so we don't redo them.
+  const seenKeys = new Set(enriched.map((c) => pairKey(c.spanish_text, c.english_text)));
+  const todo = drafts.filter((d) => !seenKeys.has(pairKey(d.spanish_text, d.english_text)));
+
   const rejected = [];
-  for (let i = 0; i < drafts.length; i++) {
-    log(`  [${i + 1}/${drafts.length}] ${drafts[i].spanish_text} -> ${drafts[i].english_text}`);
+  let sinceFlush = 0;
+  function flushCheckpoint() {
+    if (!writeCheckpoints) return;
+    const partial = {
+      slug: spec.slug,
+      title: spec.title,
+      description: spec.description,
+      language_from: optText(spec.language_from) || 'es',
+      language_to: optText(spec.language_to) || 'en',
+      _meta: {
+        generated_by: MODEL,
+        generated_at: new Date().toISOString(),
+        prompt_versions: PROMPT_VERSIONS,
+      },
+      cards: enriched.map(toSeedCard),
+    };
+    // Wrap into a resolved-shape { file, array, index } so flushResolved can write it.
+    upsertDeckFile(outFile, partial);
+    log(`    checkpoint: wrote ${enriched.length} card(s) to ${path.basename(outFile)}`);
+    sinceFlush = 0;
+  }
+
+  for (let i = 0; i < todo.length; i++) {
+    log(`  [${i + 1}/${todo.length}] ${todo[i].spanish_text} -> ${todo[i].english_text}`);
     const t0 = Date.now();
-    const { card, issues } = await enrichCard(drafts[i], maxRepairs);
+    const { card, issues } = await enrichCard(todo[i], maxRepairs);
     log(`    done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
-    if (hasIssues(issues)) rejected.push({ card, issues: flatten(issues) });
-    else enriched.push(card);
+    if (hasIssues(issues)) {
+      rejected.push({ card, issues: flatten(issues) });
+    } else {
+      enriched.push(card);
+      sinceFlush++;
+      if (writeCheckpoints && sinceFlush >= checkpoint) {
+        flushCheckpoint();
+      }
+    }
   }
 
   const deckEntry = {
@@ -256,9 +321,6 @@ async function cmdGenerate(flags) {
     log(JSON.stringify(deckEntry, null, 2));
     return;
   }
-  const outFile = flags.out
-    ? (path.isAbsolute(flags.out) ? flags.out : path.resolve(process.cwd(), flags.out))
-    : GENERATED_FILE;
   upsertDeckFile(outFile, deckEntry);
   log(`\nWrote deck "${spec.slug}" to ${outFile}`);
   log('Next: node supabase/scripts/generate_seed.cjs  (compile seed.sql)');
@@ -281,6 +343,8 @@ async function cmdEnrich(flags) {
   const maxRepairs = flags['max-repairs'] !== undefined ? Number(flags['max-repairs']) : 2;
   const onlyMissing = !!flags['only-missing'];
   const limit = flags.limit ? Number(flags.limit) : null;
+  const checkpoint = ('checkpoint' in flags) ? Number(flags.checkpoint) : DEFAULT_CHECKPOINT;
+  const writeCheckpoints = !flags.preview && checkpoint > 0;
 
   // Normalize existing cards, decide which to (re)enrich.
   const working = rawCards.map((rc) => normCard(rc, title));
@@ -289,8 +353,10 @@ async function cmdEnrich(flags) {
   if (limit) targets = targets.slice(0, limit);
 
   log(`\nEnriching deck "${flags.slug}" in ${path.basename(resolved.file)}: ${targets.length} of ${working.length} card(s) (${MODEL}).`);
+  if (writeCheckpoints) log(`Checkpointing to disk every ${checkpoint} card(s) — safe to Ctrl+C and re-run with --only-missing.`);
 
   const rejected = [];
+  let sinceFlush = 0;
   for (let t = 0; t < targets.length; t++) {
     const { c, idx } = targets[t];
     log(`  [${t + 1}/${targets.length}] ${c.spanish_text} -> ${c.english_text}`);
@@ -299,6 +365,13 @@ async function cmdEnrich(flags) {
     log(`    done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
     working[idx] = card; // replace in place (keeps card order)
     if (hasIssues(issues)) rejected.push({ card, issues: flatten(issues) });
+    sinceFlush++;
+    if (writeCheckpoints && sinceFlush >= checkpoint) {
+      resolved.array[resolved.index] = { ...deck, cards: working.map(toSeedCard) };
+      flushResolved(resolved);
+      log(`    checkpoint: wrote ${sinceFlush} enriched card(s) to ${path.basename(resolved.file)}`);
+      sinceFlush = 0;
+    }
   }
   reportRejected(rejected);
 
@@ -312,7 +385,7 @@ async function cmdEnrich(flags) {
     ...deck,
     cards: newCards,
   };
-  fs.writeFileSync(resolved.file, JSON.stringify(resolved.array, null, 2) + '\n', 'utf8');
+  flushResolved(resolved);
   log(`\nUpdated ${targets.length} card(s) in ${resolved.file}`);
   log('Next: node supabase/scripts/generate_seed.cjs  (compile seed.sql)');
 }
@@ -380,8 +453,8 @@ async function main() {
     case 'review': return cmdReview(flags);
     default:
       log('Usage: node supabase/scripts/generate_cards.cjs <generate|enrich|review> [flags]');
-      log('  generate --spec <file> [--limit N] [--preview] [--out <file>] [--max-repairs N]');
-      log('  enrich   --slug <slug> [--only-missing] [--limit N] [--preview] [--max-repairs N]');
+      log('  generate --spec <file> [--limit N] [--preview] [--out <file>] [--max-repairs N] [--checkpoint N]');
+      log('  enrich   --slug <slug> [--only-missing] [--limit N] [--preview] [--max-repairs N] [--checkpoint N]');
       log('  review   --slug <slug> [--repair] [--max-repairs N]');
       process.exit(command ? 1 : 0);
   }

@@ -70,6 +70,98 @@ export async function fetchMe() {
     id: user.id,
     email: user.email,
     full_name: user.user_metadata?.full_name || 'User',
+    created_at: user.created_at,
+  };
+}
+
+export async function updateNickname(nickname) {
+  const { data, error } = await supabase.auth.updateUser({ data: { full_name: nickname } });
+  if (error) throw new Error(error.message);
+  // Keep the profiles row (used by the DB side) in sync with auth metadata
+  // (used by the app). RLS allows updating your own row.
+  const userId = data.user?.id;
+  if (userId) {
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ full_name: nickname })
+      .eq('id', userId);
+    if (profileError) throw new Error(profileError.message);
+  }
+  return data.user;
+}
+
+export async function fetchUserIdentities() {
+  const { data, error } = await supabase.auth.getUserIdentities();
+  if (error) throw new Error(error.message);
+  return data?.identities ?? [];
+}
+
+export async function linkGoogleIdentity() {
+  // Redirects to Google and back; requires manual linking to be enabled in
+  // the Supabase dashboard (Authentication → Providers → Allow manual linking).
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider: 'google',
+    options: { redirectTo: `${window.location.origin}/settings` },
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function unlinkUserIdentity(identity) {
+  const { error } = await supabase.auth.unlinkIdentity(identity);
+  if (error) throw new Error(error.message);
+}
+
+// ===========================================================================
+// Account management
+// ===========================================================================
+export function deleteAccount() {
+  return rpc('delete_account');
+}
+
+// PostgREST caps a single response at 1000 rows; page until a short page.
+const EXPORT_PAGE_SIZE = 1000;
+
+async function fetchAllRows(buildQuery) {
+  const rows = [];
+  for (let page = 0; ; page += 1) {
+    const from = page * EXPORT_PAGE_SIZE;
+    const { data, error } = await buildQuery().range(from, from + EXPORT_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []));
+    if (!data || data.length < EXPORT_PAGE_SIZE) {
+      return rows;
+    }
+  }
+}
+
+export async function exportAccountData() {
+  const me = await fetchMe();
+  const decks = await fetchAllRows(() =>
+    supabase.from('decks').select('*').eq('user_id', me.id).order('id'),
+  );
+  const deckIds = decks.map((deck) => deck.id);
+  const cards = deckIds.length > 0
+    ? await fetchAllRows(() =>
+        supabase.from('cards').select('*').in('deck_id', deckIds).order('id'),
+      )
+    : [];
+  const progress = await fetchAllRows(() =>
+    supabase.from('card_progress').select('*').eq('user_id', me.id).order('card_id'),
+  );
+
+  const cardsByDeckId = new Map(deckIds.map((deckId) => [deckId, []]));
+  for (const card of cards) {
+    cardsByDeckId.get(card.deck_id)?.push(card);
+  }
+
+  return {
+    format: 'duocards-clone-export',
+    version: 1,
+    exported_at: new Date().toISOString(),
+    account: { id: me.id, email: me.email, nickname: me.full_name },
+    decks: decks.map((deck) => ({ ...deck, cards: cardsByDeckId.get(deck.id) ?? [] })),
+    card_progress: progress,
   };
 }
 
