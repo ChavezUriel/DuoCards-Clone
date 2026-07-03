@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { fetchDeckProgress, fetchReviewCard, submitReview, updateCard } from '../api';
+import { fetchDeckProgress, fetchReviewCard, submitReview, undoReview, updateCard } from '../api';
 import CardDetailsModal from '../components/CardDetailsModal';
 import Flashcard from '../components/Flashcard';
 import ProgressSummary from '../components/ProgressSummary';
+
+function UndoIcon() {
+  return (
+    <svg aria-hidden="true" className="back-link__icon" viewBox="0 0 24 24">
+      <path d="M9 5 4 10l5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 10h9a6 6 0 0 1 6 6v2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 function ReviewPage() {
   const { deckId } = useParams();
@@ -15,6 +24,7 @@ function ReviewPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDetailsVisible, setIsDetailsVisible] = useState(false);
   const [isSavingCard, setIsSavingCard] = useState(false);
+  const [canUndo, setCanUndo] = useState(false);
   const flashcardActionsRef = useRef(null);
 
   useEffect(() => {
@@ -114,8 +124,31 @@ function ReviewPage() {
       setCard(nextCard);
       setProgress(nextProgress);
       setIsAnswerVisible(false);
+      setCanUndo(true);
     } catch (submitError) {
       setError(submitError.message);
+      setStatus('error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleUndo() {
+    if (!canUndo || isSubmitting) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const restoredCard = await undoReview();
+      const nextProgress = await fetchDeckProgress(deckId);
+      setCard(restoredCard);
+      setProgress(nextProgress);
+      // Show the answer so the user can immediately re-judge the card.
+      setIsAnswerVisible(true);
+      setCanUndo(false);
+    } catch (undoError) {
+      setError(undoError.message);
       setStatus('error');
     } finally {
       setIsSubmitting(false);
@@ -163,9 +196,23 @@ function ReviewPage() {
       {progress ? <ProgressSummary progress={progress} /> : null}
 
       <div className="review-stage">
-        <Link className="back-link" to="/">
-          Back to home
-        </Link>
+        <div className="review-topbar">
+          <Link className="back-link" to="/">
+            Back to home
+          </Link>
+
+          {canUndo ? (
+            <button
+              type="button"
+              className="back-link review-undo-button"
+              onClick={handleUndo}
+              disabled={isSubmitting}
+            >
+              <UndoIcon />
+              <span>Undo last card</span>
+            </button>
+          ) : null}
+        </div>
 
         <Flashcard
           card={card}

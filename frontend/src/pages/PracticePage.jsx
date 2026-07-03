@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { startSmartPracticeSession, submitSmartPracticeReview, updateCard } from '../api';
+import { startSmartPracticeSession, submitSmartPracticeReview, undoSmartPracticeReview, updateCard } from '../api';
 import CardDetailsModal from '../components/CardDetailsModal';
 import Flashcard from '../components/Flashcard';
 import { loadPracticeSettings } from '../practiceSettings';
@@ -13,6 +13,15 @@ function HomeIcon() {
       <path d="M4 10.5 12 4l8 6.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M6.5 9.75V20h11V9.75" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M10 20v-5.25h4V20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function UndoIcon() {
+  return (
+    <svg aria-hidden="true" className="back-link__icon" viewBox="0 0 24 24">
+      <path d="M9 5 4 10l5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 10h9a6 6 0 0 1 6 6v2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -219,6 +228,30 @@ function PracticePage() {
     }
   }
 
+  async function handleUndo() {
+    if (!session?.summary?.can_undo || isSubmitting) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const nextSession = await undoSmartPracticeReview(session.summary.session_id);
+      setSession(nextSession);
+      // Bring the card back with its answer showing so the correction is one swipe away.
+      setIsAnswerVisible(true);
+      if (feedbackTimeoutRef.current) {
+        window.clearTimeout(feedbackTimeoutRef.current);
+        feedbackTimeoutRef.current = null;
+      }
+      setReviewFeedback(null);
+    } catch (undoError) {
+      setError(undoError.message);
+      setStatus('error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function handleSaveCard(values) {
     if (!session?.current_card) {
       return null;
@@ -274,10 +307,24 @@ function PracticePage() {
     <section className="review-screen">
       <div className="review-stage">
         <div className="practice-session-bar">
-          <Link className="back-link back-link--home" to="/">
-            <HomeIcon />
-            <span>Home</span>
-          </Link>
+          <div className="practice-session-bar__nav">
+            <Link className="back-link back-link--home" to="/">
+              <HomeIcon />
+              <span>Home</span>
+            </Link>
+
+            {summary.can_undo ? (
+              <button
+                type="button"
+                className="back-link back-link--home review-undo-button"
+                onClick={handleUndo}
+                disabled={isSubmitting}
+              >
+                <UndoIcon />
+                <span>Undo</span>
+              </button>
+            ) : null}
+          </div>
 
           <div className="practice-session-summary" aria-label="Smart practice summary">
             <span className="practice-session-summary__mode">{modeLabel(summary.mode)}</span>

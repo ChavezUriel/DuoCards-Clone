@@ -202,6 +202,12 @@ export function submitReview(cardId, result) {
   return rpc('submit_review', { p_card_id: cardId, p_result: result });
 }
 
+// Undo the last per-deck review. Restores the card's pre-review progress and
+// returns the ReviewCard JSON so the caller can show it again.
+export function undoReview() {
+  return rpc('undo_review');
+}
+
 export function fetchDeckProgress(deckId) {
   return rpc('get_deck_progress', { p_deck_id: deckId });
 }
@@ -264,4 +270,11 @@ export function submitSmartPracticeReview(sessionId, cardId, result) {
     p_card_id: cardId,
     p_result: result,
   });
+}
+
+// Undo the last smart-practice review. Reverses the FSRS update and the queue
+// move, reactivates the session if it had just finished, and returns the
+// refreshed session snapshot (with the undone card current again).
+export function undoSmartPracticeReview(sessionId) {
+  return rpc('undo_smart_practice_review', { p_session_id: sessionId });
 }

@@ -762,6 +762,38 @@ a {
   gap: 0.75rem;
 }
 
+.practice-session-bar__nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* Top row of the per-deck review screen: back link left, undo right. */
+.review-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+/* "Undo" control shared by both review screens. Inherits the back-link look
+   (plain on per-deck review, pill via back-link--home in smart practice); this
+   only fixes the <button> font and adds the disabled / hover affordances. */
+.review-undo-button {
+  font: inherit;
+}
+
+.review-undo-button:hover:not(:disabled),
+.review-undo-button:focus-visible {
+  color: var(--accent);
+}
+
+.review-undo-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .practice-session-summary {
   display: grid;
   justify-items: end;
