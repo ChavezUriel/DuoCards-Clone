@@ -58,6 +58,7 @@ function PracticePage() {
   const idleHintTimeoutRef = useRef(null);
   const hasShownIdleHintRef = useRef(false);
   const feedbackTimeoutRef = useRef(null);
+  const flashcardActionsRef = useRef(null);
 
   useEffect(() => () => {
     if (feedbackTimeoutRef.current) {
@@ -141,13 +142,13 @@ function PracticePage() {
 
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
-        handleReview('unknown');
+        flashcardActionsRef.current?.triggerReview('left');
         return;
       }
 
       if (event.key === 'ArrowRight') {
         event.preventDefault();
-        handleReview('known');
+        flashcardActionsRef.current?.triggerReview('right');
       }
     }
 
@@ -313,6 +314,7 @@ function PracticePage() {
             hideRevealButton
             hideRevealButtonOnMobile
             isIdleHintVisible={isIdleHintVisible}
+            actionsRef={flashcardActionsRef}
             onReveal={() => setIsAnswerVisible(true)}
             onToggleReveal={() => setIsAnswerVisible((current) => !current)}
             onOpenDetails={() => setIsDetailsVisible(true)}
@@ -327,7 +329,7 @@ function PracticePage() {
               Completed {summary.completed_cards} of {summary.total_cards} cards in {modeLabel(summary.mode).toLowerCase()} mode.
             </p>
             <Link className="button button--primary" to="/">
-              Start another session
+              Back to home
             </Link>
           </section>
         )}

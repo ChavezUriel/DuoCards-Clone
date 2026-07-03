@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 
 const AUTO_SPEECH_DEDUPE_WINDOW_MS = 750;
 const TAP_REVEAL_TOLERANCE_PX = 12;
@@ -7,6 +7,8 @@ const POINTER_SWIPE_REVIEW_THRESHOLD_PX = 72;
 const TOUCH_HORIZONTAL_SWIPE_RATIO = 0.85;
 const POINTER_HORIZONTAL_SWIPE_RATIO = 1.2;
 const TOUCH_CLICK_SUPPRESSION_WINDOW_MS = 500;
+// Must outlast the --exit transition in styles.css so the fly-out finishes before the swap.
+const EXIT_ANIMATION_MS = 400;
 let lastAutoSpeech = {
   key: '',
   at: 0,
@@ -22,6 +24,10 @@ function normalizeSpeechText(text) {
 
 function isInteractiveTarget(target) {
   return target instanceof Element && Boolean(target.closest('button, a, input, select, textarea, label'));
+}
+
+function clampProgress(value) {
+  return Math.min(Math.max(value, 0), 1);
 }
 
 function useTwoLineFit(targetRef, dependencies) {
@@ -154,6 +160,7 @@ function Flashcard({
   hideRevealButton = false,
   hideRevealButtonOnMobile = false,
   isIdleHintVisible = false,
+  actionsRef,
   onReveal,
   onToggleReveal,
   onOpenDetails,
@@ -176,14 +183,24 @@ function Flashcard({
     tracking: false,
   });
   const [dragOffsetX, setDragOffsetX] = useState(0);
-  const hasAnswerSpeech = canUseSpeechSynthesis() && Boolean(normalizeSpeechText(card.answer_en));
-  const swipeFeedback =
-    dragOffsetX >= TOUCH_SWIPE_REVIEW_THRESHOLD_PX ? 'known' : dragOffsetX <= -TOUCH_SWIPE_REVIEW_THRESHOLD_PX ? 'unknown' : '';
-  const showRevealHint = isIdleHintVisible && !isAnswerVisible;
-  const showSwipeHint = isIdleHintVisible && isAnswerVisible;
+  // While a review commits, the leaving card is frozen here so the fly-out keeps
+  // showing it even after the parent swaps `card` to the next one.
+  const exitCardRef = useRef(null);
+  const exitTimeoutRef = useRef(null);
+  const [exitDirection, setExitDirection] = useState(null);
+  const [isExitSettled, setIsExitSettled] = useState(false);
+  const [enterGeneration, setEnterGeneration] = useState(0);
 
-  useTwoLineFit(promptHeadingRef, [card.card_id, card.prompt_es]);
-  useTwoLineFit(answerHeadingRef, [card.card_id, card.answer_en, isAnswerVisible]);
+  const displayCard = exitCardRef.current ?? card;
+  const isBackVisible = exitDirection ? true : isAnswerVisible;
+  const hasAnswerSpeech = canUseSpeechSynthesis() && Boolean(normalizeSpeechText(displayCard.answer_en));
+  const knownSwipeProgress = clampProgress(dragOffsetX / TOUCH_SWIPE_REVIEW_THRESHOLD_PX);
+  const unknownSwipeProgress = clampProgress(-dragOffsetX / TOUCH_SWIPE_REVIEW_THRESHOLD_PX);
+  const showRevealHint = isIdleHintVisible && !isBackVisible;
+  const showSwipeHint = isIdleHintVisible && isBackVisible && !exitDirection;
+
+  useTwoLineFit(promptHeadingRef, [displayCard.card_id, displayCard.prompt_es]);
+  useTwoLineFit(answerHeadingRef, [displayCard.card_id, displayCard.answer_en, isBackVisible]);
 
   function resetGesture() {
     gestureStateRef.current = {
@@ -196,6 +213,42 @@ function Flashcard({
     };
     setDragOffsetX(0);
   }
+
+  function commitReview(direction) {
+    const submitReview = direction === 'right' ? onReviewKnown : onReviewUnknown;
+
+    if (exitDirection || isSubmitting || !isAnswerVisible || typeof submitReview !== 'function') {
+      return false;
+    }
+
+    exitCardRef.current = card;
+    setExitDirection(direction);
+    setIsExitSettled(false);
+    window.clearTimeout(exitTimeoutRef.current);
+    exitTimeoutRef.current = window.setTimeout(() => {
+      setIsExitSettled(true);
+    }, EXIT_ANIMATION_MS);
+    submitReview();
+    return true;
+  }
+
+  useImperativeHandle(actionsRef, () => ({
+    triggerReview: commitReview,
+  }));
+
+  useEffect(() => {
+    if (!exitDirection || !isExitSettled || isSubmitting) {
+      return;
+    }
+
+    exitCardRef.current = null;
+    setExitDirection(null);
+    setEnterGeneration((generation) => generation + 1);
+  }, [exitDirection, isExitSettled, isSubmitting]);
+
+  useEffect(() => () => {
+    window.clearTimeout(exitTimeoutRef.current);
+  }, []);
 
   function stopSpeech() {
     if (!canUseSpeechSynthesis()) {
@@ -266,6 +319,7 @@ function Flashcard({
 
   useEffect(() => {
     resetGesture();
+    suppressSurfaceClickRef.current = false;
   }, [card.card_id, isAnswerVisible]);
 
   function handlePlayAnswerSpeech() {
@@ -273,7 +327,7 @@ function Flashcard({
       return;
     }
 
-    speakText(card.answer_en, 'en-US', `manual-answer:${card.card_id}:${Date.now()}`);
+    speakText(displayCard.answer_en, 'en-US', `manual-answer:${displayCard.card_id}:${Date.now()}`);
   }
 
   function handlePointerDown(event) {
@@ -367,13 +421,7 @@ function Flashcard({
     }
 
     suppressSurfaceClickRef.current = true;
-
-    if (deltaX > 0) {
-      onReviewKnown();
-      return;
-    }
-
-    onReviewUnknown();
+    commitReview(deltaX > 0 ? 'right' : 'left');
   }
 
   function handlePointerCancel(event) {
@@ -480,12 +528,7 @@ function Flashcard({
 
     if (isHorizontalSwipe) {
       suppressSurfaceClickRef.current = true;
-      if (deltaX > 0) {
-        onReviewKnown();
-        return;
-      }
-
-      onReviewUnknown();
+      commitReview(deltaX > 0 ? 'right' : 'left');
       return;
     }
 
@@ -527,9 +570,13 @@ function Flashcard({
 
   const gestureSurfaceClassName = [
     'flashcard__gesture-surface',
-    dragOffsetX !== 0 ? 'flashcard__gesture-surface--dragging' : '',
-    swipeFeedback ? `flashcard__gesture-surface--${swipeFeedback}` : '',
+    !exitDirection && dragOffsetX !== 0 ? 'flashcard__gesture-surface--dragging' : '',
+    exitDirection ? `flashcard__gesture-surface--exit flashcard__gesture-surface--exit-${exitDirection}` : '',
   ]
+    .filter(Boolean)
+    .join(' ');
+
+  const flipperClassName = ['flashcard__flipper', isBackVisible ? 'flashcard__flipper--flipped' : '']
     .filter(Boolean)
     .join(' ');
 
@@ -537,11 +584,12 @@ function Flashcard({
     <section className="panel flashcard">
       <div
         aria-label={
-          isAnswerVisible
+          isBackVisible
             ? 'Flashcard answer shown. Swipe left for unknown or right for known on touch devices.'
             : 'Flashcard prompt. Tap to reveal the answer on touch devices.'
         }
         className={gestureSurfaceClassName}
+        key={`${displayCard.card_id}:${enterGeneration}`}
         onClick={handleSurfaceClick}
         onPointerCancel={handlePointerCancel}
         onPointerDown={handlePointerDown}
@@ -555,22 +603,45 @@ function Flashcard({
         style={{
           '--flashcard-swipe-rotate': `${dragOffsetX / 18}deg`,
           '--flashcard-swipe-x': `${dragOffsetX}px`,
+          '--flashcard-swipe-known': knownSwipeProgress,
+          '--flashcard-swipe-unknown': unknownSwipeProgress,
         }}
       >
-        
-        {isAnswerVisible ? (
-          
-          <div className="flashcard__face flashcard__face--back">
-            
-            {card.section_name ? (
+        <div className={flipperClassName}>
+          <div aria-hidden={isBackVisible} className="flashcard__face flashcard__face--front" inert={isBackVisible}>
+            {displayCard.section_name ? (
               <div className="flashcard__meta-row">
-                <span className="flashcard__meta-pill flashcard__meta-pill--secondary">{card.section_name}</span>
+                <span className="flashcard__meta-pill">{displayCard.section_name}</span>
+              </div>
+            ) : null}
+            <p className="flashcard__label">Spanish</p>
+            <div className="flashcard__prompt-row">
+              <h2 className="flashcard__inline-audio-heading flashcard__fit-heading" ref={promptHeadingRef}>
+                <span>{displayCard.prompt_es}</span>
+              </h2>
+            </div>
+            {displayCard.example_es ? <p className="flashcard__example">{displayCard.example_es}</p> : null}
+
+            {showRevealHint ? (
+              <div className="flashcard__reveal-hint" aria-hidden="true">
+                <span className="flashcard__reveal-pill">
+                  <TapRevealIcon />
+                  <span>Tap to reveal</span>
+                </span>
+              </div>
+            ) : null}
+          </div>
+
+          <div aria-hidden={!isBackVisible} className="flashcard__face flashcard__face--back" inert={!isBackVisible}>
+            {displayCard.section_name ? (
+              <div className="flashcard__meta-row">
+                <span className="flashcard__meta-pill flashcard__meta-pill--secondary">{displayCard.section_name}</span>
               </div>
             ) : null}
             <p className="flashcard__label">English</p>
             <div className="flashcard__prompt-row flashcard__prompt-row--answer">
               <h3 className="flashcard__inline-audio-heading flashcard__fit-heading flashcard__fit-heading--answer" ref={answerHeadingRef}>
-                <span>{card.answer_en}</span>
+                <span>{displayCard.answer_en}</span>
                 <button
                   aria-label={hasAnswerSpeech ? 'Replay English audio' : 'English audio unavailable'}
                   className="flashcard__audio-button"
@@ -583,11 +654,11 @@ function Flashcard({
                 </button>
               </h3>
             </div>
-            {card.example_en ? <p className="flashcard__example flashcard__example--answer">{card.example_en}</p> : null}
-            {card.mnemonic_en ? (
+            {displayCard.example_en ? <p className="flashcard__example flashcard__example--answer">{displayCard.example_en}</p> : null}
+            {displayCard.mnemonic_en ? (
               <p className="flashcard__mnemonic">
                 <span className="flashcard__mnemonic-label">Memory hook</span>
-                {card.mnemonic_en}
+                {displayCard.mnemonic_en}
               </p>
             ) : null}
             <button
@@ -598,47 +669,19 @@ function Flashcard({
             >
               i
             </button>
-            
-            {isAnswerVisible ? (
-              <div className={`flashcard__swipe-feedback${showSwipeHint ? ' flashcard__swipe-feedback--visible' : ''}`} aria-hidden="true">
-                <span className="flashcard__swipe-pill flashcard__swipe-pill--unknown">
-                  <SwipeDirectionIcon direction="left" />
-                  <span>I didn't know it</span>
-                </span>
-                <span className="flashcard__swipe-pill flashcard__swipe-pill--known">
-                  <span>I knew it</span>
-                  <SwipeDirectionIcon direction="right" />
-                </span>
-              </div>
-            ) : null}
 
-          </div>
-        ) : (
-          <div className="flashcard__face flashcard__face--front">
-            {card.section_name ? (
-              <div className="flashcard__meta-row">
-                <span className="flashcard__meta-pill">{card.section_name}</span>
-              </div>
-            ) : null}
-            <p className="flashcard__label">Spanish</p>
-            <div className="flashcard__prompt-row">
-              <h2 className="flashcard__inline-audio-heading flashcard__fit-heading" ref={promptHeadingRef}>
-                <span>{card.prompt_es}</span>
-              </h2>
+            <div className={`flashcard__swipe-feedback${showSwipeHint ? ' flashcard__swipe-feedback--visible' : ''}`} aria-hidden="true">
+              <span className="flashcard__swipe-pill flashcard__swipe-pill--unknown">
+                <SwipeDirectionIcon direction="left" />
+                <span>I didn't know it</span>
+              </span>
+              <span className="flashcard__swipe-pill flashcard__swipe-pill--known">
+                <span>I knew it</span>
+                <SwipeDirectionIcon direction="right" />
+              </span>
             </div>
-            {card.example_es ? <p className="flashcard__example">{card.example_es}</p> : null}
-            
-            {showRevealHint ? (
-              <div className="flashcard__reveal-hint" aria-hidden="true">
-                <span className="flashcard__reveal-pill">
-                  <TapRevealIcon />
-                  <span>Tap to reveal</span>
-                </span>
-              </div>
-            ) : null}
           </div>
-          
-        )}
+        </div>
       </div>
 
       {!hideRevealButton ? (
@@ -646,6 +689,7 @@ function Flashcard({
           className={`button button--secondary flashcard__reveal${hideRevealButtonOnMobile ? ' flashcard__reveal--mobile-hidden' : ''}`}
           type="button"
           onClick={onToggleReveal}
+          disabled={Boolean(exitDirection) || isSubmitting}
         >
           {isAnswerVisible ? 'Hide answer' : 'Reveal answer'}
         </button>

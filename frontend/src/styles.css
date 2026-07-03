@@ -489,14 +489,108 @@ a {
   user-select: none;
   -webkit-user-select: none;
   cursor: grab;
+  perspective: 1800px;
   transform: translate3d(var(--flashcard-swipe-x, 0), 0, 0) rotate(var(--flashcard-swipe-rotate, 0deg));
+  transform-origin: 50% 82%;
   transition: transform 180ms ease;
-  will-change: transform;
+  will-change: transform, opacity;
+  animation: flashcard-enter 420ms cubic-bezier(0.22, 0.9, 0.32, 1);
+}
+
+/* Direction tints that ramp up with drag distance. */
+.flashcard__gesture-surface::before,
+.flashcard__gesture-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: 26px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.flashcard__gesture-surface::before {
+  background: linear-gradient(to right, rgba(166, 75, 60, 0.18), rgba(166, 75, 60, 0) 55%);
+  box-shadow: inset 0 0 0 2px rgba(166, 75, 60, 0.32);
+  opacity: var(--flashcard-swipe-unknown, 0);
+}
+
+.flashcard__gesture-surface::after {
+  background: linear-gradient(to left, rgba(47, 93, 107, 0.18), rgba(47, 93, 107, 0) 55%);
+  box-shadow: inset 0 0 0 2px rgba(47, 93, 107, 0.32);
+  opacity: var(--flashcard-swipe-known, 0);
 }
 
 .flashcard__gesture-surface--dragging {
   cursor: grabbing;
   transition: none;
+}
+
+.flashcard__gesture-surface--dragging .flashcard__face {
+  box-shadow: 0 24px 48px rgba(34, 42, 45, 0.16);
+}
+
+/* Card fly-out once a review commits; duration must stay below EXIT_ANIMATION_MS in Flashcard.jsx. */
+.flashcard__gesture-surface--exit {
+  pointer-events: none;
+  transition: transform 360ms cubic-bezier(0.3, 0.6, 0.4, 1), opacity 320ms ease-out;
+}
+
+.flashcard__gesture-surface--exit-right {
+  transform: translate3d(112%, -5%, 0) rotate(14deg);
+  opacity: 0;
+}
+
+.flashcard__gesture-surface--exit-left {
+  transform: translate3d(-112%, -5%, 0) rotate(-14deg);
+  opacity: 0;
+}
+
+.flashcard__gesture-surface--exit-right::after,
+.flashcard__gesture-surface--exit-left::before {
+  opacity: 1;
+}
+
+.flashcard__flipper {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  transform-style: preserve-3d;
+  transition: transform 560ms cubic-bezier(0.24, 0.86, 0.32, 1.04);
+  will-change: transform;
+}
+
+.flashcard__flipper--flipped {
+  transform: rotateY(180deg);
+}
+
+@keyframes flashcard-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 30px, 0) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flashcard__gesture-surface {
+    animation: none;
+  }
+
+  .flashcard__flipper {
+    transition: none;
+  }
+
+  .flashcard__gesture-surface--exit {
+    transition: opacity 220ms ease-out;
+  }
+
+  .flashcard__gesture-surface--exit-right,
+  .flashcard__gesture-surface--exit-left {
+    transform: none;
+  }
 }
 
 .flashcard__swipe-feedback {
@@ -566,30 +660,34 @@ a {
 }
 
 .flashcard__swipe-pill--unknown {
-  /* background: rgba(166, 75, 60, 0.12); */
-  /* border-color: rgba(166, 75, 60, 0.2); */
   color: var(--danger);
+  opacity: var(--flashcard-swipe-unknown, 0);
+  transform: scale(calc(0.92 + 0.14 * var(--flashcard-swipe-unknown, 0)));
 }
 
 .flashcard__swipe-pill--known {
-  /* background: rgba(47, 93, 107, 0.12); */
-  /* border-color: rgba(47, 93, 107, 0.2); */
   color: var(--primary-dark);
+  opacity: var(--flashcard-swipe-known, 0);
+  transform: scale(calc(0.92 + 0.14 * var(--flashcard-swipe-known, 0)));
 }
 
-.flashcard__gesture-surface--unknown .flashcard__swipe-pill--unknown,
-.flashcard__gesture-surface--known .flashcard__swipe-pill--known {
+.flashcard__gesture-surface--exit-left .flashcard__swipe-pill--unknown,
+.flashcard__gesture-surface--exit-right .flashcard__swipe-pill--known {
   opacity: 1;
-  transform: scale(1);
+  transform: scale(1.08);
 }
 
 .flashcard__face {
+  grid-area: 1 / 1;
   display: grid;
   gap: 0.9rem;
-  height: 100%;
   padding: 1.35rem 1.25rem;
   border-radius: 26px;
   min-height: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow: 0 10px 26px rgba(34, 42, 45, 0.05);
+  transition: box-shadow 240ms ease;
 }
 
 .flashcard__prompt-row {
@@ -698,6 +796,7 @@ a {
   text-align: center;
   align-content: center;
   overflow: auto;
+  transform: rotateY(180deg);
 }
 
 .flashcard h2 {

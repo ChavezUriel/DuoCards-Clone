@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { fetchDeckProgress, fetchReviewCard, submitReview, updateCard } from '../api';
 import CardDetailsModal from '../components/CardDetailsModal';
@@ -15,6 +15,7 @@ function ReviewPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDetailsVisible, setIsDetailsVisible] = useState(false);
   const [isSavingCard, setIsSavingCard] = useState(false);
+  const flashcardActionsRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,13 +76,13 @@ function ReviewPage() {
 
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
-        handleReview('unknown');
+        flashcardActionsRef.current?.triggerReview('left');
         return;
       }
 
       if (event.key === 'ArrowRight') {
         event.preventDefault();
-        handleReview('known');
+        flashcardActionsRef.current?.triggerReview('right');
       }
     }
 
@@ -169,9 +170,13 @@ function ReviewPage() {
         <Flashcard
           card={card}
           isAnswerVisible={isAnswerVisible}
+          isSubmitting={isSubmitting}
+          actionsRef={flashcardActionsRef}
           onReveal={() => setIsAnswerVisible((current) => !current)}
           onToggleReveal={() => setIsAnswerVisible((current) => !current)}
           onOpenDetails={() => setIsDetailsVisible(true)}
+          onReviewKnown={() => handleReview('known')}
+          onReviewUnknown={() => handleReview('unknown')}
         />
 
         <div className="review-actions">
@@ -180,7 +185,7 @@ function ReviewPage() {
             <button
               className="button button--danger"
               type="button"
-              onClick={() => handleReview('unknown')}
+              onClick={() => flashcardActionsRef.current?.triggerReview('left')}
               disabled={!isAnswerVisible || isSubmitting}
             >
               I need to review it
@@ -188,7 +193,7 @@ function ReviewPage() {
             <button
               className="button button--primary"
               type="button"
-              onClick={() => handleReview('known')}
+              onClick={() => flashcardActionsRef.current?.triggerReview('right')}
               disabled={!isAnswerVisible || isSubmitting}
             >
               I knew it
