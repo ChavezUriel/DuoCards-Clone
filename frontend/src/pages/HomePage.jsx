@@ -6,7 +6,7 @@ import { maybeNotifyDueCards } from '../notifications';
 import { loadPracticeSettings, savePracticeSettings } from '../practiceSettings';
 
 const NEW_BLOCK_SIZE_RANGE = { min: 5, max: 12, step: 1 };
-const REVIEW_BATCH_SIZE_RANGE = { min: 20, max: 50, step: 5 };
+const REVIEW_BATCH_SIZE_RANGE = { min: 10, max: 50, step: 5 };
 
 const INTERLEAVING_LEVELS = [
   { value: 'low', label: 'Low' },
