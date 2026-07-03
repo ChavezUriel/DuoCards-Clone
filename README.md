@@ -71,6 +71,43 @@ Get the connection string from the Supabase dashboard → **Connect** → "Sessi
 pooler" (or "Direct connection"). The seed is idempotent: decks use
 `on conflict (slug) do nothing` and cards are only inserted into empty decks.
 
+### Refreshing edits to existing starter cards
+
+`seed.sql` is insert-only — re-running it won't update cards that already exist
+(matched by `(slug, lower(spanish_text), lower(english_text))`). To push
+**edits** to existing cards or deck metadata, use
+[`generate_update.cjs`](supabase/scripts/generate_update.cjs), which emits
+`UPDATE` statements into [`supabase/seed_updates.sql`](supabase/seed_updates.sql):
+
+```powershell
+# regenerate seed_updates.sql from supabase/seed_data/*.json (only needed if the source changes)
+node supabase/scripts/generate_update.cjs
+
+# overwrite metadata on existing cards + decks (safe to re-run)
+psql "<your Supabase connection string>" -f supabase/seed_updates.sql
+```
+
+It only updates rows matched by `(deck slug, lower(spanish), lower(english))`
+and never inserts or deletes, so user review progress (`card_progress`,
+`practice_session_cards`) is untouched. Identity columns (`spanish_text`/
+`english_text`), `is_enabled`, and `generation_*` are left alone, and
+`mnemonic_en` only overwrites when the incoming card has one — pushing
+un-enriched seed data won't wipe existing mnemonics.
+
+For a batch of edits that also adds new cards or decks, run both in this order:
+
+```powershell
+node supabase/scripts/generate_seed.cjs     # inserts new decks + new card pairs
+node supabase/scripts/generate_update.cjs   # overwrites metadata on existing cards
+psql "<your Supabase connection string>" -f supabase/seed.sql
+psql "<your Supabase connection string>" -f supabase/seed_updates.sql
+```
+
+Neither script handles **removed** card pairs — those linger in the database
+until deleted manually (which cascades to that card's `card_progress` and
+`practice_session_cards` rows, so verify before deleting). Renaming a card's
+`spanish_text`/`english_text` is effectively a remove + add.
+
 ## Generating & enriching decks with AI (Ollama)
 
 [`supabase/scripts/generate_cards.cjs`](supabase/scripts/generate_cards.cjs)
