@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchDeckPreview, fetchDueSummary, fetchHomeDecks, updateDeckSmartPracticeInclusion } from '../api';
 import DeckCard from '../components/DeckCard';
-import {
-  isNotificationSupported,
-  loadReminderSettings,
-  maybeNotifyDueCards,
-  requestNotificationPermission,
-  saveReminderSettings,
-} from '../notifications';
+import { maybeNotifyDueCards } from '../notifications';
 import { loadPracticeSettings, savePracticeSettings } from '../practiceSettings';
+
+const NEW_BLOCK_SIZE_RANGE = { min: 5, max: 12, step: 1 };
+const REVIEW_BATCH_SIZE_RANGE = { min: 20, max: 50, step: 5 };
+
+const INTERLEAVING_LEVELS = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Med' },
+  { value: 'high', label: 'High' },
+];
 
 function formatNextDue(nextDueAt) {
   if (!nextDueAt) {
@@ -95,6 +98,32 @@ function buildSearchMatchReasons(titleScore, descriptionScore, wordsScore) {
   return [`${reasons.slice(0, -1).join(', ')} & ${reasons[reasons.length - 1]} match`];
 }
 
+function ModeStepper({ value, range, onStep, decrementLabel, incrementLabel }) {
+  return (
+    <div className="h-stepper">
+      <button
+        type="button"
+        className="h-stepper__btn"
+        onClick={() => onStep(-range.step)}
+        disabled={value <= range.min}
+        aria-label={decrementLabel}
+      >
+        −
+      </button>
+      <output className="h-stepper__value">{value}</output>
+      <button
+        type="button"
+        className="h-stepper__btn"
+        onClick={() => onStep(range.step)}
+        disabled={value >= range.max}
+        aria-label={incrementLabel}
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
 function rankDeckSearchResults(decks, query, deckWordIndexById) {
   if (!query) {
     return decks.map((deck) => ({ deck, searchScore: 0, searchDidMatch: false, searchMatchReasons: [] }));
@@ -124,15 +153,11 @@ function HomePage() {
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [settings, setSettings] = useState(() => loadPracticeSettings());
-  const [isPracticeSettingsOpen, setIsPracticeSettingsOpen] = useState(false);
-  const [shouldRenderPracticeSettings, setShouldRenderPracticeSettings] = useState(false);
   const [pendingDeckIds, setPendingDeckIds] = useState([]);
   const [actionError, setActionError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [deckWordIndexById, setDeckWordIndexById] = useState({});
   const [dueSummary, setDueSummary] = useState(null);
-  const [reminderSettings, setReminderSettings] = useState(() => loadReminderSettings());
-  const deckReviewSectionRef = useRef(null);
 
   const areAllDecksEnabledInSmartPractice = decks.length > 0 && decks.every((d) => d.is_enabled_in_smart_practice);
   const enabledDeckCount = decks.filter((d) => d.is_enabled_in_smart_practice).length;
@@ -146,22 +171,17 @@ function HomePage() {
     });
   }
 
-  function handleTogglePracticeSettings() {
-    setIsPracticeSettingsOpen((current) => !current);
+  function stepSetting(key, delta, range) {
+    setSettings((current) => {
+      const nextValue = Math.min(range.max, Math.max(range.min, current[key] + delta));
+      if (nextValue === current[key]) {
+        return current;
+      }
+      const nextSettings = { ...current, [key]: nextValue };
+      savePracticeSettings(nextSettings);
+      return nextSettings;
+    });
   }
-
-  function handleScrollToDeckReview() {
-    deckReviewSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  useEffect(() => {
-    if (isPracticeSettingsOpen) {
-      setShouldRenderPracticeSettings(true);
-      return undefined;
-    }
-    const timeoutId = window.setTimeout(() => setShouldRenderPracticeSettings(false), 220);
-    return () => window.clearTimeout(timeoutId);
-  }, [isPracticeSettingsOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,27 +213,6 @@ function HomePage() {
     loadDueSummary();
     return () => { cancelled = true; };
   }, []);
-
-  async function handleToggleReminder() {
-    if (reminderSettings.enabled) {
-      const nextSettings = { ...reminderSettings, enabled: false };
-      setReminderSettings(nextSettings);
-      saveReminderSettings(nextSettings);
-      return;
-    }
-
-    const permission = await requestNotificationPermission();
-    if (permission !== 'granted') {
-      return;
-    }
-
-    const nextSettings = { ...reminderSettings, enabled: true };
-    setReminderSettings(nextSettings);
-    saveReminderSettings(nextSettings);
-    if (dueSummary) {
-      maybeNotifyDueCards(dueSummary);
-    }
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -306,195 +305,111 @@ function HomePage() {
   }
 
   const sessionCards = settings.new_block_size + settings.review_batch_size;
+  const dueNow = dueSummary?.due_now ?? 0;
+  const nextDueLabel = dueNow === 0 && dueSummary?.next_due_at ? formatNextDue(dueSummary.next_due_at) : null;
 
   return (
     <>
-      {/* ── Hero ─────────────────────────────────────────────────── */}
-      <div className="h-hero">
-        <p className="h-hero__kicker">SMART PRACTICE</p>
-        <div className="h-hero__layout">
-          <div className="h-hero__intro">
-            <h1 className="h-hero__headline">A calm space to remember every word.</h1>
-            <p className="h-hero__copy">
-              Surface the right cards at the right moment — each session stays focused and worth showing up for.
-            </p>
-            {isNotificationSupported() ? (
-              <button
-                type="button"
-                className={`h-reminder-toggle${reminderSettings.enabled ? ' h-reminder-toggle--on' : ''}`}
-                onClick={handleToggleReminder}
-                aria-pressed={reminderSettings.enabled}
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                  <path
-                    d="M12 3.5a5.5 5.5 0 0 0-5.5 5.5c0 3.6-1 5-1.9 6h14.8c-.9-1-1.9-2.4-1.9-6A5.5 5.5 0 0 0 12 3.5Z"
-                    fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
-                  />
-                  <path d="M10 18.5a2 2 0 0 0 4 0" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-                </svg>
-                <span>{reminderSettings.enabled ? 'Daily reminder on' : 'Remind me when cards are due'}</span>
-              </button>
-            ) : null}
-          </div>
-          <div className="h-glance-grid">
-            <Link
-              className={`h-glance-card h-glance-card--link${(dueSummary?.due_now ?? 0) > 0 ? ' h-glance-card--due' : ''}`}
-              to="/practice"
-              onClick={() => updateSettings({ focus_mode: 'review' })}
-            >
-              <div className="h-glance-card__value">{dueSummary ? dueSummary.due_now : '–'}</div>
-              <div className="h-glance-card__label">
-                {dueSummary && dueSummary.due_now === 0 && dueSummary.next_due_at
-                  ? `due · next ${formatNextDue(dueSummary.next_due_at)}`
-                  : 'cards due now'}
+      {/* ── Practice modes ────────────────────────────────────────── */}
+      <div className="h-mode-grid">
+        <article className="h-mode-card h-mode-card--primary">
+          <Link
+            className="h-mode-card__link"
+            to="/practice"
+            onClick={() => updateSettings({ focus_mode: 'auto' })}
+          >
+            <div className="h-mode-card__top">
+              <span className="h-action-kicker">RECOMMENDED</span>
+              <span className="h-action-arrow">→</span>
+            </div>
+            <div>
+              <div className="h-mode-card__title">Play Auto</div>
+              <div className="h-mode-card__meta">
+                {sessionCards} cards · ~{Math.ceil(sessionCards / 2)} min · new + review
               </div>
-            </Link>
-            <button type="button" className="h-glance-card" onClick={handleScrollToDeckReview}>
-              <div className="h-glance-card__value">{enabledDeckCount}</div>
-              <div className="h-glance-card__label">decks in rotation</div>
-            </button>
-            <button
-              type="button"
-              className="h-glance-card"
-              aria-expanded={isPracticeSettingsOpen}
-              aria-controls="h-settings-panel"
-              onClick={handleTogglePracticeSettings}
-            >
-              <div className="h-glance-card__value">{settings.new_block_size}/{settings.review_batch_size}</div>
-              <div className="h-glance-card__label">new / review mix</div>
-            </button>
-            <button
-              type="button"
-              className="h-glance-card"
-              aria-expanded={isPracticeSettingsOpen}
-              aria-controls="h-settings-panel"
-              onClick={handleTogglePracticeSettings}
-            >
-              <div className="h-glance-card__value">{settings.interleaving_intensity}</div>
-              <div className="h-glance-card__label">interleaving</div>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Practice action cards ─────────────────────────────────── */}
-      <div className="h-action-grid">
-        <Link
-          className="h-action-primary"
-          to="/practice"
-          onClick={() => updateSettings({ focus_mode: 'auto' })}
-        >
-          <div className="h-action-primary__top">
-            <span className="h-action-kicker">RECOMMENDED</span>
-            <span className="h-action-arrow">→</span>
-          </div>
-          <div>
-            <div className="h-action-primary__title">Play Auto</div>
-            <div className="h-action-primary__meta">
-              {sessionCards} cards · ~{Math.ceil(sessionCards / 2)} min
+            </div>
+          </Link>
+          <div className="h-mode-card__setting">
+            <span className="h-mode-card__setting-label">Interleaving</span>
+            <div className="h-seg" role="group" aria-label="Interleaving intensity">
+              {INTERLEAVING_LEVELS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`h-seg__btn${settings.interleaving_intensity === value ? ' h-seg__btn--active' : ''}`}
+                  aria-pressed={settings.interleaving_intensity === value}
+                  onClick={() => updateSettings({ interleaving_intensity: value })}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
-        </Link>
+        </article>
 
-        <Link
-          className="h-action-secondary"
-          to="/practice"
-          onClick={() => updateSettings({ focus_mode: 'new_material' })}
-        >
-          <span className="h-action-kicker h-action-kicker--muted">SESSION</span>
-          <div>
-            <div className="h-action-secondary__title">New material</div>
-            <p className="h-action-secondary__copy">Lean toward fresh cards you haven't met yet.</p>
-          </div>
-        </Link>
-
-        <Link
-          className="h-action-secondary"
-          to="/practice"
-          onClick={() => updateSettings({ focus_mode: 'review' })}
-        >
-          <span className="h-action-kicker h-action-kicker--muted">SESSION</span>
-          <div>
-            <div className="h-action-secondary__title">Review</div>
-            <p className="h-action-secondary__copy">
-              {(dueSummary?.due_now ?? 0) > 0
-                ? `${dueSummary.due_now} card${dueSummary.due_now === 1 ? '' : 's'} due now — clear them before they fade.`
-                : 'Settle the cards that are due back today.'}
-            </p>
-          </div>
-        </Link>
-      </div>
-
-      {/* ── Practice settings panel ───────────────────────────────── */}
-      {shouldRenderPracticeSettings ? (
-        <div
-          id="h-settings-panel"
-          className={`h-settings ${isPracticeSettingsOpen ? 'h-settings--open' : 'h-settings--closing'}`}
-        >
-          <label className="setting-field">
-            <span>New material flashcard count</span>
-            <input
-              type="range" min="5" max="12"
+        <article className="h-mode-card">
+          <Link
+            className="h-mode-card__link"
+            to="/practice"
+            onClick={() => updateSettings({ focus_mode: 'new_material' })}
+          >
+            <div className="h-mode-card__top">
+              <span className="h-action-kicker h-action-kicker--muted">SESSION</span>
+              <span className="h-action-arrow h-action-arrow--muted">→</span>
+            </div>
+            <div>
+              <div className="h-mode-card__title">New material</div>
+              <div className="h-mode-card__meta">Fresh cards you haven't met yet.</div>
+            </div>
+          </Link>
+          <div className="h-mode-card__setting">
+            <span className="h-mode-card__setting-label">Cards per session</span>
+            <ModeStepper
               value={settings.new_block_size}
-              onChange={(e) => updateSettings({ new_block_size: Number(e.target.value) })}
+              range={NEW_BLOCK_SIZE_RANGE}
+              onStep={(delta) => stepSetting('new_block_size', delta, NEW_BLOCK_SIZE_RANGE)}
+              decrementLabel="Fewer new cards per session"
+              incrementLabel="More new cards per session"
             />
-            <strong>{settings.new_block_size} cards</strong>
-          </label>
-
-          <label className="setting-field">
-            <span>Review stack flashcard count</span>
-            <input
-              type="range" min="20" max="50" step="5"
-              value={settings.review_batch_size}
-              onChange={(e) => updateSettings({ review_batch_size: Number(e.target.value) })}
-            />
-            <strong>{settings.review_batch_size} cards</strong>
-          </label>
-
-          <label className="setting-field">
-            <span>Interleaving intensity</span>
-            <select
-              className="setting-field__select"
-              value={settings.interleaving_intensity}
-              onChange={(e) => updateSettings({ interleaving_intensity: e.target.value })}
-            >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-          </label>
-
-          <div className="smart-practice-panel__controls-copy">
-            <div className="smart-practice-panel__controls-copy-block">
-              <strong>Session types</strong>
-              <ul>
-                <li>Auto mixes new material and review for the default run.</li>
-                <li>New material biases the session toward fresh cards.</li>
-                <li>Review prioritizes pending recall before expanding.</li>
-              </ul>
-            </div>
-            <div className="smart-practice-panel__controls-copy-block">
-              <strong>Interleaving intensity</strong>
-              <ul>
-                <li>Low keeps cards grouped in a steadier rhythm.</li>
-                <li>Medium mixes new and review cards more evenly.</li>
-                <li>High creates a more varied session with faster alternation.</li>
-              </ul>
-            </div>
-            <div className="smart-practice-panel__controls-copy-block">
-              <strong>How progression works</strong>
-              <ul>
-                <li>New blocks unlock only after each card reaches an initial 2-streak mastery threshold.</li>
-                <li>Review misses go back to the end of the queue instead of repeating immediately.</li>
-                <li>Mastered cards are scheduled with spaced repetition (FSRS) and come back just before you would forget them.</li>
-              </ul>
-            </div>
           </div>
-        </div>
-      ) : null}
+        </article>
+
+        <article className={`h-mode-card${dueNow > 0 ? ' h-mode-card--due' : ''}`}>
+          <Link
+            className="h-mode-card__link"
+            to="/practice"
+            onClick={() => updateSettings({ focus_mode: 'review' })}
+          >
+            <div className="h-mode-card__top">
+              <span className="h-action-kicker h-action-kicker--muted">SESSION</span>
+              <span className="h-action-arrow h-action-arrow--muted">→</span>
+            </div>
+            <div>
+              <div className="h-mode-card__title">Review</div>
+              <div className="h-mode-card__meta">
+                {dueNow > 0
+                  ? `${dueNow} card${dueNow === 1 ? '' : 's'} due now`
+                  : nextDueLabel
+                    ? `Nothing due · next ${nextDueLabel}`
+                    : 'Settle the cards due back today.'}
+              </div>
+            </div>
+          </Link>
+          <div className="h-mode-card__setting">
+            <span className="h-mode-card__setting-label">Cards per session</span>
+            <ModeStepper
+              value={settings.review_batch_size}
+              range={REVIEW_BATCH_SIZE_RANGE}
+              onStep={(delta) => stepSetting('review_batch_size', delta, REVIEW_BATCH_SIZE_RANGE)}
+              decrementLabel="Fewer review cards per session"
+              incrementLabel="More review cards per session"
+            />
+          </div>
+        </article>
+      </div>
 
       {/* ── Home decks ────────────────────────────────────────────── */}
-      <section className="h-decks" ref={deckReviewSectionRef}>
+      <section className="h-decks">
         <div className="h-decks__header">
           <div className="h-decks__header-left">
             <h2 className="h-decks__title">Home decks</h2>

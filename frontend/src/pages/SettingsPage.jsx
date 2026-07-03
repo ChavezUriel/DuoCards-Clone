@@ -521,7 +521,7 @@ function SettingsPage() {
   return (
     <div className="st-page">
       <div className="st-header">
-        <p className="h-hero__kicker">YOUR ACCOUNT</p>
+        <p className="st-kicker">YOUR ACCOUNT</p>
         <h1 className="st-header__title">Settings</h1>
       </div>
 

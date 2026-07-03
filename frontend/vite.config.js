@@ -7,6 +7,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    // PORT is set by tooling (e.g. preview sessions); default stays 5173.
+    port: Number(process.env.PORT) || 5173,
   },
 });
