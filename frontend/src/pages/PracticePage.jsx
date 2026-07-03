@@ -129,7 +129,7 @@ function PracticePage() {
         return;
       }
 
-      if (status !== 'ready' || !session?.current_card || isSubmitting) {
+      if (status !== 'ready' || !session?.current_card || isSubmitting || isDetailsVisible) {
         return;
       }
 
@@ -166,7 +166,7 @@ function PracticePage() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isAnswerVisible, isSubmitting, session, status]);
+  }, [isAnswerVisible, isDetailsVisible, isSubmitting, session, status]);
 
   useEffect(() => {
     if (!isAnswerVisible) {

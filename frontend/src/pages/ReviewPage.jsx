@@ -64,7 +64,7 @@ function ReviewPage() {
         return;
       }
 
-      if (status !== 'ready' || !card || isSubmitting) {
+      if (status !== 'ready' || !card || isSubmitting || isDetailsVisible) {
         return;
       }
 
@@ -101,7 +101,7 @@ function ReviewPage() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [card, isAnswerVisible, isSubmitting, status]);
+  }, [card, isAnswerVisible, isDetailsVisible, isSubmitting, status]);
 
   useEffect(() => {
     if (!isAnswerVisible) {
