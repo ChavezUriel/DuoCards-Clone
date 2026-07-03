@@ -27,7 +27,7 @@ const fs = require('fs');
 const path = require('path');
 const { chatJson, MODEL, BASE_URL } = require('./lib/ollama.cjs');
 const {
-  blueprintPrompt, wordSetPrompt, lexicalPrompt, equivalentsPrompt, examplesPrompt, mnemonicPrompt, PROMPT_VERSIONS,
+  blueprintPrompt, wordSetPrompt, lexicalPrompt, equivalentsPrompt, examplesPrompt, mnemonicPrompt, synonymsPrompt, PROMPT_VERSIONS,
 } = require('./lib/prompts.cjs');
 const { validateCard, hasIssues, flatten } = require('./lib/validate.cjs');
 const { optText, normList, normCard, pairKey } = require('./lib/cards.cjs');
@@ -103,6 +103,7 @@ function toSeedCard(card) {
   if (optText(card.definition_en)) out.definition_en = card.definition_en;
   out.main_translations_es = normList(card.main_translations_es);
   out.collocations = normList(card.collocations);
+  out.synonyms_en = normList(card.synonyms_en);
   // example_sentence mirrors the English example (the column the app reads).
   if (optText(card.example_en)) out.example_sentence = card.example_en;
   if (optText(card.example_es)) out.example_es = card.example_es;
@@ -172,6 +173,9 @@ function applyExamples(card, resp) {
 function applyMnemonic(card, resp) {
   card.mnemonic_en = optText(resp.mnemonic_en);
 }
+function applySynonyms(card, resp) {
+  card.synonyms_en = normList(resp.synonyms_en).slice(0, 3);
+}
 
 // Enrich a single card with up to 4 focused sub-prompts + targeted repair.
 // Only the sub-prompts whose fields are missing/invalid run: fresh drafts get
@@ -190,6 +194,7 @@ async function enrichCard(draft, maxRepairs) {
     if (issues.equivalents.length) applyEquivalents(card, await runPrompt(equivalentsPrompt(card, hint(issues.equivalents))));
     if (issues.examples.length) applyExamples(card, await runPrompt(examplesPrompt(card, hint(issues.examples))));
     if (issues.mnemonic.length) applyMnemonic(card, await runPrompt(mnemonicPrompt(card, hint(issues.mnemonic))));
+    if (issues.synonyms.length) applySynonyms(card, await runPrompt(synonymsPrompt(card, hint(issues.synonyms))));
   }
 
   return { card, issues: validateCard(card) };

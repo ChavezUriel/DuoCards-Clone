@@ -37,6 +37,7 @@ function normCard(card, deckTitle) {
     definition_en: optText(card.definition_en),
     main_translations_es: normList(card.main_translations_es),
     collocations: normList(card.collocations),
+    synonyms_en: normList(card.synonyms_en),
     example_sentence: optText(card.example_sentence),
     example_es: optText(card.example_es),
     example_en: optText(card.example_en),

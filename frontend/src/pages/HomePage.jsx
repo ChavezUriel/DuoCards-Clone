@@ -77,6 +77,7 @@ function buildDeckWordIndex(preview) {
     .flatMap((card) => [
       card.answer_en, card.prompt_es, card.section_name, card.definition_en,
       ...(card.main_translations_es || []), ...(card.collocations || []),
+      ...(card.synonyms_en || []),
       card.example_sentence, card.example_en, card.example_es,
     ])
     .filter(Boolean)

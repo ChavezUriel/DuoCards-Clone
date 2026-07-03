@@ -44,6 +44,7 @@ function CardDetailsModal({
       example_es: nullableText(formValues.example_es),
       example_en: nullableText(formValues.example_en),
       mnemonic_en: nullableText(formValues.mnemonic_en),
+      synonyms_en: splitMultiline(formValues.synonyms_en),
     });
 
     if (savedCard) {
@@ -164,6 +165,21 @@ function CardDetailsModal({
           </div>
 
           <div>
+            <span>Synonyms (English)</span>
+            {isEditing ? (
+              <textarea value={formValues.synonyms_en} onChange={(event) => updateField('synonyms_en', event.target.value)} rows={3} />
+            ) : card.synonyms_en?.length ? (
+              <ul>
+                {card.synonyms_en.map((synonym) => (
+                  <li key={synonym}>{synonym}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>Not set</p>
+            )}
+          </div>
+
+          <div>
             <span>Example sentence</span>
             {isEditing ? (
               <textarea value={formValues.example_sentence} onChange={(event) => updateField('example_sentence', event.target.value)} rows={3} />
@@ -272,6 +288,7 @@ function buildFormValues(card) {
     definition_en: card.definition_en ?? '',
     main_translations_es: (card.main_translations_es ?? []).join('\n'),
     collocations: (card.collocations ?? []).join('\n'),
+    synonyms_en: (card.synonyms_en ?? []).join('\n'),
     example_sentence: card.example_sentence ?? '',
     example_es: card.example_es ?? '',
     example_en: card.example_en ?? '',

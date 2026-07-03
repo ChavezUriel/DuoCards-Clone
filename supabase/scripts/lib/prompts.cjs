@@ -11,6 +11,7 @@ const PROMPT_VERSIONS = {
   equivalents: 'enrich-equivalents-v1',
   examples: 'enrich-examples-v1',
   mnemonic: 'enrich-mnemonic-v1',
+  synonyms: 'enrich-synonyms-v1',
 };
 
 function deckContext(spec) {
@@ -164,6 +165,28 @@ function mnemonicPrompt(card, issues) {
   return { system, user, temperature: 0.5 };
 }
 
+// ---- Stage 3e: synonyms (synonyms_en) --------------------------------------
+// English synonyms of the English answer — the "original language" counterpart
+// of main_translations_es (Spanish equivalents of the Spanish prompt). Gives
+// learners a broader lexical network around the answer.
+function synonymsPrompt(card, issues) {
+  const system =
+    'You list English synonyms of the English answer of a Spanish to English flashcard. Return JSON only.';
+  const user = JSON.stringify(withIssues({
+    task: 'Provide English synonyms of the English answer.',
+    card: { spanish: card.spanish_text, english: card.english_text },
+    required_output: { synonyms_en: ['string'] },
+    rules: [
+      'synonyms_en: 1 to 3 English words or short phrases that mean the same as the English answer (synonyms, NOT translations).',
+      'Each item must be in English only (no Spanish, no inverted ¿ ¡ punctuation).',
+      'Do not repeat the English answer itself as a synonym.',
+      'No duplicates within the list. Keep each item short and natural.',
+      'Return JSON only, no commentary or markdown.',
+    ],
+  }, issues));
+  return { system, user, temperature: 0.2 };
+}
+
 module.exports = {
   PROMPT_VERSIONS,
   blueprintPrompt,
@@ -172,4 +195,5 @@ module.exports = {
   equivalentsPrompt,
   examplesPrompt,
   mnemonicPrompt,
+  synonymsPrompt,
 };

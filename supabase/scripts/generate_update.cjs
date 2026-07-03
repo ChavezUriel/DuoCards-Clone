@@ -73,6 +73,7 @@ for (const deck of decks.values()) {
     definition_en: c.definition_en,
     main_translations_es: c.main_translations_es,
     collocations: c.collocations,
+    synonyms_en: c.synonyms_en,
     example_sentence: c.example_sentence,
     example_es: c.example_es,
     example_en: c.example_en,
@@ -87,12 +88,13 @@ for (const deck of decks.values()) {
   sql += `  section_name = x.section_name, part_of_speech = x.part_of_speech, definition_en = x.definition_en,\n`;
   sql += `  main_translations_es = coalesce(x.main_translations_es, '[]'::jsonb),\n`;
   sql += `  collocations = coalesce(x.collocations, '[]'::jsonb),\n`;
+  sql += `  synonyms_en = coalesce(x.synonyms_en, '[]'::jsonb),\n`;
   sql += `  example_sentence = x.example_sentence, example_es = x.example_es, example_en = x.example_en,\n`;
   sql += `  mnemonic_en = coalesce(x.mnemonic_en, c.mnemonic_en)\n`;
   sql += `from (select id from public.decks where slug = ${sq(deck.slug)}) dk\n`;
   sql += `cross join jsonb_to_recordset(${jsonLit(cardsJson)}::jsonb) as x(\n`;
   sql += `  spanish_text text, english_text text, section_name text, part_of_speech text, definition_en text,\n`;
-  sql += `  main_translations_es jsonb, collocations jsonb, example_sentence text, example_es text, example_en text, mnemonic_en text\n`;
+  sql += `  main_translations_es jsonb, collocations jsonb, synonyms_en jsonb, example_sentence text, example_es text, example_en text, mnemonic_en text\n`;
   sql += `)\n`;
   sql += `where c.deck_id = dk.id\n`;
   sql += `  and lower(c.spanish_text) = lower(x.spanish_text)\n`;

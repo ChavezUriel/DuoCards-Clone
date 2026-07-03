@@ -10,7 +10,7 @@ function isBlank(v) {
 }
 
 function validateCard(card) {
-  const issues = { lexical: [], equivalents: [], examples: [], mnemonic: [], card: [] };
+  const issues = { lexical: [], equivalents: [], examples: [], mnemonic: [], synonyms: [], card: [] };
 
   // --- card-level ---
   if (isBlank(card.spanish_text)) issues.card.push('spanish_text is empty');
@@ -60,6 +60,15 @@ function validateCard(card) {
     issues.mnemonic.push('mnemonic_en must be English (no ¿ or ¡)');
   } else if (String(card.mnemonic_en).length > 220) {
     issues.mnemonic.push('mnemonic_en must be one short sentence (max 220 chars)');
+  }
+
+  // --- synonyms (synonyms_en) ---
+  const syn = Array.isArray(card.synonyms_en) ? card.synonyms_en : [];
+  if (syn.length < 1 || syn.length > 3) {
+    issues.synonyms.push('synonyms_en must contain 1 to 3 items');
+  }
+  if (syn.some((s) => INVERTED_PUNCT.test(String(s)))) {
+    issues.synonyms.push('synonyms_en must be English (no ¿ or ¡)');
   }
 
   return issues;

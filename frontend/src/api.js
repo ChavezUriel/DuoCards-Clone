@@ -135,6 +135,7 @@ export function updateCard(cardId, payload) {
     p_definition_en: payload.definition_en ?? null,
     p_main_translations_es: payload.main_translations_es ?? [],
     p_collocations: payload.collocations ?? [],
+    p_synonyms_en: payload.synonyms_en ?? [],
     p_example_sentence: payload.example_sentence ?? null,
     p_example_es: payload.example_es ?? null,
     p_example_en: payload.example_en ?? null,
