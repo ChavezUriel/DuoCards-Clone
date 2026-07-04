@@ -278,3 +278,18 @@ export function submitSmartPracticeReview(sessionId, cardId, result) {
 export function undoSmartPracticeReview(sessionId) {
   return rpc('undo_smart_practice_review', { p_session_id: sessionId });
 }
+
+// Plausible wrong English answers for a recognition minigame (multiple choice).
+// Returns an array of sibling answer strings from the same deck/section; the
+// caller shuffles them together with the real answer. See docs/minigames.md §8.3.
+export function getMinigameDistractors(cardId, n = 3) {
+  return rpc('get_minigame_distractors', { p_card_id: cardId, p_n: n });
+}
+
+// Advance the current smart-practice card WITHOUT grading it — used for a Tier-B
+// recognition win, which must never touch the FSRS schedule or the graduation
+// streak. Returns a fresh session snapshot (same shape as the session in
+// submitSmartPracticeReview's response). See docs/minigames.md §5.3.
+export function skipSmartPracticeCard(sessionId, cardId) {
+  return rpc('skip_smart_practice_card', { p_session_id: sessionId, p_card_id: cardId });
+}

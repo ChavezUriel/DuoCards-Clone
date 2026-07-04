@@ -13,6 +13,11 @@ export const DEFAULT_PRACTICE_SETTINGS = {
       // Phase 1 (Tier A — counts toward scheduling): type the English for a
       // Spanish prompt. See docs/minigames.md §4 (#1) and §9 Phase 1.
       type_translation: true,
+      // Phase 2 (Tier B — practice only): pick the English translation from a
+      // few options. A clean wrong pick records a lapse; a correct pick advances
+      // without grading, so it never inflates the schedule. On by default per the
+      // plan's example (docs/minigames.md §7.1, §11.4); §4 (#4), §9 Phase 2.
+      multiple_choice: true,
     },
   },
 };

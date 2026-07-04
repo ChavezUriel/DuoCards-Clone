@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { startSmartPracticeSession, submitSmartPracticeReview, undoSmartPracticeReview, updateCard } from '../api';
+import {
+  getMinigameDistractors,
+  skipSmartPracticeCard,
+  startSmartPracticeSession,
+  submitSmartPracticeReview,
+  undoSmartPracticeReview,
+  updateCard,
+} from '../api';
 import CardDetailsModal from '../components/CardDetailsModal';
-import MinigameHost, { selectModality } from '../components/MinigameHost';
+import MinigameHost, { resolveModality, selectModality } from '../components/MinigameHost';
 import { loadPracticeSettings } from '../practiceSettings';
 
 const FIRST_IDLE_HINT_DELAY_MS = 10000;
@@ -71,6 +78,12 @@ function PracticePage() {
   const hasShownIdleHintRef = useRef(false);
   const feedbackTimeoutRef = useRef(null);
   const flashcardActionsRef = useRef(null);
+  // Per-session cache of minigame distractors, keyed by card_id. Cards cycle
+  // through the queue repeatedly, so caching a card's distractors on first fetch
+  // makes every later presentation instant (docs/minigames.md §8.3, §12 latency).
+  // The counter just forces a re-render when an async fetch settles.
+  const distractorCacheRef = useRef(new Map());
+  const [, setDistractorVersion] = useState(0);
 
   useEffect(() => () => {
     if (feedbackTimeoutRef.current) {
@@ -79,11 +92,17 @@ function PracticePage() {
   }, []);
 
   // The classic flashcard is the only arrow-driven modality. Other modalities
-  // (e.g. the typing game) own their own input and keyboard handling, so the
+  // (typing, multiple choice) own their own input and keyboard handling, so the
   // global reveal/swipe shortcuts and the idle swipe hint stay inert for them.
-  // See docs/minigames.md §8.4.
-  const currentModality = session?.current_card
-    ? selectModality(session.current_card, practiceSettings)
+  // Reads through the distractor cache (distractorVersion re-triggers this on
+  // fetch), so a multiple-choice card that falls back to classic for want of
+  // distractors correctly re-enables the arrow handlers. See docs/minigames.md §8.4.
+  const currentCard = session?.current_card ?? null;
+  const currentDistractorEntry = currentCard
+    ? distractorCacheRef.current.get(currentCard.card_id)
+    : undefined;
+  const currentModality = currentCard
+    ? resolveModality(currentCard, practiceSettings, currentDistractorEntry)
     : 'classic';
   const isClassicModality = currentModality === 'classic';
 
@@ -134,6 +153,36 @@ function PracticePage() {
       cancelled = true;
     };
   }, []);
+
+  // Fetch the current card's multiple-choice distractors as soon as it arrives,
+  // so the tiles are ready by the time the learner has read the prompt. Results
+  // are cached per session (see distractorCacheRef), so a re-queued card reuses
+  // them instantly. Only fires when the card is provisionally MC-eligible; a
+  // failed/empty fetch is cached too, and resolveModality then falls back to
+  // classic. See docs/minigames.md §8.3.
+  useEffect(() => {
+    const card = session?.current_card;
+    if (!card || selectModality(card, practiceSettings) !== 'multiple_choice') {
+      return;
+    }
+
+    const cache = distractorCacheRef.current;
+    if (cache.has(card.card_id)) {
+      return;
+    }
+
+    cache.set(card.card_id, { status: 'loading', distractors: [] });
+    setDistractorVersion((version) => version + 1);
+
+    getMinigameDistractors(card.card_id, 3)
+      .then((list) => {
+        cache.set(card.card_id, { status: 'ready', distractors: Array.isArray(list) ? list : [] });
+      })
+      .catch(() => {
+        cache.set(card.card_id, { status: 'error', distractors: [] });
+      })
+      .finally(() => setDistractorVersion((version) => version + 1));
+  }, [session?.current_card?.card_id, practiceSettings]);
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -220,15 +269,33 @@ function PracticePage() {
     };
   }, [isAnswerVisible, isClassicModality, isDetailsVisible, isSubmitting, session?.current_card?.card_id, status]);
 
-  // Unified resolution for every answer modality. Phase 0 only exercises the
-  // counted grade path (the classic swipe); `skip` (Tier-B wins) and non-counting
-  // practice outcomes are wired up in later phases — see docs/minigames.md §5, §8.2.
+  // Unified resolution for every answer modality (docs/minigames.md §5, §8.2):
+  //   * skip (a Tier-B recognition win) -> advance WITHOUT grading via the skip RPC.
+  //   * counted result -> the graded path (classic swipe, Tier-A typing).
+  //   * anything else (non-counting practice outcome) -> resolve locally, no RPC.
   async function resolveCard({ result, counts = false, skip = false }) {
     if (!session?.current_card) {
       return;
     }
 
-    if (skip || !counts || !result) {
+    if (skip) {
+      try {
+        setIsSubmitting(true);
+        // Returns a bare session snapshot (not { session, review_feedback }), so
+        // set it directly. No FSRS change, so there is no scheduling feedback to show.
+        const response = await skipSmartPracticeCard(session.summary.session_id, session.current_card.card_id);
+        setSession(response);
+        setIsAnswerVisible(false);
+      } catch (skipError) {
+        setError(skipError.message);
+        setStatus('error');
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    if (!counts || !result) {
       return;
     }
 
@@ -386,6 +453,7 @@ function PracticePage() {
             card={session.current_card}
             settings={practiceSettings}
             onResolve={resolveCard}
+            distractorEntry={currentDistractorEntry}
             isAnswerVisible={isAnswerVisible}
             isSubmitting={isSubmitting}
             isIdleHintVisible={isIdleHintVisible}

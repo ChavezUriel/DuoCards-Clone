@@ -358,6 +358,11 @@ const MINIGAME_META = {
     description: 'Type the English for the Spanish prompt. Correct or wrong, it grades the card just like a swipe.',
     counts: true,
   },
+  multiple_choice: {
+    label: 'Multiple choice',
+    description: 'Pick the English translation from a few options. A wrong pick reschedules the card, but a correct pick never changes when it’s next due.',
+    counts: false,
+  },
 };
 
 function MinigamesSection() {
