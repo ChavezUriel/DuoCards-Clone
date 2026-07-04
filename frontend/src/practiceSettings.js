@@ -18,6 +18,12 @@ export const DEFAULT_PRACTICE_SETTINGS = {
       // without grading, so it never inflates the schedule. On by default per the
       // plan's example (docs/minigames.md §7.1, §11.4); §4 (#4), §9 Phase 2.
       multiple_choice: true,
+      // Phase 3 (Tier C — practice only): queue-external boundary games that only
+      // ever run as interstitials (warm-up / block boundary / cool-down) and never
+      // touch the schedule. On by default per the plan's example (docs/minigames.md
+      // §7.1); memory_grid = §4 (#8), speed_round = §4 (#7), §9 Phase 3.
+      memory_grid: true,
+      speed_round: true,
     },
   },
 };

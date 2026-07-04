@@ -1,6 +1,7 @@
 import Flashcard from './Flashcard';
 import TypeTranslation from './TypeTranslation';
 import MultipleChoice from './MultipleChoice';
+import { shouldPlayPerCardGame } from '../minigameFrequency';
 
 // A multiple-choice round needs the correct answer plus at least this many
 // distractors (so, 3+ tiles). Below that there aren't enough plausible siblings
@@ -16,6 +17,16 @@ export function selectModality(card, settings) {
   // Fallback contract (§7.3): with the master switch off, every card uses the
   // classic flashcard, identical to the app's behavior before minigames existed.
   if (!minigames?.enabled) {
+    return 'classic';
+  }
+
+  // Frequency dose (§6.3, §7.3): 'off' is pure classic; lighter tiers may leave a
+  // given presentation on the classic swipe even when a game is eligible below.
+  // Deterministic per (card, pass) so the modality never flickers between renders,
+  // and 'balanced'/'heavy' always pass — keeping the Phase 0–2 typing/MC behavior
+  // exactly as shipped at the default frequency.
+  const frequency = minigames.frequency ?? 'balanced';
+  if (!shouldPlayPerCardGame(card, frequency)) {
     return 'classic';
   }
 

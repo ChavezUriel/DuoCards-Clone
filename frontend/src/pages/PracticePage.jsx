@@ -10,7 +10,10 @@ import {
 } from '../api';
 import CardDetailsModal from '../components/CardDetailsModal';
 import MinigameHost, { resolveModality, selectModality } from '../components/MinigameHost';
+import InterstitialHost from '../components/InterstitialHost';
 import { loadPracticeSettings } from '../practiceSettings';
+import { chooseInterstitialGame, isInterstitialPlacementEnabled } from '../minigameFrequency';
+import { loadRecentCards, mergeRecentCards, saveRecentCards } from '../recentCards';
 
 const FIRST_IDLE_HINT_DELAY_MS = 10000;
 
@@ -84,6 +87,22 @@ function PracticePage() {
   // The counter just forces a re-render when an async fetch settles.
   const distractorCacheRef = useRef(new Map());
   const [, setDistractorVersion] = useState(0);
+  // Queue-external interstitial currently overlaying the card slot, or null. When
+  // set it fully replaces the card / complete panel and drives its own keyboard,
+  // so the classic handlers below stay inert (docs/minigames.md §6.1, §8.4).
+  const [activeInterstitial, setActiveInterstitial] = useState(null);
+  // Rolling pool of words seen this session, seeded from prior sessions so a
+  // warm-up (which runs before the first card) has material to draw from. Boundary
+  // games sample from here; nothing here reaches the FSRS schedule.
+  const seenCardsRef = useRef(loadRecentCards());
+  // One interstitial per placement per session: warm-up considered once at start,
+  // one break at the new→review boundary, one cool-down on completion (§6.3).
+  const warmupConsideredRef = useRef(false);
+  const boundaryShownRef = useRef(false);
+  const cooldownConsideredRef = useRef(false);
+
+  const minigameFrequency = practiceSettings?.minigames?.frequency ?? 'balanced';
+  const isInterstitialActive = activeInterstitial !== null;
 
   useEffect(() => () => {
     if (feedbackTimeoutRef.current) {
@@ -105,6 +124,54 @@ function PracticePage() {
     ? resolveModality(currentCard, practiceSettings, currentDistractorEntry)
     : 'classic';
   const isClassicModality = currentModality === 'classic';
+
+  // Build an interstitial for a placement, or null when the frequency doesn't
+  // allow it here or the seen-cards pool can't fill any enabled boundary game.
+  // Pre-samples the pool so the choice is stable for the life of the overlay.
+  function planInterstitial(placement) {
+    if (!isInterstitialPlacementEnabled(minigameFrequency, placement)) {
+      return null;
+    }
+    // Cool-down alternates its game by how many cards were completed, so a run of
+    // sessions doesn't always end on the same one (§6.3, deterministic — not a
+    // second randomizer). Warm-up / boundary key off the placement alone.
+    const seed = placement === 'cooldown' ? (session?.summary?.completed_cards ?? 0) : 0;
+    const choice = chooseInterstitialGame(placement, seenCardsRef.current, practiceSettings, seed);
+    return choice ? { placement, game: choice.game, cards: choice.cards } : null;
+  }
+
+  // Show a one-off break when a mixed session crosses from its new block into
+  // reviews (remaining_new hits 0 while reviews remain), ~1 per transition (§6.3).
+  // Both graded and skipped advances can trip the boundary, so this runs from
+  // resolveCard with the summary captured before the queue moved.
+  // Returns true when it takes over the screen, so the caller can suppress the
+  // scheduling toast that would otherwise sit on top of the interstitial.
+  function maybeShowBoundaryInterstitial(previousSummary, nextSession) {
+    if (boundaryShownRef.current) {
+      return false;
+    }
+    const next = nextSession?.summary;
+    // Completion is the cool-down's job, not the boundary's.
+    if (!next || !nextSession?.current_card || next.mode !== 'mixed') {
+      return false;
+    }
+    const crossedNewToReview =
+      (previousSummary?.remaining_new ?? 0) > 0 && next.remaining_new === 0 && (next.remaining_review ?? 0) > 0;
+    if (!crossedNewToReview) {
+      return false;
+    }
+    const plan = planInterstitial('boundary');
+    if (!plan) {
+      return false;
+    }
+    boundaryShownRef.current = true;
+    setActiveInterstitial(plan);
+    return true;
+  }
+
+  function handleInterstitialDone() {
+    setActiveInterstitial(null);
+  }
 
   function clearIdleHintTimer() {
     if (idleHintTimeoutRef.current) {
@@ -184,6 +251,51 @@ function PracticePage() {
       .finally(() => setDistractorVersion((version) => version + 1));
   }, [session?.current_card?.card_id, practiceSettings]);
 
+  // Accumulate each card the session surfaces into the rolling pool (newest-first,
+  // capped) and persist it, so boundary games have material and a future session's
+  // warm-up can re-activate these words. Purely local — never read by the scheduler.
+  useEffect(() => {
+    const card = session?.current_card;
+    if (!card) {
+      return;
+    }
+    seenCardsRef.current = mergeRecentCards(seenCardsRef.current, [card]);
+    saveRecentCards(seenCardsRef.current);
+  }, [session?.current_card?.card_id]);
+
+  // Warm-up: considered once, as soon as the session is ready. Only fires at
+  // frequencies that enable it (heavy) and only when prior words already exist —
+  // a brand-new user's empty pool simply skips it (§6.1 open decision).
+  useEffect(() => {
+    if (status !== 'ready' || warmupConsideredRef.current) {
+      return;
+    }
+    warmupConsideredRef.current = true;
+    if (!session?.current_card) {
+      return;
+    }
+    const plan = planInterstitial('warmup');
+    if (plan) {
+      setActiveInterstitial(plan);
+    }
+    // planInterstitial closes over the latest settings/pool; run once when ready.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
+  // Cool-down: considered once when the queue empties (complete screen). The
+  // interstitial overlays the complete panel; dismissing it reveals the panel.
+  useEffect(() => {
+    if (status !== 'ready' || session?.current_card || cooldownConsideredRef.current) {
+      return;
+    }
+    cooldownConsideredRef.current = true;
+    const plan = planInterstitial('cooldown');
+    if (plan) {
+      setActiveInterstitial(plan);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, session?.current_card]);
+
   useEffect(() => {
     function handleKeyDown(event) {
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
@@ -194,9 +306,10 @@ function PracticePage() {
         return;
       }
 
-      // Non-classic modalities drive themselves (e.g. the typing input owns Enter),
-      // so the classic reveal/swipe shortcuts must not fire for them.
-      if (!isClassicModality) {
+      // An interstitial owns the whole screen and its own keys (§8.4); classic
+      // shortcuts must not fire underneath it. Non-classic modalities likewise
+      // drive themselves (e.g. the typing input owns Enter).
+      if (isInterstitialActive || !isClassicModality) {
         return;
       }
 
@@ -233,7 +346,7 @@ function PracticePage() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isAnswerVisible, isClassicModality, isDetailsVisible, isSubmitting, session, status]);
+  }, [isAnswerVisible, isClassicModality, isDetailsVisible, isInterstitialActive, isSubmitting, session, status]);
 
   useEffect(() => {
     if (!isAnswerVisible) {
@@ -243,9 +356,16 @@ function PracticePage() {
 
   useEffect(() => {
     // The idle hint only teaches the classic tap-to-reveal / swipe gestures, so
-    // skip it entirely for other modalities (also avoids re-rendering on every
-    // keystroke into the typing input).
-    if (status !== 'ready' || !session?.current_card || isSubmitting || isDetailsVisible || !isClassicModality) {
+    // skip it entirely for other modalities and while an interstitial is up (also
+    // avoids re-rendering on every keystroke into the typing input).
+    if (
+      status !== 'ready' ||
+      !session?.current_card ||
+      isSubmitting ||
+      isDetailsVisible ||
+      !isClassicModality ||
+      isInterstitialActive
+    ) {
       setIsIdleHintVisible(false);
       clearIdleHintTimer();
       return undefined;
@@ -267,7 +387,7 @@ function PracticePage() {
       window.removeEventListener('pointerdown', handleInteraction, true);
       window.removeEventListener('keydown', handleInteraction, true);
     };
-  }, [isAnswerVisible, isClassicModality, isDetailsVisible, isSubmitting, session?.current_card?.card_id, status]);
+  }, [isAnswerVisible, isClassicModality, isDetailsVisible, isInterstitialActive, isSubmitting, session?.current_card?.card_id, status]);
 
   // Unified resolution for every answer modality (docs/minigames.md §5, §8.2):
   //   * skip (a Tier-B recognition win) -> advance WITHOUT grading via the skip RPC.
@@ -278,6 +398,9 @@ function PracticePage() {
       return;
     }
 
+    // Captured before the queue moves so we can detect a block boundary afterward.
+    const previousSummary = session.summary;
+
     if (skip) {
       try {
         setIsSubmitting(true);
@@ -286,6 +409,7 @@ function PracticePage() {
         const response = await skipSmartPracticeCard(session.summary.session_id, session.current_card.card_id);
         setSession(response);
         setIsAnswerVisible(false);
+        maybeShowBoundaryInterstitial(previousSummary, response);
       } catch (skipError) {
         setError(skipError.message);
         setStatus('error');
@@ -304,8 +428,10 @@ function PracticePage() {
       const response = await submitSmartPracticeReview(session.summary.session_id, session.current_card.card_id, result);
       setSession(response.session);
       setIsAnswerVisible(false);
+      const showedBoundary = maybeShowBoundaryInterstitial(previousSummary, response.session);
 
-      if (response.review_feedback) {
+      // Skip the scheduling toast when a boundary interstitial just took over.
+      if (!showedBoundary && response.review_feedback) {
         setReviewFeedback(response.review_feedback);
         if (feedbackTimeoutRef.current) {
           window.clearTimeout(feedbackTimeoutRef.current);
@@ -408,7 +534,7 @@ function PracticePage() {
               <span>Home</span>
             </Link>
 
-            {summary.can_undo ? (
+            {summary.can_undo && !isInterstitialActive ? (
               <button
                 type="button"
                 className="back-link back-link--home review-undo-button"
@@ -448,7 +574,14 @@ function PracticePage() {
           </div>
         ) : null}
 
-        {session.current_card ? (
+        {activeInterstitial ? (
+          <InterstitialHost
+            placement={activeInterstitial.placement}
+            game={activeInterstitial.game}
+            cards={activeInterstitial.cards}
+            onDone={handleInterstitialDone}
+          />
+        ) : session.current_card ? (
           <MinigameHost
             card={session.current_card}
             settings={practiceSettings}
@@ -475,7 +608,7 @@ function PracticePage() {
           </section>
         )}
 
-        {session.current_card && isDetailsVisible ? (
+        {!isInterstitialActive && session.current_card && isDetailsVisible ? (
           <CardDetailsModal
             card={session.current_card}
             isPending={isSavingCard}

@@ -363,6 +363,16 @@ const MINIGAME_META = {
     description: 'Pick the English translation from a few options. A wrong pick reschedules the card, but a correct pick never changes when it’s next due.',
     counts: false,
   },
+  memory_grid: {
+    label: 'Memory grid',
+    description: 'Match Spanish words to their English answers in a quick warm-up or cool-down. Purely for fun — it never changes your schedule.',
+    counts: false,
+  },
+  speed_round: {
+    label: 'Speed round',
+    description: 'A fast burst of multiple-choice questions between rounds. Just for practice — it never changes when a card is next due.',
+    counts: false,
+  },
 };
 
 function MinigamesSection() {
