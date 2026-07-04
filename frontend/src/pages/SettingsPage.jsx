@@ -349,6 +349,17 @@ const MINIGAME_FREQUENCY_OPTIONS = [
   { value: 'heavy', label: 'Heavy' },
 ];
 
+// Presentation metadata for each game key in settings.minigames.games. `counts`
+// drives the Tier-A "Counts toward scheduling" vs practice-only badge. Keys added
+// here as each rollout phase ships a game; unknown keys fall back to the raw key.
+const MINIGAME_META = {
+  type_translation: {
+    label: 'Type the translation',
+    description: 'Type the English for the Spanish prompt. Correct or wrong, it grades the card just like a swipe.',
+    counts: true,
+  },
+};
+
 function MinigamesSection() {
   const [settings, setSettings] = useState(() => loadPracticeSettings());
   const minigames = settings.minigames;
@@ -413,7 +424,39 @@ function MinigamesSection() {
             No minigames yet — they’ll appear here as they’re added, each labeled with whether it counts toward
             scheduling. Your preferences are saved and ready.
           </p>
-        ) : null}
+        ) : (
+          <ul className={`st-minigame-list${minigames.enabled ? '' : ' st-minigame-list--disabled'}`}>
+            {gameEntries.map(([key, isOn]) => {
+              const meta = MINIGAME_META[key] ?? { label: key, description: '', counts: false };
+              return (
+                <li className="st-row" key={key}>
+                  <div className="st-row__info">
+                    <span className="st-row__label">{meta.label}</span>
+                    {meta.description ? <span className="st-row__meta">{meta.description}</span> : null}
+                    <span className={`st-chip st-minigame-badge${meta.counts ? '' : ' st-chip--muted'}`}>
+                      {meta.counts ? 'Counts toward scheduling' : 'Practice only'}
+                    </span>
+                  </div>
+                  <label className="st-switch">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(isOn)}
+                      disabled={!minigames.enabled}
+                      onChange={() =>
+                        persistMinigames({
+                          ...minigames,
+                          games: { ...minigames.games, [key]: !isOn },
+                        })
+                      }
+                      aria-label={`Toggle ${meta.label}`}
+                    />
+                    <span className="st-switch__track" aria-hidden="true" />
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </section>
   );

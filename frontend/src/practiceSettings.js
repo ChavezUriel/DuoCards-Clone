@@ -9,7 +9,11 @@ export const DEFAULT_PRACTICE_SETTINGS = {
     frequency: 'balanced',
     // One entry per game, added as each rollout phase ships one. An empty map
     // means every card falls back to the classic flashcard (today's behavior).
-    games: {},
+    games: {
+      // Phase 1 (Tier A — counts toward scheduling): type the English for a
+      // Spanish prompt. See docs/minigames.md §4 (#1) and §9 Phase 1.
+      type_translation: true,
+    },
   },
 };
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { startSmartPracticeSession, submitSmartPracticeReview, undoSmartPracticeReview, updateCard } from '../api';
 import CardDetailsModal from '../components/CardDetailsModal';
-import MinigameHost from '../components/MinigameHost';
+import MinigameHost, { selectModality } from '../components/MinigameHost';
 import { loadPracticeSettings } from '../practiceSettings';
 
 const FIRST_IDLE_HINT_DELAY_MS = 10000;
@@ -78,6 +78,15 @@ function PracticePage() {
     }
   }, []);
 
+  // The classic flashcard is the only arrow-driven modality. Other modalities
+  // (e.g. the typing game) own their own input and keyboard handling, so the
+  // global reveal/swipe shortcuts and the idle swipe hint stay inert for them.
+  // See docs/minigames.md §8.4.
+  const currentModality = session?.current_card
+    ? selectModality(session.current_card, practiceSettings)
+    : 'classic';
+  const isClassicModality = currentModality === 'classic';
+
   function clearIdleHintTimer() {
     if (idleHintTimeoutRef.current) {
       window.clearTimeout(idleHintTimeoutRef.current);
@@ -136,6 +145,12 @@ function PracticePage() {
         return;
       }
 
+      // Non-classic modalities drive themselves (e.g. the typing input owns Enter),
+      // so the classic reveal/swipe shortcuts must not fire for them.
+      if (!isClassicModality) {
+        return;
+      }
+
       if (event.key === 'ArrowUp') {
         event.preventDefault();
         setIsAnswerVisible((current) => !current);
@@ -169,7 +184,7 @@ function PracticePage() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isAnswerVisible, isDetailsVisible, isSubmitting, session, status]);
+  }, [isAnswerVisible, isClassicModality, isDetailsVisible, isSubmitting, session, status]);
 
   useEffect(() => {
     if (!isAnswerVisible) {
@@ -178,7 +193,10 @@ function PracticePage() {
   }, [isAnswerVisible, session?.current_card?.card_id]);
 
   useEffect(() => {
-    if (status !== 'ready' || !session?.current_card || isSubmitting || isDetailsVisible) {
+    // The idle hint only teaches the classic tap-to-reveal / swipe gestures, so
+    // skip it entirely for other modalities (also avoids re-rendering on every
+    // keystroke into the typing input).
+    if (status !== 'ready' || !session?.current_card || isSubmitting || isDetailsVisible || !isClassicModality) {
       setIsIdleHintVisible(false);
       clearIdleHintTimer();
       return undefined;
@@ -200,7 +218,7 @@ function PracticePage() {
       window.removeEventListener('pointerdown', handleInteraction, true);
       window.removeEventListener('keydown', handleInteraction, true);
     };
-  }, [isAnswerVisible, isDetailsVisible, isSubmitting, session?.current_card?.card_id, status]);
+  }, [isAnswerVisible, isClassicModality, isDetailsVisible, isSubmitting, session?.current_card?.card_id, status]);
 
   // Unified resolution for every answer modality. Phase 0 only exercises the
   // counted grade path (the classic swipe); `skip` (Tier-B wins) and non-counting
