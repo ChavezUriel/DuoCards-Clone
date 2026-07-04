@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { startSmartPracticeSession, submitSmartPracticeReview, undoSmartPracticeReview, updateCard } from '../api';
 import CardDetailsModal from '../components/CardDetailsModal';
-import Flashcard from '../components/Flashcard';
+import MinigameHost from '../components/MinigameHost';
 import { loadPracticeSettings } from '../practiceSettings';
 
 const FIRST_IDLE_HINT_DELAY_MS = 10000;
@@ -56,6 +56,9 @@ function feedbackMessage(feedback) {
 
 function PracticePage() {
   const [session, setSession] = useState(null);
+  // Read once at mount, same as the session start below; MinigameHost uses these
+  // to decide each card's answer modality (Phase 0: always the classic flashcard).
+  const [practiceSettings] = useState(() => loadPracticeSettings());
   const [isAnswerVisible, setIsAnswerVisible] = useState(false);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -199,8 +202,15 @@ function PracticePage() {
     };
   }, [isAnswerVisible, isDetailsVisible, isSubmitting, session?.current_card?.card_id, status]);
 
-  async function handleReview(result) {
+  // Unified resolution for every answer modality. Phase 0 only exercises the
+  // counted grade path (the classic swipe); `skip` (Tier-B wins) and non-counting
+  // practice outcomes are wired up in later phases — see docs/minigames.md §5, §8.2.
+  async function resolveCard({ result, counts = false, skip = false }) {
     if (!session?.current_card) {
+      return;
+    }
+
+    if (skip || !counts || !result) {
       return;
     }
 
@@ -354,19 +364,17 @@ function PracticePage() {
         ) : null}
 
         {session.current_card ? (
-          <Flashcard
+          <MinigameHost
             card={session.current_card}
+            settings={practiceSettings}
+            onResolve={resolveCard}
             isAnswerVisible={isAnswerVisible}
             isSubmitting={isSubmitting}
-            hideRevealButton
-            hideRevealButtonOnMobile
             isIdleHintVisible={isIdleHintVisible}
             actionsRef={flashcardActionsRef}
             onReveal={() => setIsAnswerVisible(true)}
             onToggleReveal={() => setIsAnswerVisible((current) => !current)}
             onOpenDetails={() => setIsDetailsVisible(true)}
-            onReviewKnown={() => handleReview('known')}
-            onReviewUnknown={() => handleReview('unknown')}
           />
         ) : (
           <section className="panel empty-state practice-complete">

@@ -19,6 +19,7 @@ import {
   requestNotificationPermission,
   saveReminderSettings,
 } from '../notifications';
+import { loadPracticeSettings, savePracticeSettings } from '../practiceSettings';
 
 // OAuth failures (e.g. Google linking) come back appended to the redirect URL.
 function readOAuthErrorFromUrl() {
@@ -341,6 +342,83 @@ function NotificationsSection() {
   );
 }
 
+const MINIGAME_FREQUENCY_OPTIONS = [
+  { value: 'off', label: 'Off — classic flashcard only' },
+  { value: 'light', label: 'Light' },
+  { value: 'balanced', label: 'Balanced' },
+  { value: 'heavy', label: 'Heavy' },
+];
+
+function MinigamesSection() {
+  const [settings, setSettings] = useState(() => loadPracticeSettings());
+  const minigames = settings.minigames;
+  const gameEntries = Object.entries(minigames.games ?? {});
+
+  // Persist the whole practice-settings blob so the other practice settings
+  // (block size, interleaving, …) survive alongside the minigame changes.
+  function persistMinigames(nextMinigames) {
+    setSettings((current) => {
+      const nextSettings = { ...current, minigames: nextMinigames };
+      savePracticeSettings(nextSettings);
+      return nextSettings;
+    });
+  }
+
+  return (
+    <section className="panel st-section" aria-labelledby="st-minigames-title">
+      <div>
+        <h2 className="st-section__title" id="st-minigames-title">Minigames</h2>
+        <p className="st-section__hint">
+          Vary how you answer during Smart Practice. Games marked <strong>“Counts toward scheduling”</strong> can change
+          when a card is next due; <strong>“Practice only”</strong> games never touch your schedule.
+        </p>
+      </div>
+
+      <div className="st-row">
+        <div className="st-row__info">
+          <span className="st-row__label">Enable minigames</span>
+          <span className="st-row__meta">
+            When off, Smart Practice uses the classic flashcard for every card — exactly as it works today.
+          </span>
+        </div>
+        <label className="st-switch">
+          <input
+            type="checkbox"
+            checked={minigames.enabled}
+            onChange={() => persistMinigames({ ...minigames, enabled: !minigames.enabled })}
+            aria-label="Toggle minigames"
+          />
+          <span className="st-switch__track" aria-hidden="true" />
+        </label>
+      </div>
+
+      <label className="st-field">
+        <span className="st-field__label">How often games appear</span>
+        <select
+          className="st-input"
+          value={minigames.frequency}
+          onChange={(event) => persistMinigames({ ...minigames, frequency: event.target.value })}
+          disabled={!minigames.enabled}
+        >
+          {MINIGAME_FREQUENCY_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </label>
+
+      <div>
+        <h3 className="st-subtitle">Games</h3>
+        {gameEntries.length === 0 ? (
+          <p className="st-note">
+            No minigames yet — they’ll appear here as they’re added, each labeled with whether it counts toward
+            scheduling. Your preferences are saved and ready.
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function DataSection() {
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
@@ -535,6 +613,7 @@ function SettingsPage() {
       />
       <SecuritySection me={me} identities={identities} onIdentitiesChanged={refreshIdentities} />
       <NotificationsSection />
+      <MinigamesSection />
       <DataSection />
       <DangerSection email={me.email} />
     </div>
