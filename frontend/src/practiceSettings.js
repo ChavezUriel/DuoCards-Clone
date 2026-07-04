@@ -24,6 +24,13 @@ export const DEFAULT_PRACTICE_SETTINGS = {
       // §7.1); memory_grid = §4 (#8), speed_round = §4 (#7), §9 Phase 3.
       memory_grid: true,
       speed_round: true,
+      // Phase 4 (Tier C — practice only): encoding aids shown on a NEW card's very
+      // first exposure, before any graded rep. Neither ever grades — both advance
+      // via skip, so the first graded rep is deferred to a later cycle. On by
+      // default per the plan's example (docs/minigames.md §7.1); mnemonic_reveal =
+      // §4 (#12), listening = §4 (#11), §9 Phase 4.
+      mnemonic_reveal: true,
+      listening: true,
     },
   },
 };

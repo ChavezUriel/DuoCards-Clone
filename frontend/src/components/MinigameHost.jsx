@@ -1,7 +1,16 @@
 import Flashcard from './Flashcard';
 import TypeTranslation from './TypeTranslation';
 import MultipleChoice from './MultipleChoice';
+import MnemonicReveal from './MnemonicReveal';
+import Listening from './Listening';
 import { shouldPlayPerCardGame } from '../minigameFrequency';
+
+// A card can back the Mnemonic reveal aid only when it actually carries a memory
+// hook; without one the aid has nothing to show and we fall through to Listening
+// (or classic). See docs/minigames.md §4 (#12).
+function hasMnemonic(card) {
+  return typeof card?.mnemonic_en === 'string' && card.mnemonic_en.trim().length > 0;
+}
 
 // A multiple-choice round needs the correct answer plus at least this many
 // distractors (so, 3+ tiles). Below that there aren't enough plausible siblings
@@ -34,6 +43,28 @@ export function selectModality(card, settings) {
   const kind = card?.card_kind;
   const timesPresented = card?.times_presented ?? 0;
   const lastResult = card?.last_result ?? null;
+
+  // Tier-C encoding aids (§4 #11–#12) on a NEW card's very first exposure
+  // (times_presented === 0). These are pure exposure / a different skill, so they
+  // NEVER grade — each resolves via skip, which re-queues the card so its first
+  // *graded* rep lands on a later cycle (§3.4, §6.1). Guardrails: only a new card's
+  // first exposure — never a review card's first pass, which is the retention
+  // measurement (§3.1) — and the MC / typing gates below can't fire here anyway
+  // (they need times_presented > 0 or a review card), so there's no contention.
+  //
+  // Preference is deterministic (no new randomizer): mnemonic first when the card
+  // has a hook and it's enabled, else listening. Both are tied to the card, so the
+  // choice can't flip between renders. If neither aid is eligible we fall through to
+  // today's classic graded swipe (guardrail: 'off'/master-off already returned
+  // 'classic' above, so first exposure stays graded exactly as before).
+  if (kind === 'new' && timesPresented === 0) {
+    if (games.mnemonic_reveal && hasMnemonic(card)) {
+      return 'mnemonic_reveal';
+    }
+    if (games.listening) {
+      return 'listening';
+    }
+  }
 
   // Tier-B "Multiple choice" (§4 #4) — recognition, so a win never counts. It is
   // eligible in two spots (§6.1): a lapsed review being rebuilt, and a new card
@@ -139,6 +170,16 @@ function MinigameHost({
     // state. It owns the whole graded interaction and reports back through the same
     // onResolve contract as the classic swipe (correct -> known, wrong -> unknown).
     return <TypeTranslation key={card.card_id} card={card} onResolve={onResolve} />;
+  }
+
+  // Tier-C encoding aids on a new card's first exposure (§4 #11–#12). Both are pure
+  // exposure and resolve via skip only (onResolve({ skip: true })) — never a grade.
+  if (modality === 'mnemonic_reveal') {
+    return <MnemonicReveal key={card.card_id} card={card} onResolve={onResolve} />;
+  }
+
+  if (modality === 'listening') {
+    return <Listening key={card.card_id} card={card} onResolve={onResolve} />;
   }
 
   if (modality === 'classic') {

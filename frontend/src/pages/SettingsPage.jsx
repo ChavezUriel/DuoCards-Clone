@@ -373,6 +373,16 @@ const MINIGAME_META = {
     description: 'A fast burst of multiple-choice questions between rounds. Just for practice — it never changes when a card is next due.',
     counts: false,
   },
+  mnemonic_reveal: {
+    label: 'Mnemonic reveal',
+    description: 'On a brand-new word, see a memory hook alongside the answer before you’re ever tested. An encoding aid — it never changes your schedule.',
+    counts: false,
+  },
+  listening: {
+    label: 'Listening',
+    description: 'Hear a brand-new word read aloud, then reveal how it’s spelled. Practice only — it never changes when a card is next due.',
+    counts: false,
+  },
 };
 
 function MinigamesSection() {
