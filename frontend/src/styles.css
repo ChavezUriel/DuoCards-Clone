@@ -1264,6 +1264,8 @@ a {
    min-height, so the banner above always has room. */
 .interstitial__game .matchgame,
 .interstitial__game .mcgame,
+.interstitial__game .scramblegame,
+.interstitial__game .hangmangame,
 .speedround > .mcgame {
   min-height: 0;
   height: 100%;
@@ -1408,6 +1410,293 @@ a {
   font-family: var(--mono-font);
   font-size: 0.95rem;
   color: var(--accent);
+}
+
+/* ---- Phase 5 Tier-A production games (count fully). Recall-from-definition and
+   Cloze reuse the .typegame panel/form/feedback footprint (they carry both classes),
+   so only their prompt bodies need styling. ---- */
+.recallgame__meta-row {
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.recallgame__definition {
+  max-width: 40ch;
+  margin: 0;
+  font-family: var(--head-font);
+  font-weight: 500;
+  font-size: clamp(1.3rem, 3.6vw, 1.7rem);
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+/* Cloze sentence (free-type #3 and the word-bank variant #6). The blank sits inline
+   in the example; on reveal it fills with the answer, tinted by outcome. */
+.clozegame__sentence {
+  max-width: 40ch;
+  margin: 0;
+  font-family: var(--head-font);
+  font-weight: 500;
+  font-size: clamp(1.3rem, 3.6vw, 1.7rem);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.clozegame__slot {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.clozegame__slot--blank {
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.clozegame__slot--known {
+  color: var(--accent);
+}
+
+.clozegame__slot--unknown {
+  color: var(--danger);
+}
+
+/* Word-bank cloze reuses the .mcgame tile engine; its prompt is the cloze sentence
+   rather than the big single-word prompt, so give it a touch of breathing room. */
+.wordbankgame__sentence {
+  margin-top: 0.2rem;
+}
+
+/* ---- Phase 5 Tier-C single-card cool-down puzzles (never count): word scramble +
+   hangman. Queue-external, so they fill the interstitial slot like matchgame. ---- */
+.scramblegame,
+.hangmangame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1.75rem;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--surface);
+  box-shadow: 0 20px 50px rgba(34, 42, 45, 0.08);
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  text-align: center;
+}
+
+.scramblegame .flashcard__label,
+.hangmangame .flashcard__label {
+  margin: 0;
+}
+
+.scramblegame__prompt,
+.hangmangame__prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  font-family: var(--head-font);
+  font-weight: 500;
+  font-size: clamp(1.5rem, 5vw, 2.2rem);
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.scramblegame__prompt-label,
+.hangmangame__prompt-label {
+  font-family: var(--mono-font);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.62rem;
+  color: var(--muted);
+}
+
+/* Scramble — the jumbled letter tiles, then a free-type answer + Reveal. */
+.scramblegame__tiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.scramblegame__tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.3rem;
+  height: 2.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-family: var(--head-font);
+  font-size: 1.3rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.scramblegame__form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  width: min(340px, 100%);
+}
+
+.scramblegame__input {
+  width: 100%;
+  text-align: center;
+  font-size: 1.1rem;
+}
+
+.scramblegame__input--wrong {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(166, 75, 60, 0.16);
+}
+
+.scramblegame__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.scramblegame__action {
+  min-width: 130px;
+}
+
+.scramblegame__feedback,
+.hangmangame__feedback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.scramblegame__verdict,
+.hangmangame__verdict {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--accent);
+}
+
+.hangmangame__feedback--loss .hangmangame__verdict {
+  color: var(--danger);
+}
+
+.scramblegame__answer,
+.hangmangame__answer {
+  margin: 0;
+  font-family: var(--head-font);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Hangman — masked word, remaining-guess dots, on-screen keyboard. */
+.hangmangame__word {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.6rem;
+}
+
+.hangmangame__letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 2.4rem;
+  border-bottom: 2px solid var(--line);
+  font-family: var(--head-font);
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.hangmangame__letter--filled {
+  border-bottom-color: var(--accent);
+}
+
+.hangmangame__letter--missed {
+  color: var(--danger);
+  border-bottom-color: var(--danger);
+}
+
+.hangmangame__space {
+  width: 0.6rem;
+}
+
+.hangmangame__lives {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+.hangmangame__life--lost {
+  color: var(--danger);
+  opacity: 0.55;
+}
+
+.hangmangame__keyboard {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 0.3rem;
+  width: min(360px, 100%);
+}
+
+.hangmangame__key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, opacity 120ms ease;
+}
+
+.hangmangame__key:hover:not(:disabled),
+.hangmangame__key:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.hangmangame__key:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.hangmangame__key--hit {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  opacity: 1;
+}
+
+.hangmangame__key--miss {
+  border-color: var(--danger);
+  color: var(--danger);
+  opacity: 0.6;
+}
+
+.hangmangame__action {
+  min-width: 160px;
+  margin-top: 0.2rem;
 }
 
 .practice-session-bar {

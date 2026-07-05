@@ -279,11 +279,21 @@ export function undoSmartPracticeReview(sessionId) {
   return rpc('undo_smart_practice_review', { p_session_id: sessionId });
 }
 
-// Plausible wrong English answers for a recognition minigame (multiple choice).
-// Returns an array of sibling answer strings from the same deck/section; the
-// caller shuffles them together with the real answer. See docs/minigames.md §8.3.
-export function getMinigameDistractors(cardId, n = 3) {
-  return rpc('get_minigame_distractors', { p_card_id: cardId, p_n: n });
+// Plausible wrong answers for a recognition minigame. Returns an array of sibling
+// answer strings from the same deck/section; the caller shuffles them together with
+// the real answer. `side` picks the language: 'en' (default, sibling english_text —
+// multiple choice / word-bank cloze) or 'es' (sibling spanish_text — reverse MC).
+//
+// The 'es' side needs migration 0014's p_side parameter. We omit p_side for 'en' so
+// the default (English) path still resolves against a remote that only has the older
+// two-argument function — reverse MC is off by default and simply degrades until
+// 0014 is pushed. See docs/minigames.md §8.3, §4 #5.
+export function getMinigameDistractors(cardId, n = 3, side = 'en') {
+  const args = { p_card_id: cardId, p_n: n };
+  if (side && side !== 'en') {
+    args.p_side = side;
+  }
+  return rpc('get_minigame_distractors', args);
 }
 
 // Advance the current smart-practice card WITHOUT grading it — used for a Tier-B

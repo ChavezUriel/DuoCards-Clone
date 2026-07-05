@@ -358,9 +358,29 @@ const MINIGAME_META = {
     description: 'Type the English for the Spanish prompt. Correct or wrong, it grades the card just like a swipe.',
     counts: true,
   },
+  recall_from_definition: {
+    label: 'Recall from definition',
+    description: 'Read the English definition and type the word it describes. Like a swipe, it grades the card.',
+    counts: true,
+  },
+  cloze_free: {
+    label: 'Fill in the blank',
+    description: 'Type the missing word in an example sentence. You produce the answer from memory, so it grades the card like a swipe.',
+    counts: true,
+  },
   multiple_choice: {
     label: 'Multiple choice',
     description: 'Pick the English translation from a few options. A wrong pick reschedules the card, but a correct pick never changes when it’s next due.',
+    counts: false,
+  },
+  word_bank_cloze: {
+    label: 'Word-bank cloze',
+    description: 'Pick the missing word in an example sentence from a bank of options. A wrong pick reschedules the card; a correct pick never changes when it’s next due.',
+    counts: false,
+  },
+  reverse_mc: {
+    label: 'Reverse multiple choice',
+    description: 'See the English answer and pick the matching Spanish word. A wrong pick reschedules the card; a correct pick never changes when it’s next due.',
     counts: false,
   },
   memory_grid: {
@@ -371,6 +391,16 @@ const MINIGAME_META = {
   speed_round: {
     label: 'Speed round',
     description: 'A fast burst of multiple-choice questions between rounds. Just for practice — it never changes when a card is next due.',
+    counts: false,
+  },
+  scramble: {
+    label: 'Word scramble',
+    description: 'Unscramble the letters of a word as a quick cool-down. Purely for fun — it never changes your schedule.',
+    counts: false,
+  },
+  hangman: {
+    label: 'Hangman',
+    description: 'Guess a word letter by letter as a cool-down. Purely for fun — it never changes your schedule.',
     counts: false,
   },
   mnemonic_reveal: {

@@ -9,13 +9,20 @@ import {
   updateCard,
 } from '../api';
 import CardDetailsModal from '../components/CardDetailsModal';
-import MinigameHost, { resolveModality, selectModality } from '../components/MinigameHost';
+import MinigameHost, { recognitionSide, resolveModality, selectModality } from '../components/MinigameHost';
 import InterstitialHost from '../components/InterstitialHost';
 import { loadPracticeSettings } from '../practiceSettings';
 import { chooseInterstitialGame, isInterstitialPlacementEnabled } from '../minigameFrequency';
 import { loadRecentCards, mergeRecentCards, saveRecentCards } from '../recentCards';
 
 const FIRST_IDLE_HINT_DELAY_MS = 10000;
+
+// Distractor cache key. A card can back an English recognition round (multiple
+// choice / word-bank cloze) or a Spanish one (reverse MC), so its distractors are
+// cached per (card, side) — never mixing the two languages. See docs/minigames.md §8.3.
+function distractorKey(cardId, side) {
+  return `${cardId}:${side}`;
+}
 
 function HomeIcon() {
   return (
@@ -81,7 +88,7 @@ function PracticePage() {
   const hasShownIdleHintRef = useRef(false);
   const feedbackTimeoutRef = useRef(null);
   const flashcardActionsRef = useRef(null);
-  // Per-session cache of minigame distractors, keyed by card_id. Cards cycle
+  // Per-session cache of minigame distractors, keyed by (card_id, side). Cards cycle
   // through the queue repeatedly, so caching a card's distractors on first fetch
   // makes every later presentation instant (docs/minigames.md §8.3, §12 latency).
   // The counter just forces a re-render when an async fetch settles.
@@ -117,8 +124,11 @@ function PracticePage() {
   // fetch), so a multiple-choice card that falls back to classic for want of
   // distractors correctly re-enables the arrow handlers. See docs/minigames.md §8.4.
   const currentCard = session?.current_card ?? null;
-  const currentDistractorEntry = currentCard
-    ? distractorCacheRef.current.get(currentCard.card_id)
+  // Derive the provisional modality first so we can look up the right distractor side
+  // ('en' vs 'es'); resolveModality re-derives the same pick and confirms the entry.
+  const currentSide = currentCard ? recognitionSide(selectModality(currentCard, practiceSettings)) : null;
+  const currentDistractorEntry = currentCard && currentSide
+    ? distractorCacheRef.current.get(distractorKey(currentCard.card_id, currentSide))
     : undefined;
   const currentModality = currentCard
     ? resolveModality(currentCard, practiceSettings, currentDistractorEntry)
@@ -229,24 +239,32 @@ function PracticePage() {
   // classic. See docs/minigames.md §8.3.
   useEffect(() => {
     const card = session?.current_card;
-    if (!card || selectModality(card, practiceSettings) !== 'multiple_choice') {
+    if (!card) {
+      return;
+    }
+    // Only recognition games need distractors; fetch the side the selected game wants
+    // ('en' for multiple choice / word-bank cloze, 'es' for reverse MC). Non-
+    // recognition modalities need no fetch.
+    const side = recognitionSide(selectModality(card, practiceSettings));
+    if (!side) {
       return;
     }
 
+    const key = distractorKey(card.card_id, side);
     const cache = distractorCacheRef.current;
-    if (cache.has(card.card_id)) {
+    if (cache.has(key)) {
       return;
     }
 
-    cache.set(card.card_id, { status: 'loading', distractors: [] });
+    cache.set(key, { status: 'loading', distractors: [] });
     setDistractorVersion((version) => version + 1);
 
-    getMinigameDistractors(card.card_id, 3)
+    getMinigameDistractors(card.card_id, 3, side)
       .then((list) => {
-        cache.set(card.card_id, { status: 'ready', distractors: Array.isArray(list) ? list : [] });
+        cache.set(key, { status: 'ready', distractors: Array.isArray(list) ? list : [] });
       })
       .catch(() => {
-        cache.set(card.card_id, { status: 'error', distractors: [] });
+        cache.set(key, { status: 'error', distractors: [] });
       })
       .finally(() => setDistractorVersion((version) => version + 1));
   }, [session?.current_card?.card_id, practiceSettings]);

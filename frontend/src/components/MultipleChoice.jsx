@@ -19,20 +19,36 @@ function shuffle(items) {
   return copy;
 }
 
-// Tier-B recognition game (docs/minigames.md §3.1, §4 #4): show prompt_es and a
-// few English tiles (the real answer + sibling distractors). Because the answer
-// is on screen a win could come from elimination, so it earns NO positive signal:
+// Tier-B recognition game (docs/minigames.md §3.1, §4 #4): show a prompt and a few
+// tiles (the real answer + sibling distractors). Because the answer is on screen a
+// win could come from elimination, so it earns NO positive signal:
 //   * correct pick -> onResolve({ skip: true })            — advance, never grade
 //   * clean wrong pick -> onResolve({ result: 'unknown', counts: true }) — a lapse
 // Never awards `known`, so it can't inflate stability or the 2-streak (§3.2).
-function MultipleChoice({ card, distractors, onResolve }) {
+//
+// The default prompt/answer is the es→en round (prompt_es → answer_en). Phase 5's
+// Reverse MC (en→es) and Word-bank cloze reuse this same tile/keyboard engine by
+// overriding `promptNode` / `answer` / `label` / `answerLabel` (§4 #5, #6).
+function MultipleChoice({
+  card,
+  distractors,
+  onResolve,
+  // The correct option string (defaults to the English answer for the es→en round).
+  answer = card.answer_en,
+  label = 'Choose the translation',
+  answerLabel = 'Answer',
+  // Prompt element rendered above the tiles; defaults to the Spanish word.
+  promptNode = null,
+}) {
+  const correctAnswer = answer;
+
   // Build the option tiles once the distractors arrive. De-dupe defensively even
   // though the RPC already excludes the answer and its synonyms.
   const { options, correctIndex } = useMemo(() => {
     if (!distractors) {
       return { options: null, correctIndex: -1 };
     }
-    const seen = new Set([normalize(card.answer_en)]);
+    const seen = new Set([normalize(correctAnswer)]);
     const cleaned = [];
     for (const distractor of distractors) {
       const key = normalize(distractor);
@@ -42,9 +58,9 @@ function MultipleChoice({ card, distractors, onResolve }) {
       seen.add(key);
       cleaned.push(distractor);
     }
-    const shuffled = shuffle([card.answer_en, ...cleaned]);
-    return { options: shuffled, correctIndex: shuffled.indexOf(card.answer_en) };
-  }, [card.answer_en, distractors]);
+    const shuffled = shuffle([correctAnswer, ...cleaned]);
+    return { options: shuffled, correctIndex: shuffled.indexOf(correctAnswer) };
+  }, [correctAnswer, distractors]);
 
   // Highlighted tile for keyboard selection; the committed pick once chosen.
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -159,8 +175,8 @@ function MultipleChoice({ card, distractors, onResolve }) {
       ) : null}
 
       <div className="mcgame__body">
-        <p className="flashcard__label">Choose the translation</p>
-        <h2 className="mcgame__prompt">{card.prompt_es}</h2>
+        <p className="flashcard__label">{label}</p>
+        {promptNode ?? <h2 className="mcgame__prompt">{card.prompt_es}</h2>}
 
         {options ? (
           <div className="mcgame__options" role="group" aria-label="Answer options">
@@ -194,8 +210,8 @@ function MultipleChoice({ card, distractors, onResolve }) {
             <p className="mcgame__verdict">{isCorrect ? 'Correct!' : 'Not quite'}</p>
             {!isCorrect ? (
               <p className="mcgame__answer">
-                <span className="mcgame__answer-label">Answer</span>
-                <span className="mcgame__answer-text">{card.answer_en}</span>
+                <span className="mcgame__answer-label">{answerLabel}</span>
+                <span className="mcgame__answer-text">{correctAnswer}</span>
               </p>
             ) : null}
             <button

@@ -6,12 +6,13 @@ import { isGuessCorrect, normalizeAnswer } from '../minigameText';
 // quickly to keep momentum. The "Continue" button lets either advance early.
 const FEEDBACK_MS = { known: 1100, unknown: 2000 };
 
-// Tier-A production game (docs/minigames.md §3.1): the learner types the English
-// for prompt_es with nothing on screen to recognize, so it demands the same free
-// recall as the classic swipe. A correct answer counts as `known`, a wrong one as
-// `unknown` — both flow through the identical onResolve({ result, counts }) contract
-// the classic flashcard uses, so they reach FSRS exactly like a right/left swipe.
-function TypeTranslation({ card, onResolve }) {
+// Tier-A production game (docs/minigames.md §3.1, §4 #2): show the English
+// definition (and part of speech) with nothing to recognize, and the learner types
+// the English answer. That demands the same free recall as the classic swipe, so a
+// correct answer counts as `known` and a wrong one as `unknown` — both flow through
+// the identical onResolve({ result, counts }) contract, reaching FSRS exactly like a
+// swipe. Selected only when the card carries a definition (see selectModality).
+function RecallFromDefinition({ card, onResolve }) {
   const [guess, setGuess] = useState('');
   // null while typing; 'known' | 'unknown' once submitted (drives the reveal).
   const [outcome, setOutcome] = useState(null);
@@ -61,17 +62,15 @@ function TypeTranslation({ card, onResolve }) {
   const isRevealed = outcome !== null;
 
   return (
-    <section className="panel typegame">
-      {card.section_name ? (
-        <div className="typegame__meta-row">
-          <span className="flashcard__meta-pill">{card.section_name}</span>
-        </div>
-      ) : null}
+    <section className="panel typegame recallgame">
+      <div className="typegame__meta-row recallgame__meta-row">
+        {card.part_of_speech ? <span className="flashcard__meta-pill">{card.part_of_speech}</span> : null}
+        {card.section_name ? <span className="flashcard__meta-pill">{card.section_name}</span> : null}
+      </div>
 
       <div className="typegame__body">
-        <p className="flashcard__label">Type the translation</p>
-        <h2 className="typegame__prompt">{card.prompt_es}</h2>
-        {card.example_es ? <p className="flashcard__example typegame__example">{card.example_es}</p> : null}
+        <p className="flashcard__label">Recall from definition</p>
+        <p className="recallgame__definition">{card.definition_en}</p>
 
         <form className="typegame__form" onSubmit={handleSubmit}>
           <input
@@ -80,8 +79,8 @@ function TypeTranslation({ card, onResolve }) {
             type="text"
             value={guess}
             onChange={(event) => setGuess(event.target.value)}
-            placeholder="Type the English answer"
-            aria-label="Type the English translation"
+            placeholder="Type the English word"
+            aria-label="Type the English word that matches this definition"
             autoComplete="off"
             autoCapitalize="off"
             autoCorrect="off"
@@ -117,4 +116,4 @@ function TypeTranslation({ card, onResolve }) {
   );
 }
 
-export default TypeTranslation;
+export default RecallFromDefinition;

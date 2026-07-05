@@ -10,25 +10,34 @@ export const DEFAULT_PRACTICE_SETTINGS = {
     // One entry per game, added as each rollout phase ships one. An empty map
     // means every card falls back to the classic flashcard (today's behavior).
     games: {
-      // Phase 1 (Tier A — counts toward scheduling): type the English for a
-      // Spanish prompt. See docs/minigames.md §4 (#1) and §9 Phase 1.
+      // --- Tier A (counts toward scheduling) — free recall, grades like a swipe ---
+      // Phase 1: type the English for a Spanish prompt. §4 (#1), §9 Phase 1.
       type_translation: true,
-      // Phase 2 (Tier B — practice only): pick the English translation from a
-      // few options. A clean wrong pick records a lapse; a correct pick advances
-      // without grading, so it never inflates the schedule. On by default per the
-      // plan's example (docs/minigames.md §7.1, §11.4); §4 (#4), §9 Phase 2.
+      // Phase 5: type the English for its definition. §4 (#2), §9 Phase 5.
+      recall_from_definition: true,
+      // Phase 5: type the word blanked out of the English example. §4 (#3), §9 Phase 5.
+      cloze_free: true,
+      // --- Tier B (practice only) — recognition; a win never grades, a clean
+      // wrong pick records a lapse, so it never inflates the schedule (§3.1–3.2) ---
+      // Phase 2: pick the English translation from a few options. On by default per
+      // the plan's example (docs/minigames.md §7.1, §11.4); §4 (#4), §9 Phase 2.
       multiple_choice: true,
-      // Phase 3 (Tier C — practice only): queue-external boundary games that only
-      // ever run as interstitials (warm-up / block boundary / cool-down) and never
-      // touch the schedule. On by default per the plan's example (docs/minigames.md
-      // §7.1); memory_grid = §4 (#8), speed_round = §4 (#7), §9 Phase 3.
-      memory_grid: true,
+      // Phase 5: pick the missing word from a bank of English tiles. §4 (#6).
+      word_bank_cloze: true,
+      // Phase 5: pick the Spanish prompt for an English answer. OFF by default —
+      // needs the Spanish-distractor backend affordance (migration 0014). §4 (#5).
+      reverse_mc: false,
+      // Phase 3: queue-external speed round of MC questions between blocks. §4 (#7).
       speed_round: true,
-      // Phase 4 (Tier C — practice only): encoding aids shown on a NEW card's very
-      // first exposure, before any graded rep. Neither ever grades — both advance
-      // via skip, so the first graded rep is deferred to a later cycle. On by
-      // default per the plan's example (docs/minigames.md §7.1); mnemonic_reveal =
-      // §4 (#12), listening = §4 (#11), §9 Phase 4.
+      // --- Tier C (practice only) — never counts; exposure / arcade / cool-down ---
+      // Phase 3: matching grid warm-up / cool-down. §4 (#8), §9 Phase 3.
+      memory_grid: true,
+      // Phase 5: single-card cool-down puzzles. OFF by default. §4 (#9–#10).
+      scramble: false,
+      hangman: false,
+      // Phase 4: encoding aids on a NEW card's very first exposure, before any graded
+      // rep. Neither grades — both advance via skip, deferring the first graded rep to
+      // a later cycle. mnemonic_reveal = §4 (#12), listening = §4 (#11), §9 Phase 4.
       mnemonic_reveal: true,
       listening: true,
     },

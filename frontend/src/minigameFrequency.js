@@ -18,9 +18,11 @@
 // per-card games fire on cards that weren't already eligible, so the FSRS
 // guardrails in selectModality stay intact.
 
-// Tier-C boundary games (never count). They only ever run as interstitials,
-// never as a per-card modality (docs/minigames.md §4 #7–#8, §5.2).
-export const BOUNDARY_GAMES = ['memory_grid', 'speed_round'];
+// Tier-C boundary / cool-down games (never count). They only ever run as
+// interstitials, never as a per-card modality (docs/minigames.md §4 #7–#10, §5.2).
+// memory_grid / speed_round are pool-based; scramble / hangman are single-card
+// cool-down puzzles (off by default).
+export const BOUNDARY_GAMES = ['memory_grid', 'speed_round', 'scramble', 'hangman'];
 
 const FREQUENCY_POLICY = {
   off: { perCard: 'none', placements: [] },
@@ -33,18 +35,32 @@ export function frequencyPolicy(frequency) {
   return FREQUENCY_POLICY[frequency] ?? FREQUENCY_POLICY.balanced;
 }
 
-// Stable pseudo-random bit for one card presentation. Deterministic in
-// (card_id, times_presented) so the chosen modality never flips between renders,
-// and so the dose doesn't stack a second randomizer on top of
+// Stable pseudo-random hash for one card presentation. Deterministic in
+// (card_id, times_presented) so any choice derived from it never flips between
+// renders, and so the dose doesn't stack a second randomizer on top of
 // interleaving_intensity (§6.3) — the same card+pass always resolves the same way.
-function presentationBit(card) {
+function presentationHash(card) {
   const id = Number(card?.card_id) || 0;
   const pass = Number(card?.times_presented) || 0;
   let x = (id * 2654435761 + pass * 40503) | 0;
   x ^= x << 13;
   x ^= x >> 17;
   x ^= x << 5;
-  return Math.abs(x) % 2;
+  return Math.abs(x);
+}
+
+function presentationBit(card) {
+  return presentationHash(card) % 2;
+}
+
+// A stable index in [0, n) for one card presentation — used to pick among several
+// eligible per-card games (Phase 5) without adding a second randomizer. Same
+// (card, pass) always maps to the same index, so the modality can't flicker.
+export function presentationIndex(card, n) {
+  if (!n || n <= 1) {
+    return 0;
+  }
+  return presentationHash(card) % n;
 }
 
 // Should an *eligible* card actually use its Phase 1/2 minigame this presentation?
@@ -114,15 +130,20 @@ function sample(cards, count) {
 }
 
 // A grid wants 4–6 pairs; a speed round needs enough distinct answers that each
-// question has at least 3 distractors (so a pool of ≥4).
+// question has at least 3 distractors (so a pool of ≥4). scramble / hangman are
+// single-card puzzles, so one usable card is enough (docs/minigames.md §4 #9–#10).
 const GAME_POOL = {
   memory_grid: { min: 4, max: 6 },
   speed_round: { min: 4, max: 6 },
+  scramble: { min: 1, max: 1 },
+  hangman: { min: 1, max: 1 },
 };
 
 // Preference order per placement — deterministic (no randomizer), tying the game
-// to the phase (§4 primary placements, §6.3). Cool-down alternates by a caller
-// seed so a run of sessions doesn't always end on the same game.
+// to the phase (§4 primary placements, §6.3). Cool-down rotates through every
+// cool-down game by a caller seed so a run of sessions doesn't always end on the
+// same one; scramble / hangman (off by default, §4 #9–#10) join the rotation when
+// enabled, and chooseInterstitialGame skips any without enough material.
 function preferenceFor(placement, seed) {
   if (placement === 'warmup') {
     return ['memory_grid', 'speed_round'];
@@ -130,7 +151,9 @@ function preferenceFor(placement, seed) {
   if (placement === 'boundary') {
     return ['speed_round', 'memory_grid'];
   }
-  return seed % 2 === 0 ? ['memory_grid', 'speed_round'] : ['speed_round', 'memory_grid'];
+  const cooldownGames = ['memory_grid', 'speed_round', 'scramble', 'hangman'];
+  const start = ((seed % cooldownGames.length) + cooldownGames.length) % cooldownGames.length;
+  return [...cooldownGames.slice(start), ...cooldownGames.slice(0, start)];
 }
 
 // Decide which boundary game (if any) to show at a placement, and pre-sample its

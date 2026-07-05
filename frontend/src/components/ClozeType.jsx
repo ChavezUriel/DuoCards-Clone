@@ -1,17 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
-import { isGuessCorrect, normalizeAnswer } from '../minigameText';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { isGuessCorrect, locateAnswerInExample, normalizeAnswer } from '../minigameText';
 
 // How long the right/wrong feedback lingers before the result is committed. A
 // miss dwells longer so the learner can read the correct answer; a hit clears
 // quickly to keep momentum. The "Continue" button lets either advance early.
 const FEEDBACK_MS = { known: 1100, unknown: 2000 };
 
-// Tier-A production game (docs/minigames.md §3.1): the learner types the English
-// for prompt_es with nothing on screen to recognize, so it demands the same free
-// recall as the classic swipe. A correct answer counts as `known`, a wrong one as
-// `unknown` — both flow through the identical onResolve({ result, counts }) contract
-// the classic flashcard uses, so they reach FSRS exactly like a right/left swipe.
-function TypeTranslation({ card, onResolve }) {
+// Tier-A production game (docs/minigames.md §3.1, §4 #3): blank the answer out of
+// the English example sentence and have the learner type the missing word. The
+// sentence is a *cue*, but the word itself is produced from memory — as strong as a
+// swipe — so it counts fully: correct -> `known`, wrong -> `unknown`, through the
+// identical onResolve({ result, counts }) contract. Selected only when the answer
+// can be located as a whole word in example_en (see selectModality); the located
+// span is recomputed here to render the blank.
+function ClozeType({ card, onResolve }) {
   const [guess, setGuess] = useState('');
   // null while typing; 'known' | 'unknown' once submitted (drives the reveal).
   const [outcome, setOutcome] = useState(null);
@@ -19,6 +21,16 @@ function TypeTranslation({ card, onResolve }) {
   const continueRef = useRef(null);
   const resolveTimeoutRef = useRef(null);
   const hasResolvedRef = useRef(false);
+
+  // The raw span of the answer inside the example, so the sentence can be split
+  // into "before ___ after". The gate guarantees a match; guard defensively.
+  const span = useMemo(
+    () => locateAnswerInExample(card.example_en, card.answer_en),
+    [card.example_en, card.answer_en],
+  );
+  const example = card.example_en ?? '';
+  const before = span ? example.slice(0, span.start) : '';
+  const after = span ? example.slice(span.end) : '';
 
   // Focus the input on mount; once submitted, move focus to Continue so a second
   // Enter (or Space) advances without touching the mouse.
@@ -61,7 +73,7 @@ function TypeTranslation({ card, onResolve }) {
   const isRevealed = outcome !== null;
 
   return (
-    <section className="panel typegame">
+    <section className="panel typegame clozegame">
       {card.section_name ? (
         <div className="typegame__meta-row">
           <span className="flashcard__meta-pill">{card.section_name}</span>
@@ -69,9 +81,18 @@ function TypeTranslation({ card, onResolve }) {
       ) : null}
 
       <div className="typegame__body">
-        <p className="flashcard__label">Type the translation</p>
-        <h2 className="typegame__prompt">{card.prompt_es}</h2>
-        {card.example_es ? <p className="flashcard__example typegame__example">{card.example_es}</p> : null}
+        <p className="flashcard__label">Fill in the missing word</p>
+        <p className="clozegame__sentence">
+          {before}
+          {isRevealed ? (
+            <span className={`clozegame__slot clozegame__slot--${outcome}`}>{card.answer_en}</span>
+          ) : (
+            <span className="clozegame__slot clozegame__slot--blank" aria-label="missing word">
+              ______
+            </span>
+          )}
+          {after}
+        </p>
 
         <form className="typegame__form" onSubmit={handleSubmit}>
           <input
@@ -80,8 +101,8 @@ function TypeTranslation({ card, onResolve }) {
             type="text"
             value={guess}
             onChange={(event) => setGuess(event.target.value)}
-            placeholder="Type the English answer"
-            aria-label="Type the English translation"
+            placeholder="Type the missing word"
+            aria-label="Type the word that fills the gap"
             autoComplete="off"
             autoCapitalize="off"
             autoCorrect="off"
@@ -117,4 +138,4 @@ function TypeTranslation({ card, onResolve }) {
   );
 }
 
-export default TypeTranslation;
+export default ClozeType;

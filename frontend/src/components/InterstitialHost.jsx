@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import MemoryGrid from './MemoryGrid';
 import SpeedRound from './SpeedRound';
+import WordScramble from './WordScramble';
+import Hangman from './Hangman';
 
 // Framing copy per placement (docs/minigames.md §6.1). The game itself is chosen
 // upstream by chooseInterstitialGame so the host stays a thin shell.
@@ -9,6 +11,22 @@ const PLACEMENT_COPY = {
   boundary: { eyebrow: 'Quick break' },
   cooldown: { eyebrow: 'Cool-down' },
 };
+
+// Render the chosen game. Pool-based games (memory_grid / speed_round) take the
+// whole sampled pool; single-card cool-down puzzles (scramble / hangman, §4 #9–#10)
+// take just the first card of the pool.
+function renderGame(game, cards, onDone) {
+  if (game === 'memory_grid') {
+    return <MemoryGrid cards={cards} onDone={onDone} />;
+  }
+  if (game === 'scramble') {
+    return <WordScramble card={cards[0]} onDone={onDone} />;
+  }
+  if (game === 'hangman') {
+    return <Hangman card={cards[0]} onDone={onDone} />;
+  }
+  return <SpeedRound cards={cards} onDone={onDone} />;
+}
 
 // Renders a queue-external Tier-C interstitial: a warm-up before the first card,
 // a break at a block boundary, or a cool-down on the complete screen. It resolves
@@ -42,11 +60,7 @@ function InterstitialHost({ placement, game, cards, onDone }) {
       </div>
 
       <div className="interstitial__game">
-        {game === 'memory_grid' ? (
-          <MemoryGrid cards={cards} onDone={onDone} />
-        ) : (
-          <SpeedRound cards={cards} onDone={onDone} />
-        )}
+        {renderGame(game, cards, onDone)}
       </div>
     </div>
   );
