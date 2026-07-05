@@ -110,7 +110,17 @@ function PracticePage() {
   const boundaryShownRef = useRef(false);
   const cooldownConsideredRef = useRef(false);
 
-  const minigameFrequency = practiceSettings?.minigames?.frequency ?? 'balanced';
+  // Master switch off => byte-for-byte the classic app (§7.3): force the effective
+  // frequency to 'off' so NO queue-external interstitial (warm-up / boundary /
+  // cool-down) can fire either. selectModality already returns 'classic' per card
+  // when disabled, but the interstitials key off frequency alone — and the Settings
+  // UI leaves the stored frequency dial untouched when you flip minigames off, so
+  // reading it directly would still surface interstitials (and a synonym-match
+  // cool-down would even log a play). Gating here keeps the always-safe default whole.
+  const minigamesEnabled = practiceSettings?.minigames?.enabled ?? false;
+  const minigameFrequency = minigamesEnabled
+    ? (practiceSettings?.minigames?.frequency ?? 'balanced')
+    : 'off';
   const isInterstitialActive = activeInterstitial !== null;
 
   useEffect(() => () => {
