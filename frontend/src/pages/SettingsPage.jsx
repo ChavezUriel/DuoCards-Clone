@@ -685,11 +685,78 @@ function DangerSection({ email }) {
   );
 }
 
+// Stroke icons for the settings sidebar, matching the app's 24×24 currentColor style.
+const ICON_PROPS = {
+  viewBox: '0 0 24 24',
+  width: 18,
+  height: 18,
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.7,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+};
+
+const SECTION_ICONS = {
+  account: (
+    <svg {...ICON_PROPS}>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20c0-3.6 3.1-5.5 7-5.5s7 1.9 7 5.5" />
+    </svg>
+  ),
+  security: (
+    <svg {...ICON_PROPS}>
+      <path d="M12 3 5 6v5c0 4.4 3 7.7 7 9 4-1.3 7-4.6 7-9V6z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  ),
+  notifications: (
+    <svg {...ICON_PROPS}>
+      <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6" />
+      <path d="M10.5 20a1.5 1.5 0 0 0 3 0" />
+    </svg>
+  ),
+  minigames: (
+    <svg {...ICON_PROPS}>
+      <rect x="4" y="4" width="16" height="16" rx="3.5" />
+      <circle cx="9" cy="9" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="9" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="15" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="15" r="1.1" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  data: (
+    <svg {...ICON_PROPS}>
+      <path d="M12 4v9" />
+      <path d="m8.5 10 3.5 3.5 3.5-3.5" />
+      <path d="M5 15v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3" />
+    </svg>
+  ),
+  danger: (
+    <svg {...ICON_PROPS}>
+      <path d="M12 4.5 3.5 19a1 1 0 0 0 .9 1.5h15.2a1 1 0 0 0 .9-1.5z" />
+      <path d="M12 10v4" />
+      <path d="M12 17h.01" />
+    </svg>
+  ),
+};
+
+// Drives the sidebar order/labels; each id maps to a renderer in SettingsPage.
+const SECTIONS = [
+  { id: 'account', label: 'Account' },
+  { id: 'security', label: 'Sign-in & security' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'minigames', label: 'Minigames' },
+  { id: 'data', label: 'Your data' },
+  { id: 'danger', label: 'Danger zone', danger: true },
+];
+
 function SettingsPage() {
   const [me, setMe] = useState(null);
   const [identities, setIdentities] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
+  const [activeSection, setActiveSection] = useState('account');
   // Read once per mount; the params disappear on the next in-app navigation.
   const [oauthError] = useState(readOAuthErrorFromUrl);
 
@@ -728,6 +795,30 @@ function SettingsPage() {
     return <p className="h-empty-state h-empty-state--error">Unable to load settings: {error}</p>;
   }
 
+  function renderSection() {
+    switch (activeSection) {
+      case 'account':
+        return (
+          <AccountSection
+            me={me}
+            onNicknameSaved={(name) => setMe((current) => ({ ...current, full_name: name }))}
+          />
+        );
+      case 'security':
+        return <SecuritySection me={me} identities={identities} onIdentitiesChanged={refreshIdentities} />;
+      case 'notifications':
+        return <NotificationsSection />;
+      case 'minigames':
+        return <MinigamesSection />;
+      case 'data':
+        return <DataSection />;
+      case 'danger':
+        return <DangerSection email={me.email} />;
+      default:
+        return null;
+    }
+  }
+
   return (
     <div className="st-page">
       <div className="st-header">
@@ -739,15 +830,29 @@ function SettingsPage() {
         <p className="st-banner st-banner--error">Sign-in linking failed: {oauthError}</p>
       ) : null}
 
-      <AccountSection
-        me={me}
-        onNicknameSaved={(name) => setMe((current) => ({ ...current, full_name: name }))}
-      />
-      <SecuritySection me={me} identities={identities} onIdentitiesChanged={refreshIdentities} />
-      <NotificationsSection />
-      <MinigamesSection />
-      <DataSection />
-      <DangerSection email={me.email} />
+      <div className="st-layout">
+        <nav className="st-nav panel" aria-label="Settings sections">
+          {SECTIONS.map((section) => {
+            const isActive = activeSection === section.id;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                className={`st-nav__item${isActive ? ' st-nav__item--active' : ''}${
+                  section.danger ? ' st-nav__item--danger' : ''
+                }`}
+                onClick={() => setActiveSection(section.id)}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                <span className="st-nav__icon" aria-hidden="true">{SECTION_ICONS[section.id]}</span>
+                <span>{section.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="st-content">{renderSection()}</div>
+      </div>
     </div>
   );
 }

@@ -3556,10 +3556,110 @@ a {
 }
 
 .st-page {
-  width: min(100%, 780px);
+  width: min(100%, 960px);
   margin: 0 auto;
   display: grid;
   gap: 1.25rem;
+}
+
+/* Two-pane settings: sticky section picker on the left, active panel on the right. */
+.st-layout {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.st-nav {
+  position: sticky;
+  top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem;
+}
+
+.st-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border: none;
+  border-radius: 14px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.st-nav__item:hover {
+  background: var(--accent-soft);
+}
+
+.st-nav__item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.st-nav__item--active,
+.st-nav__item--active:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.st-nav__item--danger {
+  color: var(--danger);
+}
+
+.st-nav__item--danger:hover {
+  background: rgba(166, 75, 60, 0.12);
+}
+
+.st-nav__item--danger.st-nav__item--active,
+.st-nav__item--danger.st-nav__item--active:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.st-nav__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.st-content {
+  min-width: 0;
+}
+
+/* Below this width the sidebar stacks above the panel as a horizontal scroller. */
+@media (max-width: 720px) {
+  .st-layout {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .st-nav {
+    position: static;
+    flex-direction: row;
+    gap: 0.35rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .st-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .st-nav__item {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
 }
 
 .st-header {
