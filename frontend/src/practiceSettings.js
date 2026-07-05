@@ -24,14 +24,18 @@ export const DEFAULT_PRACTICE_SETTINGS = {
       multiple_choice: true,
       // Phase 5: pick the missing word from a bank of English tiles. §4 (#6).
       word_bank_cloze: true,
-      // Phase 5: pick the Spanish prompt for an English answer. OFF by default —
-      // needs the Spanish-distractor backend affordance (migration 0014). §4 (#5).
-      reverse_mc: false,
+      // Pick the Spanish prompt for an English answer. ON by default as of Phase 6:
+      // its Spanish-distractor backend (migration 0014) is live, so it works
+      // end-to-end and degrades cleanly when a card lacks distractors. §4 (#5), §9 Phase 6.
+      reverse_mc: true,
       // Phase 3: queue-external speed round of MC questions between blocks. §4 (#7).
       speed_round: true,
-      // --- Tier C (practice only) — never counts; exposure / arcade / cool-down ---
+      // --- Tier C / depth (practice only) — never counts toward FSRS ---
       // Phase 3: matching grid warm-up / cool-down. §4 (#8), §9 Phase 3.
       memory_grid: true,
+      // Phase 6 depth game: match a word to its synonyms as a cool-down. Feeds a
+      // separate "depth" stat, never due_at. §11, §4 enrichment aside, §9 Phase 6.
+      synonym_match: true,
       // Phase 5: single-card cool-down puzzles. OFF by default. §4 (#9–#10).
       scramble: false,
       hangman: false,

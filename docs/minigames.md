@@ -141,7 +141,7 @@ public.skip_smart_practice_card(p_session_id bigint, p_card_id bigint) returns j
 This keeps FSRS pristine while letting a *recognized* card move on. It is only required for Tier‑B‑in‑session; Tier A and all boundary games work without it.
 
 ### 5.4 Optional future: a real Hard(2) grade
-If we later want recognition wins to count as a **downgraded positive** (instead of not at all), extend `_apply_card_progress` to accept a third result mapped to FSRS rating `2`, and relax the `CHECK (... in ('known','unknown'))` constraints on `card_progress.last_result` and `practice_session_cards.last_result`. **Deferred** — the count‑failures‑only model above is FSRS‑safe without it.
+If we later want recognition wins to count as a **downgraded positive** (instead of not at all), extend `_apply_card_progress` to accept a third result mapped to FSRS rating `2`, and relax the `CHECK (... in ('known','unknown'))` constraints on `card_progress.last_result` and `practice_session_cards.last_result`. **Deferred** — the count‑failures‑only model above is FSRS‑safe without it. (Still deferred as of Phase 6, §9: if ever adopted, the 2‑streak graduation must keep requiring a genuine free‑recall `known`, never a Hard.)
 
 ---
 
@@ -291,10 +291,45 @@ Each phase ships independently and leaves the app fully working.
 - Recall‑from‑definition, free‑type cloze, word‑bank cloze, reverse MC, scramble, hangman.
 - Per‑game badges, copy, and (optional) minigame telemetry (§10).
 
+### Phase 6 — Telemetry, reverse‑MC go‑live & a depth stat
+Net‑new scope beyond the original plan, drawn from the deferred items (§10, §11) and the §4
+enrichment aside. **Additive only: zero change to FSRS, the 2‑streak, or any modality's
+`onResolve` contract** — with everything here off/empty the app is byte‑for‑byte the Phase 5 flow.
+
+- **Minigame telemetry (§10).** New `minigame_plays` table (`user_id`, `card_id`, `game`,
+  `outcome`, `counted`, `created_at`) written through a SECURITY DEFINER RPC
+  `log_minigame_play` (migration 0015), mirroring the 0013/0014 grant pattern. The frontend
+  logs every **per‑card** minigame resolution from `resolveCard` — each Tier‑A/B modality with
+  its `outcome` (`known` / `unknown` / `skip`) and whether it `counted` toward FSRS — plus each
+  depth‑game play. The classic swipe is **not** a minigame and is not logged (so a
+  minigames‑disabled session writes zero rows). The queue‑external arcade games (memory grid /
+  speed round / scramble / hangman) are pure fun with no card‑learning outcome and are not
+  logged either. Purely additive analytics — **never read by the scheduler**.
+- **Reverse‑MC go‑live (§4 #5).** Migration 0014's `p_side='es'` distractor path is live on the
+  remote, so Reverse MC now has real Spanish sibling distractors end‑to‑end. Flipped **on by
+  default** (joining Multiple choice); it still degrades cleanly to a production/classic modality
+  whenever a card can't supply enough distractors (`resolveModality`), so nothing breaks on a
+  remote that predates 0014.
+- **Depth stat (§11, §4 enrichment aside).** A new **Synonym match** game (`synonym_match`) over
+  `synonyms_en`: show an answer word and pick which sibling words share its meaning (distractors
+  drawn from the seen‑cards pool — no fetch). It runs as a queue‑external **cool‑down**
+  interstitial (like scramble/hangman), so it **never touches `due_at` or the graduation
+  streak** and never calls a session RPC. Results feed a separate **client‑side depth stat**
+  (localStorage, `duocards.depthStat`) — a running count of related words matched, orthogonal to
+  the FSRS schedule — surfaced in Settings → Minigames and on the session‑complete screen.
+- **Deferred (unchanged):** the Hard(2) grade (§5.4) and active "type what you hear" dictation
+  stay deferred — the count‑failures‑only model is FSRS‑safe without them, and graduation must
+  keep requiring genuine free‑recall Good.
+
+**Acceptance:** telemetry is write‑only and never influences a grade or the streak; disabling
+minigames still yields pure classic and writes no plays; Reverse MC works end‑to‑end after 0014
+and degrades cleanly before it; the depth game and its stat never reach
+`submit_smart_practice_review` / `skip_smart_practice_card`.
+
 ---
 
-## 10. Optional telemetry (deferred)
-To analyze engagement without touching FSRS, add a `minigame_plays` table (`user_id`, `card_id`, `game`, `outcome`, `counted boolean`, `created_at`). Purely additive; never read by the scheduler.
+## 10. Minigame telemetry (implemented in Phase 6)
+To analyze engagement without touching FSRS, a `minigame_plays` table (`user_id`, `card_id`, `game`, `outcome`, `counted boolean`, `created_at`) records every per‑card minigame play and every depth‑game play. Writes go through the SECURITY DEFINER RPC `log_minigame_play` (migration 0015); the frontend fires them best‑effort (a failed log never disrupts practice). Purely additive; **never read by the scheduler**. The classic swipe and the pure arcade boundary/cool‑down games are not logged. See §9 Phase 6.
 
 ---
 

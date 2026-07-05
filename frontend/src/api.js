@@ -284,16 +284,35 @@ export function undoSmartPracticeReview(sessionId) {
 // the real answer. `side` picks the language: 'en' (default, sibling english_text —
 // multiple choice / word-bank cloze) or 'es' (sibling spanish_text — reverse MC).
 //
-// The 'es' side needs migration 0014's p_side parameter. We omit p_side for 'en' so
-// the default (English) path still resolves against a remote that only has the older
-// two-argument function — reverse MC is off by default and simply degrades until
-// 0014 is pushed. See docs/minigames.md §8.3, §4 #5.
+// The 'es' side needs migration 0014's p_side parameter, which is live on the remote
+// (Phase 6, §4 #5). We still omit p_side on the 'en' path so the default resolves
+// against any older two-argument function too — and a remote that predates 0014
+// simply errors on the 'es' fetch, which resolveModality degrades away cleanly.
+// See docs/minigames.md §8.3, §4 #5.
 export function getMinigameDistractors(cardId, n = 3, side = 'en') {
   const args = { p_card_id: cardId, p_n: n };
   if (side && side !== 'en') {
     args.p_side = side;
   }
   return rpc('get_minigame_distractors', args);
+}
+
+// Best-effort minigame telemetry (docs/minigames.md §10, §9 Phase 6). Records one
+// play — the game id, its outcome ('known' | 'unknown' | 'skip' | a depth result),
+// and whether it counted toward FSRS. Purely additive analytics, NEVER read by the
+// scheduler. Deliberately swallows every error (including a missing session): a
+// failed log must never disrupt a review, so callers fire-and-forget it.
+export async function logMinigamePlay(cardId, game, outcome, counted = false) {
+  try {
+    await supabase.rpc('log_minigame_play', {
+      p_card_id: cardId ?? null,
+      p_game: game,
+      p_outcome: outcome,
+      p_counted: Boolean(counted),
+    });
+  } catch {
+    /* telemetry is best-effort — never surface a logging failure in practice */
+  }
 }
 
 // Advance the current smart-practice card WITHOUT grading it — used for a Tier-B

@@ -20,6 +20,7 @@ import {
   saveReminderSettings,
 } from '../notifications';
 import { loadPracticeSettings, savePracticeSettings } from '../practiceSettings';
+import { loadDepthStat, resetDepthStat } from '../depthStat';
 
 // OAuth failures (e.g. Google linking) come back appended to the redirect URL.
 function readOAuthErrorFromUrl() {
@@ -388,6 +389,11 @@ const MINIGAME_META = {
     description: 'Match Spanish words to their English answers in a quick warm-up or cool-down. Purely for fun — it never changes your schedule.',
     counts: false,
   },
+  synonym_match: {
+    label: 'Synonym match',
+    description: 'In a cool-down, pick the words that share a meaning with an answer. Builds your vocabulary-depth stat — a different skill that never changes when a card is next due.',
+    counts: false,
+  },
   speed_round: {
     label: 'Speed round',
     description: 'A fast burst of multiple-choice questions between rounds. Just for practice — it never changes when a card is next due.',
@@ -417,8 +423,13 @@ const MINIGAME_META = {
 
 function MinigamesSection() {
   const [settings, setSettings] = useState(() => loadPracticeSettings());
+  const [depthStat, setDepthStat] = useState(() => loadDepthStat());
   const minigames = settings.minigames;
   const gameEntries = Object.entries(minigames.games ?? {});
+
+  function handleResetDepth() {
+    setDepthStat(resetDepthStat());
+  }
 
   // Persist the whole practice-settings blob so the other practice settings
   // (block size, interleaving, …) survive alongside the minigame changes.
@@ -511,6 +522,29 @@ function MinigamesSection() {
               );
             })}
           </ul>
+        )}
+      </div>
+
+      <div className="st-depth">
+        <h3 className="st-subtitle">Vocabulary depth</h3>
+        {depthStat.rounds > 0 ? (
+          <>
+            <p className="st-section__hint">
+              You’ve matched <strong>{depthStat.matched}</strong> related word{depthStat.matched === 1 ? '' : 's'} across{' '}
+              {depthStat.rounds} Synonym-match round{depthStat.rounds === 1 ? '' : 's'}. This depth score tracks the words
+              you can connect — it’s separate from your review schedule and never changes when a card is next due.
+            </p>
+            <div className="st-actions">
+              <button type="button" className="button button--secondary st-button--compact" onClick={handleResetDepth}>
+                Reset depth stat
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="st-section__hint">
+            Play the Synonym-match cool-down to start building a vocabulary-depth score — it tracks related words you know,
+            separately from your review schedule.
+          </p>
         )}
       </div>
     </section>

@@ -3,6 +3,7 @@ import MemoryGrid from './MemoryGrid';
 import SpeedRound from './SpeedRound';
 import WordScramble from './WordScramble';
 import Hangman from './Hangman';
+import SynonymMatch from './SynonymMatch';
 
 // Framing copy per placement (docs/minigames.md §6.1). The game itself is chosen
 // upstream by chooseInterstitialGame so the host stays a thin shell.
@@ -14,7 +15,8 @@ const PLACEMENT_COPY = {
 
 // Render the chosen game. Pool-based games (memory_grid / speed_round) take the
 // whole sampled pool; single-card cool-down puzzles (scramble / hangman, §4 #9–#10)
-// take just the first card of the pool.
+// take just the first card of the pool; the depth game (synonym_match, §9 Phase 6)
+// takes cards[0] as its anchor and the rest as its distractor pool.
 function renderGame(game, cards, onDone) {
   if (game === 'memory_grid') {
     return <MemoryGrid cards={cards} onDone={onDone} />;
@@ -24,6 +26,9 @@ function renderGame(game, cards, onDone) {
   }
   if (game === 'hangman') {
     return <Hangman card={cards[0]} onDone={onDone} />;
+  }
+  if (game === 'synonym_match') {
+    return <SynonymMatch card={cards[0]} pool={cards.slice(1)} onDone={onDone} />;
   }
   return <SpeedRound cards={cards} onDone={onDone} />;
 }

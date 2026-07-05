@@ -18,11 +18,18 @@
 // per-card games fire on cards that weren't already eligible, so the FSRS
 // guardrails in selectModality stay intact.
 
-// Tier-C boundary / cool-down games (never count). They only ever run as
+// Queue-external games (never count toward FSRS). They only ever run as
 // interstitials, never as a per-card modality (docs/minigames.md §4 #7–#10, §5.2).
 // memory_grid / speed_round are pool-based; scramble / hangman are single-card
-// cool-down puzzles (off by default).
-export const BOUNDARY_GAMES = ['memory_grid', 'speed_round', 'scramble', 'hangman'];
+// cool-down puzzles (off by default); synonym_match is the Phase 6 depth game
+// (§11) — it feeds a separate depth stat, still never touching due_at.
+export const BOUNDARY_GAMES = ['memory_grid', 'speed_round', 'scramble', 'hangman', 'synonym_match'];
+
+// The Synonym-match depth round needs an anchor word carrying at least this many
+// distinct synonyms (the correct picks) and this many other pool answers to draw
+// distractors from. Below either bound the game is skipped (§9 Phase 6).
+const DEPTH_MIN_SYNONYMS = 2;
+const DEPTH_MIN_DISTRACTORS = 3;
 
 const FREQUENCY_POLICY = {
   off: { perCard: 'none', placements: [] },
@@ -151,9 +158,72 @@ function preferenceFor(placement, seed) {
   if (placement === 'boundary') {
     return ['speed_round', 'memory_grid'];
   }
-  const cooldownGames = ['memory_grid', 'speed_round', 'scramble', 'hangman'];
+  const cooldownGames = ['memory_grid', 'speed_round', 'synonym_match', 'scramble', 'hangman'];
   const start = ((seed % cooldownGames.length) + cooldownGames.length) % cooldownGames.length;
   return [...cooldownGames.slice(start), ...cooldownGames.slice(0, start)];
+}
+
+// A card's distinct English synonyms, excluding any that just restate the answer —
+// the correct picks for a Synonym-match round (docs/minigames.md §9 Phase 6).
+function usableSynonyms(card) {
+  const answerKey = normalizeKey(card?.answer_en);
+  const seen = new Set(answerKey ? [answerKey] : []);
+  const out = [];
+  for (const raw of Array.isArray(card?.synonyms_en) ? card.synonyms_en : []) {
+    const text = typeof raw === 'string' ? raw.trim() : '';
+    const norm = normalizeKey(text);
+    if (!norm || seen.has(norm)) {
+      continue;
+    }
+    seen.add(norm);
+    out.push(text);
+  }
+  return out;
+}
+
+// Assemble a Synonym-match round from the seen-cards pool: one anchor with enough
+// synonyms plus a set of other cards to source distractor answers from. Returns
+// { cards: [anchor, ...distractorCards] } (SynonymMatch reads cards[0] as the anchor
+// and the rest as the distractor pool) or null when the pool can't supply a fair
+// round. Uses the RAW pool (which carries synonyms_en) rather than the slimmed
+// boundary pool. See §9 Phase 6.
+function chooseDepthRound(cards) {
+  // One entry per distinct answer so a repeated word can't be both anchor and distractor.
+  const byAnswer = [];
+  const seenAnswers = new Set();
+  for (const card of cards ?? []) {
+    if (!card || card.card_id == null) {
+      continue;
+    }
+    const answerKey = normalizeKey(card.answer_en);
+    if (!answerKey || seenAnswers.has(answerKey)) {
+      continue;
+    }
+    seenAnswers.add(answerKey);
+    byAnswer.push(card);
+  }
+
+  const anchors = byAnswer.filter((card) => usableSynonyms(card).length >= DEPTH_MIN_SYNONYMS);
+  if (anchors.length === 0) {
+    return null;
+  }
+  const anchor = sample(anchors, 1)[0];
+  const anchorAnswerKey = normalizeKey(anchor.answer_en);
+  const anchorSynonymKeys = new Set(usableSynonyms(anchor).map(normalizeKey));
+
+  // Distractors: other answers that are neither the anchor's answer nor a synonym.
+  const distractors = byAnswer.filter((card) => {
+    if (card.card_id === anchor.card_id) {
+      return false;
+    }
+    const key = normalizeKey(card.answer_en);
+    return key !== anchorAnswerKey && !anchorSynonymKeys.has(key);
+  });
+  if (distractors.length < DEPTH_MIN_DISTRACTORS) {
+    return null;
+  }
+
+  return { cards: [anchor, ...sample(distractors, Math.min(6, distractors.length))] };
 }
 
 // Decide which boundary game (if any) to show at a placement, and pre-sample its
@@ -165,6 +235,15 @@ export function chooseInterstitialGame(placement, cards, settings, seed = 0) {
   const pool = usableBoundaryCards(cards);
   for (const game of preferenceFor(placement, seed)) {
     if (!BOUNDARY_GAMES.includes(game) || !enabled[game]) {
+      continue;
+    }
+    // The depth game has its own material rule (an anchor with synonyms + distractor
+    // answers), drawn from the raw pool rather than the synonym-stripped boundary pool.
+    if (game === 'synonym_match') {
+      const round = chooseDepthRound(cards);
+      if (round) {
+        return { game, cards: round.cards };
+      }
       continue;
     }
     const bounds = GAME_POOL[game];

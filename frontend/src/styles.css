@@ -1049,6 +1049,159 @@ a {
   margin-top: 0.3rem;
 }
 
+/* ---- Synonym match (Phase 6 depth game, never counts). Runs as a cool-down
+   interstitial and feeds the separate vocabulary-depth stat; shares the matching
+   grid's footprint so it fills the interstitial slot. §9 Phase 6, §11. ---- */
+.synmatch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 1.75rem;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--surface);
+  box-shadow: 0 20px 50px rgba(34, 42, 45, 0.08);
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  text-align: center;
+}
+
+.synmatch .flashcard__label {
+  margin: 0;
+}
+
+.synmatch__lead {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.synmatch__answer {
+  margin: 0;
+  font-family: var(--head-font);
+  font-weight: 500;
+  font-size: clamp(1.7rem, 5vw, 2.4rem);
+  line-height: 1.05;
+  color: var(--ink);
+}
+
+.synmatch__context {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.synmatch__tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  width: min(460px, 100%);
+  margin-top: 0.35rem;
+}
+
+.synmatch__tile {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease, opacity 120ms ease;
+}
+
+.synmatch__tile:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.synmatch__tile--active,
+.synmatch__tile:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--accent-soft);
+}
+
+.synmatch__tile:disabled {
+  cursor: default;
+}
+
+.synmatch__tile--hit {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.synmatch__tile--missed {
+  border-style: dashed;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.synmatch__tile--wrong {
+  border-color: var(--danger);
+  background: rgba(166, 75, 60, 0.12);
+}
+
+.synmatch__tile--muted {
+  opacity: 0.5;
+}
+
+.synmatch__tile-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-family: var(--mono-font);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.synmatch__tile-text {
+  flex: 1;
+}
+
+.synmatch__actions,
+.synmatch__feedback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.3rem;
+}
+
+.synmatch__action {
+  min-width: 180px;
+}
+
+.synmatch__verdict {
+  margin: 0;
+  font-family: var(--head-font);
+  font-size: 1.2rem;
+  color: var(--ink);
+}
+
+.synmatch__result {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+}
+
 /* ---- Phase 4 encoding aids (new-card first exposure): mnemonic reveal + listening.
    Tier-C, never graded. Both share the classic flashcard's panel footprint so
    switching modalities in/out never jumps the layout. ---- */
@@ -1266,6 +1419,7 @@ a {
 .interstitial__game .mcgame,
 .interstitial__game .scramblegame,
 .interstitial__game .hangmangame,
+.interstitial__game .synmatch,
 .speedround > .mcgame {
   min-height: 0;
   height: 100%;
@@ -1833,6 +1987,16 @@ a {
 .practice-complete .eyebrow {
   font-family: var(--mono-font);
   color: var(--accent);
+}
+
+/* Vocabulary-depth line on the complete screen — surfaced after a cool-down
+   Synonym-match round (§9 Phase 6). Subtle: it's a side stat, not the schedule. */
+.practice-complete__depth {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
 }
 
 .review-shortcuts {
@@ -3572,6 +3736,20 @@ a {
 .st-minigame-badge {
   justify-self: start;
   margin-top: 0.15rem;
+}
+
+/* Vocabulary-depth read-out in the Minigames settings section (§9 Phase 6). */
+.st-depth {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--bg);
+}
+
+.st-depth .st-subtitle {
+  margin: 0;
 }
 
 .st-button--compact {

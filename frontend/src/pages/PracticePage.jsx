@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   getMinigameDistractors,
+  logMinigamePlay,
   skipSmartPracticeCard,
   startSmartPracticeSession,
   submitSmartPracticeReview,
@@ -14,6 +15,7 @@ import InterstitialHost from '../components/InterstitialHost';
 import { loadPracticeSettings } from '../practiceSettings';
 import { chooseInterstitialGame, isInterstitialPlacementEnabled } from '../minigameFrequency';
 import { loadRecentCards, mergeRecentCards, saveRecentCards } from '../recentCards';
+import { loadDepthStat } from '../depthStat';
 
 const FIRST_IDLE_HINT_DELAY_MS = 10000;
 
@@ -419,6 +421,18 @@ function PracticePage() {
     // Captured before the queue moves so we can detect a block boundary afterward.
     const previousSummary = session.summary;
 
+    // Minigame telemetry (docs/minigames.md §10, §9 Phase 6). Log the per-card play
+    // — the game, its outcome, and whether it counted toward FSRS — for every
+    // modality except the classic swipe (which is not a minigame). Fire-and-forget:
+    // logMinigamePlay swallows its own errors, so this can never block or break the
+    // advance, and it's purely additive (never read by the scheduler).
+    if (currentModality && currentModality !== 'classic') {
+      const outcome = skip ? 'skip' : result;
+      if (outcome) {
+        logMinigamePlay(session.current_card.card_id, currentModality, outcome, Boolean(counts && result));
+      }
+    }
+
     if (skip) {
       try {
         setIsSubmitting(true);
@@ -541,6 +555,9 @@ function PracticePage() {
   }
 
   const summary = session.summary;
+  // Only read the depth stat on the completion screen (no current card), where the
+  // cool-down Synonym-match game surfaces — avoids a localStorage read every render.
+  const depthStat = session.current_card ? null : loadDepthStat();
 
   return (
     <section className="review-screen">
@@ -620,6 +637,11 @@ function PracticePage() {
             <p>
               Completed {summary.completed_cards} of {summary.total_cards} cards in {modeLabel(summary.mode).toLowerCase()} mode.
             </p>
+            {depthStat && depthStat.matched > 0 ? (
+              <p className="practice-complete__depth">
+                Vocabulary depth: {depthStat.matched} related word{depthStat.matched === 1 ? '' : 's'} matched.
+              </p>
+            ) : null}
             <Link className="button button--primary" to="/">
               Back to home
             </Link>

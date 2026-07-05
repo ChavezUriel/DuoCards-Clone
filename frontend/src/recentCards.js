@@ -8,6 +8,29 @@
 // the card pool (no backend change).
 const STORAGE_KEY = 'duocards.recentPracticeCards';
 const CAP = 24;
+// Keep only a handful of synonyms per card so the blob stays small; the depth game
+// (Synonym match, §9 Phase 6) needs just a couple to build a round.
+const SYNONYM_CAP = 6;
+
+// Trim a card's English synonyms to a small, clean array of non-empty strings.
+// Older stored blobs predate this field and simply yield [] (those cards then just
+// aren't eligible as a Synonym-match anchor).
+function slimSynonyms(synonyms) {
+  if (!Array.isArray(synonyms)) {
+    return [];
+  }
+  const out = [];
+  for (const raw of synonyms) {
+    const text = typeof raw === 'string' ? raw.trim() : '';
+    if (text) {
+      out.push(text);
+    }
+    if (out.length >= SYNONYM_CAP) {
+      break;
+    }
+  }
+  return out;
+}
 
 function slimCard(card) {
   if (!card || card.card_id == null) {
@@ -18,7 +41,14 @@ function slimCard(card) {
   if (!prompt_es || !answer_en) {
     return null;
   }
-  return { card_id: card.card_id, prompt_es, answer_en, section_name: card.section_name ?? null };
+  return {
+    card_id: card.card_id,
+    prompt_es,
+    answer_en,
+    section_name: card.section_name ?? null,
+    // Carried for the depth game only; boundary games ignore it. See §9 Phase 6.
+    synonyms_en: slimSynonyms(card.synonyms_en),
+  };
 }
 
 export function loadRecentCards() {
