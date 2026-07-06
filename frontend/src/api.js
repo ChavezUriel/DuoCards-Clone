@@ -112,6 +112,20 @@ export async function unlinkUserIdentity(identity) {
   if (error) throw new Error(error.message);
 }
 
+// Whether the current user has a password set. Supabase does not expose this on
+// the user object, and an `email` identity is NOT created when a Google-first
+// user sets a password, so we read auth.users.encrypted_password server-side.
+export async function hasPassword() {
+  return Boolean(await rpc('has_password'));
+}
+
+// Back-fill the `email` identity for a password-having user who lacks one. This
+// is what lets GoTrue (which requires >= 2 identities) unlink Google afterwards.
+// Idempotent; returns true once the email identity exists.
+export async function ensureEmailIdentity() {
+  return Boolean(await rpc('ensure_email_identity'));
+}
+
 // ===========================================================================
 // Account management
 // ===========================================================================

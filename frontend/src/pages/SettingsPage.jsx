@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import {
   deleteAccount,
+  ensureEmailIdentity,
   exportAccountData,
   fetchMe,
   fetchUserIdentities,
+  hasPassword as fetchHasPassword,
   linkGoogleIdentity,
   requestPasswordReset,
   unlinkUserIdentity,
@@ -100,11 +102,12 @@ function AccountSection({ me, onNicknameSaved }) {
   );
 }
 
-function SecuritySection({ me, identities, onIdentitiesChanged }) {
+function SecuritySection({ me, identities, hasPassword, onIdentitiesChanged, onPasswordChanged }) {
   const googleIdentity = identities.find((identity) => identity.provider === 'google');
   const emailIdentity = identities.find((identity) => identity.provider === 'email');
-  const hasPassword = Boolean(emailIdentity);
-  const canUnlinkGoogle = Boolean(googleIdentity) && identities.length > 1;
+  // A password is a valid second way to sign in even when Supabase never created
+  // an `email` identity for it, so it also permits unlinking Google.
+  const canUnlinkGoogle = Boolean(googleIdentity) && (hasPassword || identities.length > 1);
 
   const [linkError, setLinkError] = useState('');
   const [isLinking, setIsLinking] = useState(false);
@@ -131,6 +134,13 @@ function SecuritySection({ me, identities, onIdentitiesChanged }) {
     setLinkError('');
     setIsUnlinking(true);
     try {
+      // GoTrue refuses to unlink unless the account keeps >= 2 identities. A
+      // Google-first user with a password has no `email` identity, so create it
+      // first — this makes the password a real, standalone way to sign in.
+      if (!emailIdentity && hasPassword) {
+        await ensureEmailIdentity();
+        await onIdentitiesChanged();
+      }
       await unlinkUserIdentity(googleIdentity);
       await onIdentitiesChanged();
     } catch (unlinkFailure) {
@@ -153,8 +163,15 @@ function SecuritySection({ me, identities, onIdentitiesChanged }) {
       await updatePassword(passwordForm.password);
       setPasswordForm({ password: '', confirmPassword: '' });
       setPasswordStatus('saved');
-      // A Google-only user gains an email identity once a password exists.
-      await onIdentitiesChanged();
+      // Supabase does not create an `email` identity when a Google-first user
+      // sets a password, so add one — this enables email sign-in and later
+      // Google unlinking. Best-effort: never fail a saved password over it.
+      try {
+        await ensureEmailIdentity();
+      } catch {
+        // ignore — the password was still saved
+      }
+      await Promise.all([onIdentitiesChanged(), onPasswordChanged()]);
     } catch (updateFailure) {
       setPasswordError(updateFailure.message);
       setPasswordStatus('error');
@@ -754,6 +771,7 @@ const SECTIONS = [
 function SettingsPage() {
   const [me, setMe] = useState(null);
   const [identities, setIdentities] = useState([]);
+  const [passwordSet, setPasswordSet] = useState(false);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [activeSection, setActiveSection] = useState('account');
@@ -765,9 +783,18 @@ function SettingsPage() {
     async function load() {
       try {
         const [nextMe, nextIdentities] = await Promise.all([fetchMe(), fetchUserIdentities()]);
+        // The has_password RPC is the source of truth, but fall back to the old
+        // identity heuristic so the page still loads if it isn't deployed yet.
+        let nextHasPassword;
+        try {
+          nextHasPassword = await fetchHasPassword();
+        } catch {
+          nextHasPassword = nextIdentities.some((identity) => identity.provider === 'email');
+        }
         if (!cancelled) {
           setMe(nextMe);
           setIdentities(nextIdentities);
+          setPasswordSet(nextHasPassword);
           setStatus('ready');
         }
       } catch (loadError) {
@@ -785,6 +812,10 @@ function SettingsPage() {
 
   async function refreshIdentities() {
     setIdentities(await fetchUserIdentities());
+  }
+
+  async function refreshPasswordState() {
+    setPasswordSet(await fetchHasPassword());
   }
 
   if (status === 'loading') {
@@ -805,7 +836,15 @@ function SettingsPage() {
           />
         );
       case 'security':
-        return <SecuritySection me={me} identities={identities} onIdentitiesChanged={refreshIdentities} />;
+        return (
+          <SecuritySection
+            me={me}
+            identities={identities}
+            hasPassword={passwordSet}
+            onIdentitiesChanged={refreshIdentities}
+            onPasswordChanged={refreshPasswordState}
+          />
+        );
       case 'notifications':
         return <NotificationsSection />;
       case 'minigames':
