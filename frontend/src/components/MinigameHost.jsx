@@ -183,9 +183,11 @@ export function resolveModality(card, settings, entry) {
 
 // Sits where <Flashcard> used to render in PracticePage and owns modality
 // selection. Every modality reports its outcome through a single `onResolve`
-// contract: { result: 'known' | 'unknown' | null, counts: boolean, skip?: boolean }.
-// (`summary`, used for phase-boundary detection, arrives with the boundary games
-// in a later phase.)
+// contract: { result: 'known' | 'unknown' | 'almost' | null, counts: boolean,
+// skip?: boolean }. 'almost' is the typing games' neutral near miss: it always
+// rides with skip: true / counts: false, so it advances ungraded (telemetry keeps
+// the label). (`summary`, used for phase-boundary detection, arrives with the
+// boundary games in a later phase.)
 function MinigameHost({
   card,
   settings,
@@ -248,7 +250,8 @@ function MinigameHost({
   // Tier-A production games — keyed by card so each new card remounts with fresh
   // input/feedback state. Each owns the whole graded interaction and reports back
   // through the same onResolve contract as the classic swipe (correct -> known,
-  // wrong -> unknown). Safe on a review card's first pass (§3.3).
+  // wrong -> unknown, near miss -> neutral skip). Safe on a review card's first
+  // pass (§3.3).
   if (modality === 'type_translation') {
     return <TypeTranslation key={card.card_id} card={card} onResolve={onResolve} />;
   }

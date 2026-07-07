@@ -420,7 +420,8 @@ function PracticePage() {
   }, [isAnswerVisible, isClassicModality, isDetailsVisible, isInterstitialActive, isSubmitting, session?.current_card?.card_id, status]);
 
   // Unified resolution for every answer modality (docs/minigames.md §5, §8.2):
-  //   * skip (a Tier-B recognition win) -> advance WITHOUT grading via the skip RPC.
+  //   * skip (a Tier-B recognition win, a Tier-C aid, or a Tier-A near miss — the
+  //     neutral 'almost' verdict) -> advance WITHOUT grading via the skip RPC.
   //   * counted result -> the graded path (classic swipe, Tier-A typing).
   //   * anything else (non-counting practice outcome) -> resolve locally, no RPC.
   async function resolveCard({ result, counts = false, skip = false }) {
@@ -437,7 +438,9 @@ function PracticePage() {
     // logMinigamePlay swallows its own errors, so this can never block or break the
     // advance, and it's purely additive (never read by the scheduler).
     if (currentModality && currentModality !== 'classic') {
-      const outcome = skip ? 'skip' : result;
+      // A skip usually logs as 'skip', but a Tier-A near miss skips WITH a result
+      // ('almost') so telemetry can tell the two neutral paths apart.
+      const outcome = skip ? (result ?? 'skip') : result;
       if (outcome) {
         logMinigamePlay(session.current_card.card_id, currentModality, outcome, Boolean(counts && result));
       }

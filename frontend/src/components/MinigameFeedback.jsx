@@ -1,18 +1,32 @@
 import { useEffect, useRef } from 'react';
 
+// Per-tone verdict mark and screen-reader text. The color mark IS the verdict; the
+// sr-only line keeps it available to assistive tech.
+const TONES = {
+  correct: { mark: '✓', sr: 'Correct' },
+  almost: { mark: '≈', sr: 'Almost correct — check the exact answer' },
+  wrong: { mark: '✗', sr: 'Incorrect' },
+};
+
 // Shared reveal feedback for the auto-advancing minigames (multiple choice + the
 // typing games). It replaces the old "Correct!/Not quite" verdict *text* with a
-// color-coded green/red animation and drives the stoppable auto-advance flow from
+// color-coded animation and drives the stoppable auto-advance flow from
 // useAutoAdvance:
-//   * a green (correct) or red (wrong) mark pops + pulses in — this IS the verdict,
+//   * a green (correct), amber (almost) or red (wrong) mark pops + pulses in — this
+//     IS the verdict,
 //   * while counting down it shows a depleting timer bar and NO Continue button, plus
 //     a quiet hint that a tap or key press will stay the advance,
 //   * once the learner stops the countdown it swaps in an explicit Continue button.
 //
+// `tone` is 'correct' | 'almost' | 'wrong'. 'almost' is the typing games' NEUTRAL
+// near-miss verdict (never graded, card recycles — docs/minigames.md §4 near-miss
+// aside), so it alone carries a one-line caption: color can say "not right", but not
+// "this won't count against you".
+//
 // `children` is the game's own answer reveal (e.g. the correct answer for a miss),
 // rendered between the color mark and the countdown/Continue control.
-function MinigameFeedback({ correct, phase, delay, stoppable = true, onAdvance, children }) {
-  const tone = correct ? 'correct' : 'wrong';
+function MinigameFeedback({ tone, phase, delay, stoppable = true, onAdvance, children }) {
+  const { mark, sr } = TONES[tone] ?? TONES.wrong;
   const stopped = phase === 'stopped';
   const continueRef = useRef(null);
 
@@ -27,11 +41,15 @@ function MinigameFeedback({ correct, phase, delay, stoppable = true, onAdvance, 
   return (
     <div className={`mg-feedback mg-feedback--${tone}`} role="status" aria-live="polite">
       {/* The verdict is conveyed by color; this keeps it available to screen readers. */}
-      <span className="sr-only">{correct ? 'Correct' : 'Incorrect'}</span>
+      <span className="sr-only">{sr}</span>
 
       <div className={`mg-feedback__flash mg-feedback__flash--${tone}`} aria-hidden="true">
-        <span className="mg-feedback__mark">{correct ? '✓' : '✗'}</span>
+        <span className="mg-feedback__mark">{mark}</span>
       </div>
+
+      {tone === 'almost' ? (
+        <p className="mg-feedback__caption">Almost right — this one will come back around.</p>
+      ) : null}
 
       {children}
 

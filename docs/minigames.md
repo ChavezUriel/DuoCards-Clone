@@ -95,9 +95,9 @@ Support‑heavy formats early in a word's life; production formats late and on r
 
 | # | Game | Tier | Card fields | Counting | Primary placement |
 |---|---|---|---|---|---|
-| 1 | **Type the translation** | A | `prompt_es`, `answer_en`, `synonyms_en` | Count fully | Review 1st pass; new consolidation |
-| 2 | **Recall from definition** | A | `definition_en`, `part_of_speech`, `answer_en` | Count fully | Review 1st pass |
-| 3 | **Cloze (free‑type)** | A | `example_en`, `answer_en` | Count fully | New consolidation; review |
+| 1 | **Type the translation** | A | `prompt_es`, `answer_en`, `synonyms_en` | Count fully (near miss: neutral) | Review 1st pass; new consolidation |
+| 2 | **Recall from definition** | A | `definition_en`, `part_of_speech`, `answer_en` | Count fully (near miss: neutral) | Review 1st pass |
+| 3 | **Cloze (free‑type)** | A | `example_en`, `answer_en` | Count fully (near miss: neutral) | New consolidation; review |
 | 4 | **Multiple choice (es→en)** | B | `prompt_es`, siblings' `answer_en` | Failures only | New consolidation; lapsed review |
 | 5 | **Reverse MC (en→es)** | B | `answer_en`, siblings' `prompt_es` | Failures only | New consolidation |
 | 6 | **Word‑bank cloze** | B | `example_en` + option tiles | Failures only | New consolidation |
@@ -112,6 +112,8 @@ Enrichment aside: synonym/collocation matching (`synonyms_en`, `collocations`) i
 
 Hints aside (#2 recall‑from‑definition and #3 free‑type cloze, `MinigameHints.jsx`): a two‑step ladder the learner can spend before submitting — step 1 reveals the answer's **shape** (one underscore per character, word gaps shown; in the cloze it replaces the anonymous `______` blank in the sentence), step 2 additionally shows `prompt_es`. The hint button sits one Tab after the answer input and returns focus to it on press. Hints don't change grading: a hinted correct answer still counts `known` (Tier A contract untouched).
 
+Near‑miss aside (#1–#3, `classifyGuess` in `minigameText.js`): a guess that is *close but not exact* grades as **neutral**, not as a lapse. Close means: within a typo budget of the answer or any synonym (Damerau‑Levenshtein on the normalized strings — 1 edit for 4–7 chars, 2 for 8+, 0 for ≤3 where one edit is usually a different word), or the same content words with exactly one function word (article / infinitive `to` / preposition / particle) dropped or added ("listen" for "listen to"). The UI shows an amber `≈` verdict, echoes the guess, and prints the exact answer; the card advances via `skip_smart_practice_card` (§5.3) — FSRS and the 2‑streak untouched, card recycled to the back of the queue for a clean free‑recall rep. Telemetry logs it as outcome `almost`, `counted=false`. Rationale: punishing "recieve" with a lapse mis‑measures memory (the word *was* recalled), but rewarding it with `known` teaches the typo — deferring the rep measures nothing falsely.
+
 ---
 
 ## 5. Integration with the queue & FSRS
@@ -119,7 +121,7 @@ Hints aside (#2 recall‑from‑definition and #3 free‑type cloze, `MinigameHi
 Every card gets **exactly one graded interaction.** Games fall into two structural categories:
 
 ### 5.1 Graded games (replace the swipe) — Tier A
-The game *is* the graded rep. Correct → `submit_smart_practice_review(..., 'known')`, wrong → `'unknown'`. Drop‑in replacement for the swipe on eligible cards. **Zero backend change** (uses the existing RPC).
+The game *is* the graded rep. Correct → `submit_smart_practice_review(..., 'known')`, wrong → `'unknown'`. Drop‑in replacement for the swipe on eligible cards. **Zero backend change** (uses the existing RPC). One carve‑out: a *near miss* (typo‑level, §4 near‑miss aside) grades neither way — it rides the §5.3 skip so the rep is deferred, not counted.
 
 ### 5.2 Practice games (never award a positive) — Tier B & C
 These never call `submit(..., 'known')`. Placement determines how they touch the queue:
@@ -140,7 +142,7 @@ Add one RPC:
 public.skip_smart_practice_card(p_session_id bigint, p_card_id bigint) returns jsonb  -- new snapshot
 ```
 
-This keeps FSRS pristine while letting a *recognized* card move on. It is only required for Tier‑B‑in‑session; Tier A and all boundary games work without it.
+This keeps FSRS pristine while letting a *recognized* card move on. It serves Tier‑B‑in‑session wins and the Tier‑A **near‑miss neutral** outcome (§4 near‑miss aside); Tier A exact/wrong grading and all boundary games work without it.
 
 ### 5.4 Optional future: a real Hard(2) grade
 If we later want recognition wins to count as a **downgraded positive** (instead of not at all), extend `_apply_card_progress` to accept a third result mapped to FSRS rating `2`, and relax the `CHECK (... in ('known','unknown'))` constraints on `card_progress.last_result` and `practice_session_cards.last_result`. **Deferred** — the count‑failures‑only model above is FSRS‑safe without it. (Still deferred as of Phase 6, §9: if ever adopted, the 2‑streak graduation must keep requiring a genuine free‑recall `known`, never a Hard.)

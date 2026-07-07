@@ -190,7 +190,7 @@ function MultipleChoice({
 
         {isRevealed ? (
           <MinigameFeedback
-            correct={isCorrect}
+            tone={isCorrect ? 'correct' : 'wrong'}
             phase={autoAdvance.phase}
             delay={isCorrect ? REVEAL_MS.correct : REVEAL_MS.wrong}
             stoppable={stoppable}

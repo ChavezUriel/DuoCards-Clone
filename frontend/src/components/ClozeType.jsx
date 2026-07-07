@@ -1,25 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { isGuessCorrect, locateAnswerInExample, normalizeAnswer } from '../minigameText';
+import { classifyGuess, locateAnswerInExample, normalizeAnswer } from '../minigameText';
 import MinigameFeedback from './MinigameFeedback';
 import { AnswerShape, HintButton, TranslationHint, useHints } from './MinigameHints';
 import { useAutoAdvance } from '../useAutoAdvance';
 
-// How long the right/wrong feedback lingers before it auto-advances. A miss dwells
+// How long the feedback lingers before it auto-advances. A miss or near miss dwells
 // longer so the learner can read the correct answer; a hit clears quickly to keep
 // momentum. A click or key press during the window stays the advance and surfaces a
 // Continue button instead (see useAutoAdvance).
-const FEEDBACK_MS = { known: 1100, unknown: 2000 };
+const FEEDBACK_MS = { known: 1100, almost: 2000, unknown: 2000 };
 
 // Tier-A production game (docs/minigames.md §3.1, §4 #3): blank the answer out of
 // the English example sentence and have the learner type the missing word. The
 // sentence is a *cue*, but the word itself is produced from memory — as strong as a
 // swipe — so it counts fully: correct -> `known`, wrong -> `unknown`, through the
-// identical onResolve({ result, counts }) contract. Selected only when the answer
-// can be located as a whole word in example_en (see selectModality); the located
-// span is recomputed here to render the blank.
+// identical onResolve({ result, counts }) contract. A NEAR MISS (a typo / dropped
+// function word, classifyGuess 'almost') is NEUTRAL: amber feedback shows the exact
+// answer and the card advances via the skip RPC — never graded, recycled for a clean
+// rep (§4 near-miss aside). Selected only when the answer can be located as a whole
+// word in example_en (see selectModality); the located span is recomputed here to
+// render the blank.
 function ClozeType({ card, onResolve }) {
   const [guess, setGuess] = useState('');
-  // null while typing; 'known' | 'unknown' once submitted (drives the reveal).
+  // null while typing; 'known' | 'almost' | 'unknown' once submitted (drives the reveal).
   const [outcome, setOutcome] = useState(null);
   // First empty submit arms a "Sure?" skip confirmation; the second one skips.
   const [confirmSkip, setConfirmSkip] = useState(false);
@@ -68,7 +71,18 @@ function ClozeType({ card, onResolve }) {
       return;
     }
 
-    const result = isGuessCorrect(guess, card) ? 'known' : 'unknown';
+    const verdict = classifyGuess(guess, card);
+
+    // Near miss → neutral: advance WITHOUT grading via the skip path (card recycles
+    // to the back of the queue, FSRS untouched). `result: 'almost'` rides along so
+    // telemetry can tell a near miss from a recognition-win skip.
+    if (verdict === 'almost') {
+      setOutcome('almost');
+      autoAdvance.arm(FEEDBACK_MS.almost, () => onResolve({ result: 'almost', counts: false, skip: true }));
+      return;
+    }
+
+    const result = verdict === 'correct' ? 'known' : 'unknown';
     setOutcome(result);
     // The hook keeps this idempotent across the timer and the Continue button.
     autoAdvance.arm(FEEDBACK_MS[result], () => onResolve({ result, counts: true }));
@@ -131,11 +145,18 @@ function ClozeType({ card, onResolve }) {
 
           {isRevealed ? (
             <MinigameFeedback
-              correct={outcome === 'known'}
+              tone={outcome === 'known' ? 'correct' : outcome === 'almost' ? 'almost' : 'wrong'}
               phase={autoAdvance.phase}
               delay={FEEDBACK_MS[outcome]}
               onAdvance={autoAdvance.advance}
             >
+              {/* On a near miss, echo the guess so the learner can spot the typo. */}
+              {outcome === 'almost' ? (
+                <p className="typegame__answer">
+                  <span className="typegame__answer-label">You typed</span>
+                  <span className="typegame__typed-text">{guess.trim()}</span>
+                </p>
+              ) : null}
               <p className="typegame__answer">
                 <span className="typegame__answer-label">Answer</span>
                 <span className="typegame__answer-text">{card.answer_en}</span>

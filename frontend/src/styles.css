@@ -846,6 +846,13 @@ a {
   box-shadow: 0 0 0 3px rgba(166, 75, 60, 0.16);
 }
 
+/* Neutral near miss (typo / dropped function word): amber, neither the green win
+   nor the red lapse — the guess was close and the rep is recycled, not graded. */
+.st-input.typegame__input--almost {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 3px var(--warning-soft);
+}
+
 .typegame__action {
   min-width: 180px;
 }
@@ -885,6 +892,16 @@ a {
   font-size: 1.25rem;
   font-weight: 600;
   color: var(--ink);
+}
+
+/* The learner's near-miss guess, echoed above the answer so the typo is spottable.
+   The wavy underline is the universal "check the spelling" affordance. */
+.typegame__typed-text {
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: var(--warning-ink);
+  text-decoration: underline wavy var(--warning);
+  text-underline-offset: 3px;
 }
 
 /* Multiple-choice minigame — recognition tiles; shares the classic flashcard's
@@ -1066,6 +1083,14 @@ a {
     mg-feedback-glow-wrong 900ms ease-out both;
 }
 
+/* Neutral near miss (typing games): an amber ≈ — close, ungraded, recycled. */
+.mg-feedback__flash--almost {
+  background: var(--warning);
+  animation:
+    mg-feedback-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    mg-feedback-glow-almost 900ms ease-out both;
+}
+
 .mg-feedback__mark {
   font-size: 1.7rem;
   font-weight: 700;
@@ -1110,6 +1135,19 @@ a {
   background: var(--danger);
 }
 
+.mg-feedback__timer-fill--almost {
+  background: var(--warning);
+}
+
+/* One quiet line only the 'almost' tone shows: color says "not right", but text has
+   to say "this won't count against you". */
+.mg-feedback__caption {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--warning-ink);
+}
+
 .mg-feedback__hint {
   margin: 0;
   font-size: 0.76rem;
@@ -1150,6 +1188,15 @@ a {
   }
 }
 
+@keyframes mg-feedback-glow-almost {
+  from {
+    box-shadow: 0 0 0 0 rgba(201, 150, 46, 0.45);
+  }
+  to {
+    box-shadow: 0 0 0 20px rgba(201, 150, 46, 0);
+  }
+}
+
 @keyframes mg-feedback-countdown {
   from {
     transform: scaleX(1);
@@ -1164,6 +1211,7 @@ a {
   .mg-feedback__flash,
   .mg-feedback__flash--correct,
   .mg-feedback__flash--wrong,
+  .mg-feedback__flash--almost,
   .mg-feedback__timer-fill {
     animation: none;
   }
@@ -1732,6 +1780,11 @@ a {
 
 .clozegame__slot--unknown {
   color: var(--danger);
+}
+
+/* Neutral near miss: amber ink (darker than --warning, which is too faint for text). */
+.clozegame__slot--almost {
+  color: var(--warning-ink);
 }
 
 /* ---- Hints for the free-type production games (recall-from-definition + cloze,

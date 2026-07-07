@@ -1,7 +1,8 @@
 // Shared text helpers for the answer-matching minigames. Kept in one module so the
 // Tier-A free-type games (Type the translation, Recall from definition, Cloze) all
-// normalize and compare answers identically, and so the cloze games locate the
-// blank the same way. See docs/minigames.md §4 (#1–#3, #6), Phase 1 & Phase 5.
+// normalize and grade answers identically (classifyGuess: correct / almost / wrong),
+// and so the cloze games locate the blank the same way. See docs/minigames.md §4
+// (#1–#3, #6 + near-miss aside), Phase 1 & Phase 5.
 
 // Normalize an answer for comparison: trim + lowercase + strip diacritics, and
 // unify the Unicode hyphens/dashes and curly apostrophes that show up in real card
@@ -18,16 +19,111 @@ export function normalizeAnswer(value) {
     .trim();
 }
 
-// A guess is correct when, after normalization, it exactly matches the primary
-// answer or any listed English synonym.
-export function isGuessCorrect(guess, card) {
-  const normalizedGuess = normalizeAnswer(guess);
-  if (!normalizedGuess) {
+// Damerau-Levenshtein (optimal string alignment) distance, so a transposition
+// ("recieve" for "receive") costs 1 like any single typo. Answers are short, so a
+// full matrix is fine.
+function editDistance(a, b) {
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const d = Array.from({ length: rows }, () => new Array(cols).fill(0));
+  for (let i = 0; i < rows; i += 1) {
+    d[i][0] = i;
+  }
+  for (let j = 0; j < cols; j += 1) {
+    d[0][j] = j;
+  }
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+    }
+  }
+  return d[a.length][b.length];
+}
+
+// How many typos still count as "almost" for an expected answer of this length
+// (normalized, spaces included). Short words get none — one edit away from "cat"
+// is usually a different word, not a typo.
+function typoBudget(length) {
+  if (length <= 3) {
+    return 0;
+  }
+  if (length <= 7) {
+    return 1;
+  }
+  return 2;
+}
+
+// Function words a learner plausibly drops or adds without missing the word itself:
+// articles, the infinitive "to", and the prepositions/particles that ride along with
+// phrasal answers ("listen to", "give up"). Answers are English, so a fixed set works.
+const FUNCTION_WORDS = new Set([
+  'a', 'an', 'the', 'to', 'of', 'in', 'on', 'at', 'by', 'for', 'with', 'from',
+  'up', 'out', 'off', 'into', 'onto', 'over', 'under', 'down', 'away', 'back',
+  'about', 'around', 'through',
+]);
+
+// True when one side equals the other with exactly one function word removed —
+// "listen" for "listen to", "to give up" for "give up". Content words must all
+// match exactly; anything looser is a different answer, not a near miss.
+function oneFunctionWordApart(a, b) {
+  const aTokens = a.split(' ');
+  const bTokens = b.split(' ');
+  const [longer, shorter] = aTokens.length >= bTokens.length ? [aTokens, bTokens] : [bTokens, aTokens];
+  if (longer.length !== shorter.length + 1 || shorter.length === 0) {
     return false;
   }
+  for (let i = 0; i < longer.length; i += 1) {
+    if (!FUNCTION_WORDS.has(longer[i])) {
+      continue;
+    }
+    const spliced = longer.slice(0, i).concat(longer.slice(i + 1));
+    if (spliced.every((token, k) => token === shorter[k])) {
+      return true;
+    }
+  }
+  return false;
+}
 
-  const candidates = [card.answer_en, ...(card.synonyms_en ?? [])];
-  return candidates.some((candidate) => normalizeAnswer(candidate) === normalizedGuess);
+// Grade a free-typed guess against the primary answer and every listed English
+// synonym: 'correct' on an exact normalized match, 'almost' on a near miss, else
+// 'wrong'. A near miss — within the typo budget of a candidate, or one dropped/added
+// function word ("listen" for "listen to") — is close enough that grading it as a
+// lapse would be unfair, but not exact enough to count as known. The typing games
+// resolve it as NEUTRAL: amber feedback + the exact answer, advancing via the skip
+// RPC so FSRS is never touched and the card recycles for a clean rep (§4 near-miss
+// aside, §5.3).
+export function classifyGuess(guess, card) {
+  const normalizedGuess = normalizeAnswer(guess);
+  if (!normalizedGuess) {
+    return 'wrong';
+  }
+
+  const candidates = [card.answer_en, ...(card.synonyms_en ?? [])]
+    .map(normalizeAnswer)
+    .filter(Boolean);
+
+  if (candidates.some((candidate) => candidate === normalizedGuess)) {
+    return 'correct';
+  }
+
+  for (const candidate of candidates) {
+    const budget = typoBudget(candidate.length);
+    if (
+      budget > 0 &&
+      Math.abs(candidate.length - normalizedGuess.length) <= budget &&
+      editDistance(normalizedGuess, candidate) <= budget
+    ) {
+      return 'almost';
+    }
+    if (oneFunctionWordApart(normalizedGuess, candidate)) {
+      return 'almost';
+    }
+  }
+  return 'wrong';
 }
 
 // A word token: a Unicode letter run, allowing internal apostrophes/hyphens so
