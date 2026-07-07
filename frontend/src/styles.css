@@ -20,6 +20,15 @@
   --primary-dark: #1e4555;
   --secondary: var(--surface-2);
   --danger: #a64b3c;
+  /* Green "correct" signal for the minigame color-coded feedback (paired with
+     --danger for "wrong"). A muted forest green that sits beside the teal accent. */
+  --success: #3f7d5c;
+  --success-soft: rgba(63, 125, 92, 0.14);
+  /* Amber "are you sure?" signal — the double-Enter skip confirmation on the typing
+     games. Bright border, pale fill, dark-amber text (legible on the cream surface). */
+  --warning: #c9962e;
+  --warning-soft: rgba(201, 150, 46, 0.16);
+  --warning-ink: #7f5a10;
   --shadow: 0 24px 80px rgba(34, 42, 45, 0.10);
 }
 
@@ -825,12 +834,14 @@ a {
   background: var(--surface);
 }
 
-.typegame__input--known {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+/* Doubled with .st-input so the reveal tint beats the base input's `border`
+   shorthand (defined later in the sheet at equal single-class specificity). */
+.st-input.typegame__input--known {
+  border-color: var(--success);
+  box-shadow: 0 0 0 3px var(--success-soft);
 }
 
-.typegame__input--unknown {
+.st-input.typegame__input--unknown {
   border-color: var(--danger);
   box-shadow: 0 0 0 3px rgba(166, 75, 60, 0.16);
 }
@@ -839,26 +850,20 @@ a {
   min-width: 180px;
 }
 
-.typegame__feedback {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
+/* Empty-input "Skip" affordance: a subtle outline button (vs the filled primary
+   "Check"), so skipping never looks like the default action. */
+.typegame__action--skip {
+  background: var(--surface);
+  color: var(--muted);
+  border: 2px solid var(--line);
+  transition: border-color 160ms ease, color 160ms ease, background-color 160ms ease;
 }
 
-.typegame__verdict {
-  margin: 0;
-  font-weight: 600;
-  font-size: 1.05rem;
-}
-
-.typegame__feedback--known .typegame__verdict {
-  color: var(--accent);
-}
-
-.typegame__feedback--unknown .typegame__verdict {
-  color: var(--danger);
+/* Second press pending: the "Sure?" confirmation turns the button amber. */
+.typegame__action--confirm {
+  background: var(--warning-soft);
+  border-color: var(--warning);
+  color: var(--warning-ink);
 }
 
 .typegame__answer {
@@ -964,8 +969,8 @@ a {
 }
 
 .mcgame__tile--correct {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--success);
+  background: var(--success-soft);
 }
 
 .mcgame__tile--wrong {
@@ -1001,28 +1006,6 @@ a {
   font-size: 0.95rem;
 }
 
-.mcgame__feedback {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-}
-
-.mcgame__verdict {
-  margin: 0;
-  font-weight: 600;
-  font-size: 1.05rem;
-}
-
-.mcgame__feedback--correct .mcgame__verdict {
-  color: var(--accent);
-}
-
-.mcgame__feedback--wrong .mcgame__verdict {
-  color: var(--danger);
-}
-
 .mcgame__answer {
   display: flex;
   flex-direction: column;
@@ -1044,9 +1027,146 @@ a {
   color: var(--ink);
 }
 
-.mcgame__continue {
+/* ---- Shared minigame reveal feedback (MinigameFeedback.jsx + useAutoAdvance.js).
+   Replaces the old per-game "Correct!/Not quite" verdict text with a color-coded
+   green/red animation, and shows either a depleting auto-advance timer or, once the
+   learner stays it with a click/key, a Continue button. Used by the multiple-choice
+   and typing games. ---- */
+.mg-feedback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+}
+
+/* The color mark IS the verdict: a green ✓ or red ✗ that pops + pulses in. */
+.mg-feedback__flash {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.1rem;
+  height: 3.1rem;
+  border-radius: 999px;
+  color: #fff;
+  animation: mg-feedback-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.mg-feedback__flash--correct {
+  background: var(--success);
+  animation:
+    mg-feedback-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    mg-feedback-glow-correct 900ms ease-out both;
+}
+
+.mg-feedback__flash--wrong {
+  background: var(--danger);
+  animation:
+    mg-feedback-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    mg-feedback-glow-wrong 900ms ease-out both;
+}
+
+.mg-feedback__mark {
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mg-feedback__auto {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  width: min(300px, 100%);
+}
+
+/* Depleting bar that mirrors the JS auto-advance timeout, so the learner can see the
+   advance coming (and that there's time to stay it). Cosmetic only — the actual
+   advance is the setTimeout in useAutoAdvance, not this animation. */
+.mg-feedback__timer {
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.mg-feedback__timer-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  transform-origin: left center;
+  animation-name: mg-feedback-countdown;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.mg-feedback__timer-fill--correct {
+  background: var(--success);
+}
+
+.mg-feedback__timer-fill--wrong {
+  background: var(--danger);
+}
+
+.mg-feedback__hint {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.mg-feedback__continue {
   min-width: 180px;
-  margin-top: 0.3rem;
+  margin-top: 0.1rem;
+}
+
+@keyframes mg-feedback-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes mg-feedback-glow-correct {
+  from {
+    box-shadow: 0 0 0 0 rgba(63, 125, 92, 0.45);
+  }
+  to {
+    box-shadow: 0 0 0 20px rgba(63, 125, 92, 0);
+  }
+}
+
+@keyframes mg-feedback-glow-wrong {
+  from {
+    box-shadow: 0 0 0 0 rgba(166, 75, 60, 0.45);
+  }
+  to {
+    box-shadow: 0 0 0 20px rgba(166, 75, 60, 0);
+  }
+}
+
+@keyframes mg-feedback-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* Respect reduced-motion: keep the color verdict, drop the pop/glow/countdown motion. */
+@media (prefers-reduced-motion: reduce) {
+  .mg-feedback__flash,
+  .mg-feedback__flash--correct,
+  .mg-feedback__flash--wrong,
+  .mg-feedback__timer-fill {
+    animation: none;
+  }
 }
 
 /* ---- Synonym match (Phase 6 depth game, never counts). Runs as a cool-down
@@ -1607,7 +1727,7 @@ a {
 }
 
 .clozegame__slot--known {
-  color: var(--accent);
+  color: var(--success);
 }
 
 .clozegame__slot--unknown {

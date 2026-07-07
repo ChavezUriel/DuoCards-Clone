@@ -119,6 +119,9 @@ function SpeedRound({ cards, onDone }) {
         card={question.card}
         distractors={question.distractors}
         onResolve={handleResolve}
+        // Rapid-fire: never let an eager next-answer key/tap stay the advance, so the
+        // color feedback just flashes and the round rolls straight to the next Q.
+        stoppable={false}
       />
     </div>
   );

@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import MinigameFeedback from './MinigameFeedback';
+import { useAutoAdvance } from '../useAutoAdvance';
 
-// How long the right/wrong reveal lingers before the outcome is committed. A
-// wrong pick dwells longer so the learner can read the correct answer; a right
-// pick clears quickly to keep momentum. The "Continue" button advances either early.
+// How long the right/wrong reveal lingers before it auto-advances. A wrong pick
+// dwells longer so the learner can read the correct answer; a right pick clears
+// quickly to keep momentum. A click or key press during the window stays the
+// advance and surfaces a Continue button instead (see useAutoAdvance).
 const REVEAL_MS = { correct: 900, wrong: 1900 };
 
 function normalize(value) {
@@ -39,6 +42,9 @@ function MultipleChoice({
   answerLabel = 'Answer',
   // Prompt element rendered above the tiles; defaults to the Spanish word.
   promptNode = null,
+  // Whether a click/key press can stay the auto-advance. In-queue rounds want this;
+  // the rapid-fire speed round passes false so eager next-answer keys never pause it.
+  stoppable = true,
 }) {
   const correctAnswer = answer;
 
@@ -66,43 +72,19 @@ function MultipleChoice({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [chosenIndex, setChosenIndex] = useState(null);
   const optionRefs = useRef([]);
-  const continueRef = useRef(null);
-  const resolveTimeoutRef = useRef(null);
-  const hasResolvedRef = useRef(false);
+  const autoAdvance = useAutoAdvance({ stoppable });
 
   const isRevealed = chosenIndex !== null;
   const isCorrect = isRevealed && chosenIndex === correctIndex;
 
-  useEffect(() => () => window.clearTimeout(resolveTimeoutRef.current), []);
-
-  // Keep focus on the active control so keyboard users always have a target:
-  // the highlighted tile while choosing, then Continue once revealed.
+  // Keep the highlighted tile focused while choosing so keyboard users always have a
+  // target; once revealed, MinigameFeedback owns focus (its Continue button).
   useEffect(() => {
-    if (!options) {
+    if (!options || isRevealed) {
       return;
     }
-    if (isRevealed) {
-      continueRef.current?.focus();
-    } else {
-      optionRefs.current[selectedIndex]?.focus();
-    }
+    optionRefs.current[selectedIndex]?.focus();
   }, [selectedIndex, isRevealed, options]);
-
-  // Idempotent: the auto-timeout and the Continue button can both fire, but the
-  // card resolves exactly once. Correct -> advance without grading (skip);
-  // wrong -> record the lapse through the shared onResolve contract.
-  function resolveOnce(correct) {
-    if (hasResolvedRef.current) {
-      return;
-    }
-    hasResolvedRef.current = true;
-    window.clearTimeout(resolveTimeoutRef.current);
-    if (correct) {
-      onResolve({ skip: true });
-    } else {
-      onResolve({ result: 'unknown', counts: true });
-    }
-  }
 
   function commitChoice(index) {
     if (isRevealed || !options || index < 0 || index >= options.length) {
@@ -110,9 +92,14 @@ function MultipleChoice({
     }
     setChosenIndex(index);
     const correct = index === correctIndex;
-    resolveTimeoutRef.current = window.setTimeout(
-      () => resolveOnce(correct),
+    // Correct -> advance without grading (skip); wrong -> record the lapse through the
+    // shared onResolve contract. The hook makes this idempotent across the timer and
+    // the Continue button.
+    autoAdvance.arm(
       correct ? REVEAL_MS.correct : REVEAL_MS.wrong,
+      correct
+        ? () => onResolve({ skip: true })
+        : () => onResolve({ result: 'unknown', counts: true }),
     );
   }
 
@@ -202,27 +189,20 @@ function MultipleChoice({
         )}
 
         {isRevealed ? (
-          <div
-            className={`mcgame__feedback mcgame__feedback--${isCorrect ? 'correct' : 'wrong'}`}
-            role="status"
-            aria-live="polite"
+          <MinigameFeedback
+            correct={isCorrect}
+            phase={autoAdvance.phase}
+            delay={isCorrect ? REVEAL_MS.correct : REVEAL_MS.wrong}
+            stoppable={stoppable}
+            onAdvance={autoAdvance.advance}
           >
-            <p className="mcgame__verdict">{isCorrect ? 'Correct!' : 'Not quite'}</p>
             {!isCorrect ? (
               <p className="mcgame__answer">
                 <span className="mcgame__answer-label">{answerLabel}</span>
                 <span className="mcgame__answer-text">{correctAnswer}</span>
               </p>
             ) : null}
-            <button
-              ref={continueRef}
-              type="button"
-              className="button button--primary mcgame__continue"
-              onClick={() => resolveOnce(isCorrect)}
-            >
-              Continue
-            </button>
-          </div>
+          </MinigameFeedback>
         ) : null}
       </div>
     </section>
