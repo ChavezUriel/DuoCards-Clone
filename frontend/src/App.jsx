@@ -46,10 +46,13 @@ function App() {
     }
   };
 
+  // Deck explorer shares the focused chrome (no header links) but must scroll
+  // freely on small screens, so it gets its own shell modifier below.
+  const isDeckRoute = location.pathname.startsWith('/decks/');
   const isFocusedRoute =
     location.pathname.startsWith('/review/') ||
     location.pathname === '/practice' ||
-    location.pathname.startsWith('/decks/');
+    isDeckRoute;
 
   let headerContent = null;
 
@@ -68,11 +71,7 @@ function App() {
           ) : (
             <Link to="/settings" className="back-link">Settings</Link>
           )}
-          <button
-            onClick={handleLogout}
-            className="back-link"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-          >
+          <button onClick={handleLogout} className="back-link">
             Logout
           </button>
         </nav>
@@ -94,13 +93,13 @@ function App() {
   }
 
   return (
-    <div className={`app-shell ${isFocusedRoute ? 'app-shell--review' : ''}`}>
+    <div className={`app-shell ${isFocusedRoute ? 'app-shell--review' : ''} ${isDeckRoute ? 'app-shell--deck' : ''}`}>
       <header className="app-header">
         <div className="app-header__inner">
           {headerContent}
         </div>
       </header>
-      <main className={`page-content ${isFocusedRoute ? 'page-content--review' : ''}`}>
+      <main className={`page-content ${isFocusedRoute ? 'page-content--review' : ''} ${isDeckRoute ? 'page-content--deck' : ''}`}>
         <Routes>
           <Route path="/" element={<PrivateRoute session={session}><HomePage /></PrivateRoute>} />
           <Route path="/market" element={<PrivateRoute session={session}><MarketPage /></PrivateRoute>} />
