@@ -110,6 +110,8 @@ Support‑heavy formats early in a word's life; production formats late and on r
 
 Enrichment aside: synonym/collocation matching (`synonyms_en`, `collocations`) is fun but tests a *different fact*; if tracked, it should feed a separate "depth" stat, never `due_at`.
 
+Hints aside (#2 recall‑from‑definition and #3 free‑type cloze, `MinigameHints.jsx`): a two‑step ladder the learner can spend before submitting — step 1 reveals the answer's **shape** (one underscore per character, word gaps shown; in the cloze it replaces the anonymous `______` blank in the sentence), step 2 additionally shows `prompt_es`. The hint button sits one Tab after the answer input and returns focus to it on press. Hints don't change grading: a hinted correct answer still counts `known` (Tier A contract untouched).
+
 ---
 
 ## 5. Integration with the queue & FSRS

@@ -1734,6 +1734,63 @@ a {
   color: var(--danger);
 }
 
+/* ---- Hints for the free-type production games (recall-from-definition + cloze,
+   MinigameHints.jsx). The button renders between the input and the Check/Skip action
+   in DOM order, so it's exactly one Tab from the input; pressing it reveals the next
+   hint step and hands focus straight back to the input. ---- */
+.typegame__hint-btn {
+  min-height: 34px;
+  padding: 0.35rem 1rem;
+  font-size: 0.85rem;
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  transition: border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.typegame__hint-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* The answer's shape: one underscore per character; a small gap separates letters so
+   the underscores don't fuse into one line, and a wider gap marks each space. */
+.hintshape {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.55em;
+  letter-spacing: normal; /* the flex gaps do the spacing (beats the blank slot's letter-spacing) */
+}
+
+.hintshape__word {
+  display: inline-flex;
+  gap: 0.14em;
+}
+
+/* Recall-from-definition has no in-sentence blank, so its shape hint sits on its own
+   line under the definition, in the blank slot's muted voice. */
+.typegame__hint-line {
+  margin: 0;
+  font-family: var(--head-font);
+  font-weight: 600;
+  font-size: clamp(1.2rem, 3.2vw, 1.5rem);
+  color: var(--muted);
+}
+
+/* Second hint: the Spanish side of the card, labeled like the reveal's answer block. */
+.typegame__hint-translation {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+}
+
+.typegame__hint-word {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
 /* Word-bank cloze reuses the .mcgame tile engine; its prompt is the cloze sentence
    rather than the big single-word prompt, so give it a touch of breathing room. */
 .wordbankgame__sentence {

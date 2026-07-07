@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { isGuessCorrect, locateAnswerInExample, normalizeAnswer } from '../minigameText';
 import MinigameFeedback from './MinigameFeedback';
+import { AnswerShape, HintButton, TranslationHint, useHints } from './MinigameHints';
 import { useAutoAdvance } from '../useAutoAdvance';
 
 // How long the right/wrong feedback lingers before it auto-advances. A miss dwells
@@ -24,6 +25,8 @@ function ClozeType({ card, onResolve }) {
   const [confirmSkip, setConfirmSkip] = useState(false);
   const inputRef = useRef(null);
   const autoAdvance = useAutoAdvance();
+  // Two-step hint ladder (shape, then Spanish); revealing refocuses the input.
+  const hints = useHints(inputRef);
 
   // The raw span of the answer inside the example, so the sentence can be split
   // into "before ___ after". The gate guarantees a match; guard defensively.
@@ -87,6 +90,12 @@ function ClozeType({ card, onResolve }) {
           {before}
           {isRevealed ? (
             <span className={`clozegame__slot clozegame__slot--${outcome}`}>{card.answer_en}</span>
+          ) : hints.level >= 1 ? (
+            // First hint: the anonymous blank becomes the answer's shape — an
+            // underscore per character, word gaps visible (AnswerShape labels itself).
+            <span className="clozegame__slot clozegame__slot--blank">
+              <AnswerShape answer={card.answer_en} />
+            </span>
           ) : (
             <span className="clozegame__slot clozegame__slot--blank" aria-label="missing word">
               ______
@@ -94,6 +103,8 @@ function ClozeType({ card, onResolve }) {
           )}
           {after}
         </p>
+
+        {!isRevealed && hints.level >= 2 ? <TranslationHint text={card.prompt_es} /> : null}
 
         <form className="typegame__form" onSubmit={handleSubmit}>
           <input
@@ -131,16 +142,20 @@ function ClozeType({ card, onResolve }) {
               </p>
             </MinigameFeedback>
           ) : (
-            <button
-              type="submit"
-              className={
-                guess.trim()
-                  ? 'button button--primary typegame__action'
-                  : `button typegame__action typegame__action--skip${confirmSkip ? ' typegame__action--confirm' : ''}`
-              }
-            >
-              {guess.trim() ? 'Check' : confirmSkip ? 'Sure?' : 'Skip'}
-            </button>
+            <>
+              {/* Directly after the input in DOM order — exactly one Tab away. */}
+              <HintButton level={hints.level} onReveal={hints.reveal} />
+              <button
+                type="submit"
+                className={
+                  guess.trim()
+                    ? 'button button--primary typegame__action'
+                    : `button typegame__action typegame__action--skip${confirmSkip ? ' typegame__action--confirm' : ''}`
+                }
+              >
+                {guess.trim() ? 'Check' : confirmSkip ? 'Sure?' : 'Skip'}
+              </button>
+            </>
           )}
         </form>
       </div>
