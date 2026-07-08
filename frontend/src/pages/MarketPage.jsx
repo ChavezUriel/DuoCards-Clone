@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchMarketDecks, updateDeckHomeSelection } from '../api';
+import { claimMarketDeck, fetchMarketDecks, updateDeckHomeSelection } from '../api';
 import DeckCard from '../components/DeckCard';
 
 function HomeIcon() {
@@ -99,6 +99,26 @@ function MarketPage() {
     }
   }
 
+  async function handleClaimDeck(deckId) {
+    setPendingDeckIds((current) => [...current, deckId]);
+
+    try {
+      const result = await claimMarketDeck(deckId);
+      setDecks((current) => current.map((deck) => (
+        deck.id === deckId
+          ? { ...deck, owner_id: result.owner_id, owner_name: result.owner_name, is_owner: true, open_proposals: 0 }
+          : deck
+      )));
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setPendingDeckIds((current) => current.filter((pendingDeckId) => pendingDeckId !== deckId));
+    }
+  }
+
+  const openProposalsToReview = decks.reduce((sum, deck) => sum + (deck.is_owner ? (deck.open_proposals ?? 0) : 0), 0);
+  const hasProposalActivity = decks.some((deck) => deck.is_owner || (deck.my_open_proposals ?? 0) > 0);
+
   if (status === 'loading') {
     return <p className="h-empty-state">Loading deck market…</p>;
   }
@@ -118,6 +138,13 @@ function MarketPage() {
           <p className="h-market__kicker">DECK MARKET</p>
           <h1 className="h-market__title">Find your next deck.</h1>
           <p className="h-market__copy">Add decks to your home screen to bring them into rotation. You can remove them later.</p>
+          <Link to="/market/proposals" className="h-decks__text-action h-market__proposals-link">
+            {openProposalsToReview > 0
+              ? `Review ${openProposalsToReview} open proposal${openProposalsToReview === 1 ? '' : 's'} →`
+              : hasProposalActivity
+                ? 'Change proposals →'
+                : 'Your change proposals →'}
+          </Link>
         </div>
 
         <label className="h-deck-search h-market__search" aria-label="Search market decks">
@@ -148,6 +175,7 @@ function MarketPage() {
               variant="market"
               isPending={pendingDeckIds.includes(deck.id)}
               onToggleHome={handleToggleHome}
+              onClaim={handleClaimDeck}
             />
           ))}
         </div>

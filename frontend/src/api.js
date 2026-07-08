@@ -256,6 +256,72 @@ export function updateCard(cardId, payload) {
 }
 
 // ===========================================================================
+// Market sync & change proposals (migration 0017)
+// ===========================================================================
+
+// Pending updates for MY copy of a market deck: { linked, added, changed,
+// removed, deck_meta, total_updates }. Also fast-forwards no-op drift.
+export function fetchDeckSyncStatus(deckId) {
+  return rpc('get_deck_sync_status', { p_deck_id: deckId });
+}
+
+// Apply a selected subset of pending updates. `changes` is an array of
+// {type:'add'|'update', base_card_id} | {type:'remove', card_id} | {type:'deck_meta'}.
+// Returns { applied, skipped, status } with the refreshed sync status.
+export function applyDeckSync(deckId, changes) {
+  return rpc('apply_deck_sync', { p_deck_id: deckId, p_changes: changes });
+}
+
+// Cards I edited locally that still differ from the live market deck —
+// the candidates for a change proposal.
+export function fetchDeckOutgoingChanges(deckId) {
+  return rpc('get_deck_outgoing_changes', { p_deck_id: deckId });
+}
+
+// Submit selected cards of my copy as a proposal ("pull request") to the
+// market deck. The server derives all content from my real cards.
+export function createDeckChangeProposal(marketDeckId, message, userCardIds) {
+  return rpc('create_deck_change_proposal', {
+    p_market_deck_id: marketDeckId,
+    p_message: message ?? null,
+    p_user_card_ids: userCardIds,
+  });
+}
+
+// { to_review: [...], mine: [...] } — proposals on decks I maintain and
+// proposals I submitted, each with per-item payload/base/current diffs.
+export function listDeckProposals() {
+  return rpc('list_deck_proposals');
+}
+
+// Maintainer decision. action: 'approve' | 'reject'. Approval writes the
+// proposal into the market deck, which flags updates for every subscriber.
+export function resolveDeckChangeProposal(proposalId, action, note) {
+  return rpc('resolve_deck_change_proposal', {
+    p_proposal_id: proposalId,
+    p_action: action,
+    p_note: note ?? null,
+  });
+}
+
+export function withdrawDeckChangeProposal(proposalId) {
+  return rpc('withdraw_deck_change_proposal', { p_proposal_id: proposalId });
+}
+
+// Become the maintainer of an unmaintained market deck.
+export function claimMarketDeck(deckId) {
+  return rpc('claim_market_deck', { p_deck_id: deckId });
+}
+
+// Hand a market deck I maintain to another registered user.
+export function transferMarketDeckOwnership(deckId, email) {
+  return rpc('transfer_market_deck_ownership', {
+    p_deck_id: deckId,
+    p_new_owner_email: email,
+  });
+}
+
+// ===========================================================================
 // Spaced repetition
 // ===========================================================================
 export function fetchDueSummary() {

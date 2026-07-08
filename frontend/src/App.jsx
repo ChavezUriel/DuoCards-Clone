@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import { logout as apiLogout } from './api';
 import HomePage from './pages/HomePage';
 import MarketPage from './pages/MarketPage';
+import ProposalsPage from './pages/ProposalsPage';
 import DeckWordsPage from './pages/DeckWordsPage';
 import PracticePage from './pages/PracticePage';
 import ReviewPage from './pages/ReviewPage';
@@ -103,6 +104,7 @@ function App() {
         <Routes>
           <Route path="/" element={<PrivateRoute session={session}><HomePage /></PrivateRoute>} />
           <Route path="/market" element={<PrivateRoute session={session}><MarketPage /></PrivateRoute>} />
+          <Route path="/market/proposals" element={<PrivateRoute session={session}><ProposalsPage /></PrivateRoute>} />
           <Route path="/decks/:deckId/words" element={<PrivateRoute session={session}><DeckWordsPage /></PrivateRoute>} />
           <Route path="/practice" element={<PrivateRoute session={session}><PracticePage /></PrivateRoute>} />
           <Route path="/review/:deckId" element={<PrivateRoute session={session}><ReviewPage /></PrivateRoute>} />

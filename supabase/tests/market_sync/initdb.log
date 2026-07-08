@@ -1,0 +1,23 @@
+Los archivos de este cluster serán de propiedad del usuario «tu_rk».
+Este usuario también debe ser quien ejecute el proceso servidor.
+
+El cluster será inicializado con configuración regional «C».
+La configuración de búsqueda en texto ha sido definida a «english».
+
+Las sumas de verificación en páginas de datos han sido activadas.
+
+creando el directorio C:/Users/tu_rk/Desktop/Projects/Web Projects/DuoCards Clone/supabase/tests/market_sync/.pgdata ... hecho
+creando subdirectorios ... hecho
+seleccionando implementación de memoria compartida dinámica ... windows
+seleccionando el valor para «max_connections» ... 100
+seleccionando el valor para «shared_buffers» ... 128MB
+seleccionando el huso horario por omisión ... America/Mexico_City
+creando archivos de configuración ... hecho
+ejecutando script de inicio (bootstrap) ... hecho
+realizando inicialización post-bootstrap ... hecho
+sincronizando los datos a disco ... hecho
+
+Completado. Ahora puede iniciar el servidor de bases de datos usando:
+
+    ^"C^:^\Program^ Files^\PostgreSQL^\18^\bin^\pg^_ctl^" -D ^"C^:^/Users^/tu^_rk^/Desktop^/Projects^/Web^ Projects^/DuoCards^ Clone^/supabase^/tests^/market^_sync^/^.pgdata^" -l archivo_de_registro start
+

@@ -10,6 +10,8 @@ function DeckCard({
   isPending = false,
   onToggleSmartPractice,
   onToggleHome,
+  onOpenSync,
+  onClaim,
   searchMatchReasons = [],
   isSearchDimmed = false,
 }) {
@@ -56,7 +58,24 @@ function DeckCard({
       >
         <div className="h-deck-card__top">
           <div className="h-deck-card__title">{deck.title}</div>
-          <div className="h-deck-card__due">{dueLabel}</div>
+          <div className="h-deck-card__top-actions">
+            <div className="h-deck-card__due">{dueLabel}</div>
+            <button
+              className="deck-card__explore-button"
+              type="button"
+              aria-label={`Open ${deck.title} deck explorer`}
+              title="Open your copy in the deck explorer"
+              onClick={(e) => { e.stopPropagation(); handleOpenDeck(); }}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <svg fill="currentColor" viewBox="0 0 36 36" aria-hidden="true">
+                <path d="M15,17H4a2,2,0,0,1-2-2V8A2,2,0,0,1,4,6H15a2,2,0,0,1,2,2v7A2,2,0,0,1,15,17ZM4,8v7H15V8Z" />
+                <path d="M32,17H21a2,2,0,0,1-2-2V8a2,2,0,0,1,2-2H32a2,2,0,0,1,2,2v7A2,2,0,0,1,32,17ZM21,8v7H32V8Z" />
+                <path d="M15,30H4a2,2,0,0,1-2-2V21a2,2,0,0,1,2-2H15a2,2,0,0,1,2,2v7A2,2,0,0,1,15,30ZM4,21v7H15V21Z" />
+                <path d="M32,30H21a2,2,0,0,1-2-2V21a2,2,0,0,1,2-2H32a2,2,0,0,1,2,2v7A2,2,0,0,1,32,30ZM21,21v7H32V21Z" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {searchMatchReasons.length > 0 && (
@@ -73,6 +92,24 @@ function DeckCard({
           </div>
         )}
 
+        {(deck.updates_available ?? 0) > 0 && onOpenSync ? (
+          <button
+            className="h-deck-card__updates"
+            type="button"
+            aria-label={`Review ${deck.updates_available} market update${deck.updates_available === 1 ? '' : 's'} for ${deck.title}`}
+            title="This deck's market source changed — review and pull the updates"
+            onClick={(e) => { e.stopPropagation(); onOpenSync(deck.id); }}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 4v12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="m7 11 5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5 20h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            {deck.updates_available} market update{deck.updates_available === 1 ? '' : 's'}
+          </button>
+        ) : null}
+
         <div className="h-deck-card__bottom">
           <div className="h-deck-card__stats">
             <span>{deck.total_cards} cards</span>
@@ -82,22 +119,6 @@ function DeckCard({
             <div className="h-progress-fill" style={{ width: `${pct}%` }} />
           </div>
         </div>
-
-        <button
-          className="deck-card__explore-button"
-          type="button"
-          aria-label={`Open ${deck.title} deck explorer`}
-          title="Open deck explorer"
-          onClick={(e) => { e.stopPropagation(); handleOpenDeck(); }}
-          onKeyDown={(e) => e.stopPropagation()}
-        >
-          <svg fill="currentColor" viewBox="0 0 36 36" aria-hidden="true">
-            <path d="M15,17H4a2,2,0,0,1-2-2V8A2,2,0,0,1,4,6H15a2,2,0,0,1,2,2v7A2,2,0,0,1,15,17ZM4,8v7H15V8Z" />
-            <path d="M32,17H21a2,2,0,0,1-2-2V8a2,2,0,0,1,2-2H32a2,2,0,0,1,2,2v7A2,2,0,0,1,32,17ZM21,8v7H32V8Z" />
-            <path d="M15,30H4a2,2,0,0,1-2-2V21a2,2,0,0,1,2-2H15a2,2,0,0,1,2,2v7A2,2,0,0,1,15,30ZM4,21v7H15V21Z" />
-            <path d="M32,30H21a2,2,0,0,1-2-2V21a2,2,0,0,1,2-2H32a2,2,0,0,1,2,2v7A2,2,0,0,1,32,30ZM21,21v7H32V21Z" />
-          </svg>
-        </button>
       </article>
     );
   }
@@ -147,6 +168,44 @@ function DeckCard({
       )}
 
       <p className="h-market-card__desc">{deck.description}</p>
+
+      {deck.owner_id !== undefined ? (
+        <div className="h-market-card__maintainer">
+          {deck.is_owner ? (
+            <>
+              <span className="sync-chip sync-chip--owner">You maintain this deck</span>
+              {deck.open_proposals > 0 ? (
+                <button
+                  type="button"
+                  className="h-decks__text-action"
+                  onClick={(e) => { e.stopPropagation(); navigate('/market/proposals'); }}
+                >
+                  {deck.open_proposals} proposal{deck.open_proposals === 1 ? '' : 's'} to review →
+                </button>
+              ) : null}
+            </>
+          ) : deck.owner_id ? (
+            <span className="h-market-card__maintainer-name">
+              Maintained by <strong>{deck.owner_name}</strong>
+              {deck.my_open_proposals > 0 ? ` · ${deck.my_open_proposals} proposal${deck.my_open_proposals === 1 ? '' : 's'} pending` : ''}
+            </span>
+          ) : (
+            <>
+              <span className="h-market-card__maintainer-name">Unmaintained</span>
+              {onClaim ? (
+                <button
+                  type="button"
+                  className="h-decks__text-action"
+                  disabled={isPending}
+                  onClick={(e) => { e.stopPropagation(); onClaim(deck.id); }}
+                >
+                  Become maintainer
+                </button>
+              ) : null}
+            </>
+          )}
+        </div>
+      ) : null}
 
       <div className="h-market-card__progress" aria-label={`Progress for ${deck.title}`}>
         <div className="h-market-card__progress-meta">

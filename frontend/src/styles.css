@@ -213,67 +213,59 @@ html {
   flex-shrink: 0;
 }
 
+/* Top-right cluster on a home deck card: due pill + explore button. The
+   explore button lives in normal flow (not absolutely positioned) so it can
+   never cover the due pill, and it stays visible at every viewport — it is
+   the only path from home into the personal copy's deck explorer. */
+.h-deck-card__top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .deck-card__explore-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.7rem;
-  height: 2.7rem;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
   border-radius: 999px;
-  border: 1px solid rgba(47, 93, 107, 0.16);
-  background: rgba(255, 255, 255, 0.72);
-  color: var(--primary-dark);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent);
   cursor: pointer;
   text-decoration: none;
   transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
 }
 
-.deck-card__explore-button {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-6px);
-  transition:
-    opacity 160ms ease,
-    visibility 160ms ease,
-    transform 160ms ease,
-    background-color 160ms ease,
-    border-color 160ms ease;
-}
-
-.deck-card:hover .deck-card__explore-button {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-}
-
-@media (hover: none) {
-  .deck-card__explore-button {
-    opacity: 1;
-    visibility: visible;
-    transform: none;
-  }
-}
-
 .deck-card__explore-button:hover {
   transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.94);
-  border-color: rgba(47, 93, 107, 0.28);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.deck-card__explore-button:focus-visible {
+  outline: 3px solid rgba(47, 93, 107, 0.22);
+  outline-offset: 2px;
 }
 
 .deck-card__explore-button svg {
-  width: 1.3rem;
-  height: 1.3rem;
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
 @media (max-width: 720px) {
-
+  /* Finger-sized target on phones. */
   .deck-card__explore-button {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .deck-card__explore-button svg {
+    width: 1.25rem;
+    height: 1.25rem;
   }
 }
 
@@ -2086,7 +2078,7 @@ html {
   align-items: center;
   justify-content: center;
   padding: 0.4rem 0;
-  border: 1px solid var(--line);
+  /* border: 1px solid var(--line); */
   border-radius: 8px;
   background: var(--surface);
   color: var(--ink);
@@ -2458,8 +2450,8 @@ html {
 }
 
 .deck-preview-page {
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   gap: 0.85rem;
   height: 100%;
   max-height: 100%;
@@ -2480,16 +2472,7 @@ html {
   gap: 0.75rem;
 }
 
-.deck-preview__header-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 1rem;
-}
-
 .deck-preview__description,
-.deck-preview__pagination-status,
-.deck-preview__languages p,
 .deck-preview__status {
   margin: 0;
 }
@@ -2501,8 +2484,46 @@ html {
 }
 
 .deck-preview__header h2 {
+  margin: 0;
   font-family: var(--head-font);
   font-weight: 400;
+}
+
+.deck-preview__title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.15rem 0 0.35rem;
+}
+
+/* Whose deck is this? Personal (teal) vs public market (amber) chips sit
+   right next to the title so the answer is never ambiguous. */
+.deck-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.deck-scope-chip--personal {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.deck-scope-chip--market {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning-ink);
 }
 
 .deck-preview__status {
@@ -2513,60 +2534,254 @@ html {
   border-radius: 14px;
 }
 
-.deck-preview__grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: repeat(5, minmax(0, 1fr));
-  gap: 0.55rem;
-  height: 100%;
-  min-height: 0;
+/* -- Deck explorer: search / filter / count controls --------------- */
+.deck-table-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.75rem;
+}
+
+.deck-table-controls__search {
+  flex: 1 1 240px;
+  max-width: 420px;
+}
+
+.deck-table-controls__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.6rem;
+  height: 1.6rem;
   padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.deck-preview__item {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  align-content: stretch;
-  min-height: 0;
-  padding: 0.65rem 0.75rem;
-  border-radius: 14px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  overflow: visible;
-}
-
-.deck-preview__item--placeholder {
-  border-style: dashed;
+  border: none;
+  border-radius: 999px;
   background: transparent;
+  color: var(--muted);
+  cursor: pointer;
 }
 
-.deck-preview__item--disabled {
+.deck-table-controls__clear:hover {
   background: var(--surface-2);
-  border-color: var(--line);
-  color: var(--muted);
+  color: var(--ink);
 }
 
-.deck-preview__item--disabled .deck-preview__language-label,
-.deck-preview__item--disabled .deck-preview__icon-button--muted,
-.deck-preview__item--disabled .deck-preview__icon-button {
-  color: var(--muted);
+.deck-table-controls__clear svg {
+  width: 0.85rem;
+  height: 0.85rem;
 }
 
-.deck-preview__item--disabled .deck-preview__icon-button {
+.deck-table-controls__count {
+  margin: 0 0 0 auto;
+  font-family: var(--mono-font);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* -- Deck explorer: records table ----------------------------------- */
+/* The shell owns the border; the scroller inside it keeps the whole card
+   list reachable without pagination while the page itself stays put. */
+.deck-table-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 16px;
   background: var(--surface);
-  border-color: var(--line);
+  overflow: hidden;
 }
 
-.deck-preview__actions {
+.deck-table-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.deck-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.deck-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.55rem 0.9rem;
+  background: var(--surface);
+  box-shadow: 0 1px 0 var(--line);
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.deck-table__col--word,
+.deck-table__col--translation {
+  width: 28%;
+}
+
+.deck-table__col--section {
+  width: 20%;
+}
+
+.deck-table__col--pos {
+  width: 14%;
+}
+
+.deck-table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.15rem 0.3rem;
+  margin: -0.15rem -0.3rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.deck-table__sort:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.deck-table__sort--active {
+  color: var(--accent);
+}
+
+.deck-table__sort svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex-shrink: 0;
+}
+
+.deck-table td {
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+
+.deck-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.deck-table__row {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.deck-table__row:hover {
+  background: var(--accent-soft);
+}
+
+.deck-table__row--disabled {
+  background: rgba(235, 232, 224, 0.45);
+}
+
+.deck-table__row--disabled td,
+.deck-table__row--disabled .deck-table__cell--word strong {
+  color: var(--muted);
+}
+
+.deck-table__cell--word strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.deck-table__cell--section,
+.deck-table__cell--pos {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.deck-table__placeholder {
+  color: var(--muted);
+  opacity: 0.55;
+}
+
+.deck-table__cell--actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.deck-table__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.35rem;
   align-items: center;
-  min-height: 2.2rem;
-  margin-top: 0.8rem;
-  padding-top: 0.1rem;
+  gap: 0.35rem;
+}
+
+.deck-table__state-chip,
+.deck-table__match-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.deck-table__state-chip {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.deck-table__match-chip {
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.deck-table__mark {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: var(--warning-soft);
+  color: inherit;
+  box-shadow: inset 0 -2px 0 var(--warning);
+}
+
+.deck-table-empty {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.9rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.deck-table-empty p {
+  margin: 0;
+}
+
+@media (max-width: 1080px) {
+  /* Part of speech is the first column to go when width gets tight; it
+     stays reachable through the card details modal. */
+  .deck-table__col--pos,
+  .deck-table__cell--pos {
+    display: none;
+  }
 }
 
 .deck-preview__icon-button {
@@ -2600,82 +2815,6 @@ html {
 }
 
 .deck-preview__icon-button--muted {
-  color: var(--muted);
-}
-
-.deck-preview__languages {
-  display: grid;
-  align-content: start;
-  gap: 0.45rem;
-  min-height: 0;
-}
-
-.deck-preview__languages div {
-  display: grid;
-  gap: 0.25rem;
-  min-height: 0;
-}
-
-.deck-preview__languages strong,
-.deck-preview__languages p {
-  font-size: 0.98rem;
-  line-height: 1.15;
-  word-break: break-word;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-clamp: 2;
-  -webkit-line-clamp: 2;
-}
-
-.deck-preview__pagination {
-  display: grid;
-  grid-template-columns: 2.4rem minmax(0, 1fr) 2.4rem;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.deck-preview__pagination--header {
-  align-self: center;
-  justify-self: end;
-  width: clamp(16rem, 28vw, 21rem);
-}
-
-.deck-preview__pagination-arrow {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--accent);
-  cursor: pointer;
-  transition: transform 160ms ease, opacity 160ms ease, background-color 160ms ease;
-}
-
-.deck-preview__pagination-arrow svg {
-  width: 1rem;
-  height: 1rem;
-}
-
-.deck-preview__pagination-arrow:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-.deck-preview__pagination-arrow:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.deck-preview__pagination-status {
-  font-family: var(--mono-font);
-  font-size: 0.82rem;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
 
@@ -2739,35 +2878,112 @@ html {
   }
 
   .deck-card__actions,
-  .deck-preview-page__toolbar,
-  .deck-preview__pagination {
+  .deck-preview-page__toolbar {
     width: 100%;
   }
 
-  .deck-preview__header-row {
-    grid-template-columns: 1fr;
-    align-items: start;
-  }
-
-  .deck-preview-page__toolbar,
-  .deck-preview__pagination {
+  .deck-preview-page__toolbar {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .deck-preview__pagination {
-    display: flex;
-    justify-content: space-between;
+  /* The search/filter bar rides along while the unlocked page scrolls. */
+  .deck-table-controls {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin: 0 -0.35rem;
+    padding: 0.5rem 0.35rem;
+    background: var(--surface);
+    box-shadow: 0 10px 14px -12px rgba(34, 42, 45, 0.45);
   }
 
-  .deck-preview__pagination--header {
+  .deck-table-controls__search {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .deck-table-controls__count {
+    margin-left: auto;
+  }
+
+  /* The table relaxes into a flat list of records: word + translation
+     stacked, section and the action buttons sharing the footer line. The
+     page scroller takes over from the internal one. */
+  .deck-table-shell {
+    flex: none;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .deck-table-scroll {
+    flex: none;
+    overflow: visible;
+  }
+
+  .deck-table thead {
+    display: none;
+  }
+
+  .deck-table,
+  .deck-table tbody {
+    display: block;
     width: 100%;
   }
 
-  .deck-preview__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: none;
-    height: auto;
+  .deck-table__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'word word'
+      'translation translation'
+      'section actions';
+    gap: 0.2rem 0.75rem;
+    padding: 0.7rem 0.1rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .deck-table td {
+    display: block;
+    padding: 0;
+    border-bottom: none;
+  }
+
+  .deck-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .deck-table__cell--word {
+    grid-area: word;
+    font-size: 1rem;
+  }
+
+  .deck-table__cell--translation {
+    grid-area: translation;
+  }
+
+  .deck-table__cell--section {
+    grid-area: section;
+    align-self: center;
+    font-size: 0.8rem;
+  }
+
+  /* Needs the td qualifier to outrank `.deck-table td { display: block }`. */
+  .deck-table td.deck-table__cell--pos {
+    display: none;
+  }
+
+  .deck-table__cell--actions {
+    grid-area: actions;
+    align-self: center;
+    width: auto;
+  }
+
+  /* An empty section cell should not reserve a footer line of its own. */
+  .deck-table__placeholder {
+    display: none;
   }
 
   .review-progress__meta {
@@ -2842,12 +3058,6 @@ html {
   border: none;
   background: none;
   cursor: pointer;
-}
-
-@media (max-width: 560px) {
-  .deck-preview__grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Auth: Google SSO button + "or" divider */
@@ -3296,9 +3506,9 @@ html {
 .h-seg__btn {
   min-height: 44px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.10);
-  color: var(--accent-ink);
+  border: 0px solid var(--line);
+  background: var(--surface);
+  color: var(--accent);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -3307,18 +3517,52 @@ html {
 }
 
 .h-seg__btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--surface-2);
 }
 
 .h-seg__btn--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.h-seg__btn--active:hover {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+  color: var(--accent-ink);
+}
+
+.h-seg__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Overrides for primary elements (dark theme containers) */
+.h-mode-card--primary .h-seg__btn {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--accent-ink);
+}
+
+.h-mode-card--primary .h-seg__btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.h-mode-card--primary .h-seg__btn--active {
   background: var(--accent-ink);
   border-color: var(--accent-ink);
   color: var(--accent);
 }
 
-.h-seg__btn:focus-visible {
-  outline: 2px solid var(--accent-ink);
-  outline-offset: 2px;
+.h-mode-card--primary .h-seg__btn--active:hover {
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
+  color: var(--accent);
+  opacity: 0.9;
+}
+
+.h-mode-card--primary .h-seg__btn:focus-visible {
+  outline-color: var(--accent-ink);
 }
 
 .h-stepper {
@@ -3424,7 +3668,8 @@ html {
   align-items: center;
   gap: 10px;
   min-width: 220px;
-  padding: 10px 14px;
+  height: 44px;
+  padding: 0 14px;
   border-radius: 12px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -3443,6 +3688,14 @@ html {
   font-size: 13.5px;
   color: var(--ink);
   width: 100%;
+}
+
+.h-deck-search input::-webkit-search-decoration,
+.h-deck-search input::-webkit-search-cancel-button,
+.h-deck-search input::-webkit-search-results-button,
+.h-deck-search input::-webkit-search-results-decoration {
+  display: none;
+  -webkit-appearance: none;
 }
 
 .h-deck-search input::placeholder {
@@ -4660,5 +4913,556 @@ html {
   .interstitial,
   .speedround {
     height: auto;
+  }
+}
+
+/* ==================================================================
+   Market sync & change proposals (deck updates, PR-style review)
+   ================================================================== */
+
+/* -- Home deck card: pending-updates pill ------------------------- */
+.h-deck-card__updates {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-top: 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.h-deck-card__updates svg {
+  width: 13px;
+  height: 13px;
+}
+
+.h-deck-card__updates:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* -- Market card: maintainer row ---------------------------------- */
+.h-market-card__maintainer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.h-market-card__maintainer-name strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.h-market__proposals-link {
+  display: inline-block;
+  margin-top: 10px;
+}
+
+/* -- Deck explorer: toolbar actions + maintainer line -------------- */
+.deck-preview-page__toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.deck-preview__sync-button--pending {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.deck-preview__maintainer {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.deck-preview__maintainer strong {
+  color: var(--ink);
+}
+
+/* -- Status / role chips ------------------------------------------ */
+.sync-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.sync-chip--warn {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning-ink);
+}
+
+.sync-chip--add,
+.sync-chip--approved {
+  border-color: var(--success);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.sync-chip--open,
+.sync-chip--owner {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sync-chip--owner {
+  margin-left: 0;
+}
+
+.sync-chip--rejected {
+  border-color: var(--danger);
+  background: rgba(166, 75, 60, 0.12);
+  color: var(--danger);
+}
+
+.proposal-card .sync-chip {
+  margin-left: 0;
+}
+
+.proposal-card .sync-chip--warn,
+.proposal-card .sync-chip--add {
+  margin-right: 8px;
+}
+
+/* -- Sync / propose modals ----------------------------------------- */
+.sync-modal__panel {
+  display: flex;
+  flex-direction: column;
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(80vh, 720px);
+}
+
+.sync-modal__status {
+  margin: 12px 0 0;
+  color: var(--muted);
+}
+
+.sync-modal__status--error {
+  color: var(--danger);
+}
+
+.sync-modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: 14px;
+  padding-right: 4px;
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.sync-modal__done {
+  margin-top: 18px;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.sync-modal__done p {
+  margin: 0;
+  font-weight: 600;
+}
+
+.sync-modal__done-note {
+  color: var(--muted);
+  font-weight: 400 !important;
+  font-size: 0.86rem;
+}
+
+.sync-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.sync-modal__footer-note {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.sync-modal__message {
+  display: grid;
+  gap: 6px;
+}
+
+.sync-modal__message span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sync-modal__message textarea {
+  resize: vertical;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+/* -- Sync sections + rows ------------------------------------------ */
+.sync-section {
+  display: grid;
+  gap: 8px;
+}
+
+.sync-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+
+.sync-section__title {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.sync-section__count {
+  font-family: var(--mono-font);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.sync-section__hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.sync-section__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.sync-row {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.sync-row__title {
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.sync-check {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.sync-check input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  transform: translateY(2px);
+}
+
+/* -- Field diffs ---------------------------------------------------- */
+.sync-diff {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 25px;
+  display: grid;
+  gap: 4px;
+}
+
+.sync-diff li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.83rem;
+}
+
+.sync-diff__label {
+  flex-shrink: 0;
+  min-width: 96px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sync-diff__values {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sync-diff__values del {
+  color: var(--danger);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  overflow-wrap: anywhere;
+}
+
+.sync-diff__values ins {
+  color: var(--success);
+  text-decoration: none;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sync-diff__arrow {
+  color: var(--muted);
+}
+
+/* -- Proposals page -------------------------------------------------- */
+.proposals-page {
+  display: grid;
+  gap: 20px;
+}
+
+.proposals-page__head .back-link {
+  margin-bottom: 14px;
+}
+
+.proposals-page__maintained {
+  padding: 18px 20px;
+}
+
+.proposals-page__maintained h2 {
+  margin: 0 0 10px;
+  font-family: var(--head-font);
+  font-size: 1.15rem;
+}
+
+.proposals-page__maintained ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.maintained-deck {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 10px 14px;
+}
+
+.maintained-deck__main {
+  display: grid;
+  gap: 2px;
+}
+
+.maintained-deck__title {
+  font-weight: 700;
+}
+
+.maintained-deck__meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.maintained-deck__transfer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.maintained-deck__transfer input {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  min-width: 220px;
+}
+
+.proposals-page__tabs {
+  display: inline-flex;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  padding: 4px;
+  justify-self: start;
+}
+
+.proposals-page__list {
+  display: grid;
+  gap: 12px;
+}
+
+.proposal-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.proposal-card--open {
+  border-color: var(--accent);
+}
+
+.proposal-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.proposal-card__head-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.proposal-card__deck {
+  font-weight: 700;
+}
+
+.proposal-card__meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.proposal-card__chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.proposal-card__body {
+  padding: 0 16px 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.proposal-card__message {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 10px 10px 0;
+  font-style: italic;
+}
+
+.proposal-card__resolution {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.proposal-item__detail {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.proposal-card__actions {
+  display: grid;
+  gap: 10px;
+}
+
+.proposal-card__note {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.proposal-card__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* -- Mobile ----------------------------------------------------------- */
+@media (max-width: 640px) {
+  .sync-modal__panel {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 48px);
+  }
+
+  .sync-diff__label {
+    min-width: 100%;
+  }
+
+  .sync-modal__footer {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .deck-preview-page__toolbar-actions {
+    justify-content: flex-start;
+  }
+
+  .maintained-deck__transfer input {
+    min-width: 0;
+    flex: 1;
   }
 }

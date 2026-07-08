@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchDeckPreview, fetchDueSummary, fetchHomeDecks, updateDeckSmartPracticeInclusion } from '../api';
 import DeckCard from '../components/DeckCard';
+import DeckSyncModal from '../components/DeckSyncModal';
 import { maybeNotifyDueCards } from '../notifications';
 import { loadPracticeSettings, savePracticeSettings } from '../practiceSettings';
+import { normalizeSearchText, scoreFieldMatch } from '../textSearch';
 
 const NEW_BLOCK_SIZE_RANGE = { min: 5, max: 12, step: 1 };
 const REVIEW_BATCH_SIZE_RANGE = { min: 10, max: 50, step: 5 };
@@ -51,28 +53,6 @@ function sortDecksBySmartPractice(decks) {
     }
     return leftDeck.title.localeCompare(rightDeck.title);
   });
-}
-
-function normalizeSearchText(value) {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, ' ')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function scoreFieldMatch(fieldValue, query) {
-  if (!fieldValue) return 0;
-  const normalizedField = normalizeSearchText(fieldValue);
-  if (!normalizedField) return 0;
-  if (normalizedField === query) return 120;
-  if (normalizedField.startsWith(query)) return 90;
-  if (normalizedField.includes(query)) return 70;
-  const queryTerms = query.split(' ');
-  const matchedTerms = queryTerms.filter((term) => normalizedField.includes(term)).length;
-  return matchedTerms === queryTerms.length ? 50 : matchedTerms > 0 ? 20 + matchedTerms : 0;
 }
 
 function buildDeckWordIndex(preview) {
@@ -158,6 +138,8 @@ function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [deckWordIndexById, setDeckWordIndexById] = useState({});
   const [dueSummary, setDueSummary] = useState(null);
+  const [syncDeckId, setSyncDeckId] = useState(null);
+  const [deckRefreshToken, setDeckRefreshToken] = useState(0);
 
   const areAllDecksEnabledInSmartPractice = decks.length > 0 && decks.every((d) => d.is_enabled_in_smart_practice);
   const enabledDeckCount = decks.filter((d) => d.is_enabled_in_smart_practice).length;
@@ -195,7 +177,7 @@ function HomePage() {
     }
     loadDecks();
     return () => { cancelled = true; };
-  }, []);
+  }, [deckRefreshToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -453,12 +435,21 @@ function HomePage() {
               isPending={pendingDeckIds.includes(deck.id)}
               variant="home"
               onToggleSmartPractice={handleToggleSmartPractice}
+              onOpenSync={(deckId) => setSyncDeckId(deckId)}
               isSearchDimmed={Boolean(normalizedSearchQuery) && !searchDidMatch}
               searchMatchReasons={searchMatchReasons}
             />
           ))}
         </div>
       </section>
+
+      {syncDeckId !== null ? (
+        <DeckSyncModal
+          deckId={syncDeckId}
+          onClose={() => setSyncDeckId(null)}
+          onApplied={() => setDeckRefreshToken((token) => token + 1)}
+        />
+      ) : null}
     </>
   );
 }

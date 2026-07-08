@@ -1,0 +1,22 @@
+2026-07-07 18:39:56.171 CST [28980] LOG:  starting PostgreSQL 18.3 on x86_64-windows, compiled by msvc-19.44.35222, 64-bit
+2026-07-07 18:39:56.171 CST [28980] LOG:  listening on IPv4 address "127.0.0.1", port 55442
+2026-07-07 18:39:56.261 CST [28396] LOG:  database system was shut down at 2026-07-07 18:39:49 CST
+2026-07-07 18:39:56.269 CST [28980] LOG:  database system is ready to accept connections
+2026-07-07 18:40:00.870 CST [28980] LOG:  received fast shutdown request
+2026-07-07 18:40:00.872 CST [28980] LOG:  aborting any active transactions
+2026-07-07 18:40:00.883 CST [28980] LOG:  background worker "logical replication launcher" (PID 17552) exited with exit code 1
+2026-07-07 18:40:00.883 CST [39760] LOG:  shutting down
+2026-07-07 18:40:00.885 CST [39760] LOG:  checkpoint starting: shutdown immediate
+2026-07-07 18:40:01.876 CST [39760] LOG:  checkpoint complete: wrote 1108 buffers (6.8%), wrote 4 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.283 s, sync=0.694 s, total=0.993 s; sync files=386, longest=0.074 s, average=0.002 s; distance=5530 kB, estimate=5530 kB; lsn=0/1D57A18, redo lsn=0/1D57A18
+2026-07-07 18:40:03.435 CST [28980] LOG:  database system is shut down
+2026-07-07 19:05:29.802 CST [22684] LOG:  starting PostgreSQL 18.3 on x86_64-windows, compiled by msvc-19.44.35222, 64-bit
+2026-07-07 19:05:29.804 CST [22684] LOG:  listening on IPv4 address "127.0.0.1", port 55442
+2026-07-07 19:05:30.121 CST [13116] LOG:  database system was shut down at 2026-07-07 19:05:21 CST
+2026-07-07 19:05:30.136 CST [22684] LOG:  database system is ready to accept connections
+2026-07-07 19:05:40.961 CST [22684] LOG:  received fast shutdown request
+2026-07-07 19:05:40.963 CST [22684] LOG:  aborting any active transactions
+2026-07-07 19:05:41.038 CST [22684] LOG:  background worker "logical replication launcher" (PID 36512) exited with exit code 1
+2026-07-07 19:05:41.056 CST [37816] LOG:  shutting down
+2026-07-07 19:05:41.061 CST [37816] LOG:  checkpoint starting: shutdown immediate
+2026-07-07 19:05:42.379 CST [37816] LOG:  checkpoint complete: wrote 1109 buffers (6.8%), wrote 4 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.662 s, sync=0.579 s, total=1.321 s; sync files=386, longest=0.006 s, average=0.002 s; distance=5573 kB, estimate=5573 kB; lsn=0/1D626A0, redo lsn=0/1D626A0
+2026-07-07 19:05:44.854 CST [22684] LOG:  database system is shut down
