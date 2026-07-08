@@ -34,7 +34,7 @@ References are `file:line` into the current codebase.
 | `synonyms_en[]` | accept near‑answers when typing |
 | `collocations[]` | depth/collocation games |
 | `example_es`, `example_en` | cloze / fill‑the‑gap |
-| `mnemonic_en` | encoding aid |
+| `mnemonic_en` | unused — memory-hook feature removed (column kept; still part of the 0017 sync content hash) |
 
 ### 2.2 The grade path (how a "guess" is counted)
 Every review funnels through a **binary** result. `handleReview('known'|'unknown')` ([frontend/src/pages/PracticePage.jsx:202](../frontend/src/pages/PracticePage.jsx)) → `submit_smart_practice_review` → `_apply_card_progress` ([supabase/migrations/0006_fsrs_scheduling.sql:157](../supabase/migrations/0006_fsrs_scheduling.sql)), which **hardcodes the FSRS rating** `known → Good(3)`, `unknown → Again(1)` (line 210). That single grade drives `stability`, `difficulty`, `due_at`, `lapses`, and the **2‑streak that trips `initial_mastered_at`** (lines 198–200). There is no Hard/Easy middle grade.
@@ -75,7 +75,7 @@ New word ───────────────────────�
 
 - **Tier A — Production / free recall → count fully.** No options on screen; the user produces the answer. As strong as the swipe, and *verifiable* (higher‑quality data than self‑report).
 - **Tier B — Recognition / cued → count only clean failures.** Options are visible; a win can come from elimination, so it earns **no** `known`. A *clean* wrong pick is solid proof of not‑knowing → record `unknown`.
-- **Tier C — Exposure / scaffolded / different‑skill → never count.** No meaningful es→en retrieval (mnemonic reveal, memory‑grid spatial matching, hangman, listening/spelling). Pure fun / encoding aid.
+- **Tier C — Exposure / scaffolded / different‑skill → never count.** No meaningful es→en retrieval (memory‑grid spatial matching, hangman, listening/spelling). Pure fun / encoding aid.
 
 ### 3.2 The asymmetry
 A right answer and a wrong answer are **not** symmetric. Even where a *win* is weak evidence, a *clean loss* is strong evidence. So Tier B's rule is "**count failures, ignore wins**," which never inflates stability yet still captures the negative signal.
@@ -106,7 +106,7 @@ Support‑heavy formats early in a word's life; production formats late and on r
 | 9 | **Word scramble** | C | `answer_en` letters | Never | Cool‑down |
 | 10 | **Hangman** | C | `answer_en` letters | Never | Cool‑down |
 | 11 | **Listening / dictation** | C | TTS `answer_en` (speech synth already in [Flashcard.jsx:263](../frontend/src/components/Flashcard.jsx)) | Never (different skill) | New 1st exposure |
-| 12 | **Mnemonic reveal** | C | `mnemonic_en` | Never | New 1st exposure |
+| 12 | **Mnemonic reveal** *(removed — shipped in Phase 4, cut with the memory-hook feature)* | C | `mnemonic_en` | Never | New 1st exposure |
 
 Enrichment aside: synonym/collocation matching (`synonyms_en`, `collocations`) is fun but tests a *different fact*; if tracked, it should feed a separate "depth" stat, never `due_at`.
 
@@ -156,7 +156,7 @@ If we later want recognition wins to count as a **downgraded positive** (instead
 | Moment (detected via) | Learner is… | Game type | Counts? |
 |---|---|---|---|
 | **Warm‑up** (before queue) | re‑activating prior words | matching grid, fast recognition | No |
-| **New card, 1st exposure** (`card_kind='new'`, `times_presented=0`) | *encoding* a new word | mnemonic reveal, listening | No |
+| **New card, 1st exposure** (`card_kind='new'`, `times_presented=0`) | *encoding* a new word | listening | No |
 | **New card, consolidating** (cycling to 2‑streak) | building the trace | MC, word‑bank cloze | Wins no / clean fails yes; never advance graduation |
 | **Between blocks** (`remaining_new`/`remaining_review` boundary) | resetting attention | speed round, grid interstitial | No |
 | **Review, 1st pass** (`card_kind='review'`, `times_presented=0`) | *measuring* retention | classic swipe **or** Tier‑A production | Yes, fully |
@@ -199,7 +199,6 @@ minigames: {
     scramble:              false,   // Tier C — practice
     hangman:               false,   // Tier C — practice
     listening:             true,    // Tier C — practice
-    mnemonic_reveal:       true,    // Tier C — practice
   },
 }
 ```
@@ -288,7 +287,7 @@ Each phase ships independently and leaves the app fully working.
 - **Acceptance:** these never call session RPCs; toggling frequency changes how often they appear.
 
 ### Phase 4 — Encoding aids for new 1st exposure (Tier C)
-- Mnemonic reveal + listening/dictation shown on a new card's very first exposure (`times_presented=0`), before any graded rep.
+- Mnemonic reveal + listening/dictation shown on a new card's very first exposure (`times_presented=0`), before any graded rep. *(The mnemonic reveal was later removed along with the whole memory-hook feature; listening remains.)*
 - **Acceptance:** first exposure never produces a grade; the graded rep still happens on a later cycle.
 
 ### Phase 5 — Remaining Tier‑A/B games + polish

@@ -39,10 +39,9 @@ export const DEFAULT_PRACTICE_SETTINGS = {
       // Phase 5: single-card cool-down puzzles. OFF by default. §4 (#9–#10).
       scramble: false,
       hangman: false,
-      // Phase 4: encoding aids on a NEW card's very first exposure, before any graded
-      // rep. Neither grades — both advance via skip, deferring the first graded rep to
-      // a later cycle. mnemonic_reveal = §4 (#12), listening = §4 (#11), §9 Phase 4.
-      mnemonic_reveal: true,
+      // Phase 4: encoding aid on a NEW card's very first exposure, before any graded
+      // rep. It never grades — it advances via skip, deferring the first graded rep
+      // to a later cycle. §4 (#11), §9 Phase 4.
       listening: true,
     },
   },
@@ -53,10 +52,17 @@ const STORAGE_KEY = 'duocards.smartPracticeSettings';
 // Overlay a stored blob onto the defaults. Top-level keys are a shallow merge,
 // but `minigames` (and its nested `games` map) is merged one level deeper so a
 // blob written by an older app version still inherits games added since — see
-// docs/minigames.md §7.1.
+// docs/minigames.md §7.1. Games absent from the defaults are dropped, so a blob
+// written before a game was removed doesn't resurrect its toggle.
 function mergePracticeSettings(overrides) {
   const storedMinigames =
     overrides && typeof overrides.minigames === 'object' && overrides.minigames ? overrides.minigames : {};
+  const storedGames = storedMinigames.games ?? {};
+
+  const games = {};
+  for (const [game, defaultOn] of Object.entries(DEFAULT_PRACTICE_SETTINGS.minigames.games)) {
+    games[game] = typeof storedGames[game] === 'boolean' ? storedGames[game] : defaultOn;
+  }
 
   return {
     ...DEFAULT_PRACTICE_SETTINGS,
@@ -64,10 +70,7 @@ function mergePracticeSettings(overrides) {
     minigames: {
       ...DEFAULT_PRACTICE_SETTINGS.minigames,
       ...storedMinigames,
-      games: {
-        ...DEFAULT_PRACTICE_SETTINGS.minigames.games,
-        ...(storedMinigames.games ?? {}),
-      },
+      games,
     },
   };
 }

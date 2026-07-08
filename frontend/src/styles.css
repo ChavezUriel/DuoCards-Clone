@@ -732,28 +732,6 @@ html {
   text-align: center;
 }
 
-.flashcard__mnemonic {
-  max-width: 38ch;
-  margin: 0.35rem 0 0;
-  padding: 0.55rem 0.85rem;
-  border-radius: 12px;
-  background: var(--accent-soft);
-  color: var(--ink);
-  font-size: 0.86rem;
-  line-height: 1.45;
-  text-align: center;
-}
-
-.flashcard__mnemonic-label {
-  display: block;
-  margin-bottom: 0.2rem;
-  font-family: var(--mono-font);
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-size: 0.62rem;
-  color: var(--accent);
-}
-
 .flashcard-details {
   display: grid;
   gap: 0.85rem;
@@ -1405,10 +1383,9 @@ html {
   letter-spacing: 0.03em;
 }
 
-/* ---- Phase 4 encoding aids (new-card first exposure): mnemonic reveal + listening.
-   Tier-C, never graded. Both share the classic flashcard's panel footprint so
+/* ---- Phase 4 encoding aid (new-card first exposure): listening.
+   Tier-C, never graded. Shares the classic flashcard's panel footprint so
    switching modalities in/out never jumps the layout. ---- */
-.mnemonicgame,
 .listengame {
   position: relative;
   display: flex;
@@ -1425,13 +1402,11 @@ html {
   overflow: hidden;
 }
 
-.mnemonicgame__meta-row,
 .listengame__meta-row {
   display: flex;
   justify-content: center;
 }
 
-.mnemonicgame__body,
 .listengame__body {
   flex: 1;
   min-height: 0;
@@ -1444,7 +1419,6 @@ html {
   overflow: auto;
 }
 
-.mnemonicgame__prompt,
 .listengame__prompt {
   margin: 0;
   font-family: var(--head-font);
@@ -1454,7 +1428,6 @@ html {
   color: var(--ink);
 }
 
-.mnemonicgame__answer,
 .listengame__answer {
   display: flex;
   flex-direction: column;
@@ -1462,7 +1435,6 @@ html {
   margin: 0;
 }
 
-.mnemonicgame__answer-label,
 .listengame__answer-label {
   font-family: var(--mono-font);
   text-transform: uppercase;
@@ -1471,40 +1443,15 @@ html {
   color: var(--muted);
 }
 
-.mnemonicgame__answer-text,
 .listengame__answer-text {
   font-size: 1.35rem;
   font-weight: 600;
   color: var(--ink);
 }
 
-.mnemonicgame__action,
 .listengame__action {
   min-width: 180px;
   margin-top: 0.3rem;
-}
-
-/* Mnemonic hook box — mirrors the flashcard back-face memory hook. */
-.mnemonicgame__mnemonic {
-  max-width: 40ch;
-  margin: 0;
-  padding: 0.7rem 1rem;
-  border-radius: 14px;
-  background: var(--accent-soft);
-  color: var(--ink);
-  font-size: 0.95rem;
-  line-height: 1.5;
-  text-align: center;
-}
-
-.mnemonicgame__mnemonic-label {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-family: var(--mono-font);
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-size: 0.62rem;
-  color: var(--accent);
 }
 
 /* Listening — prominent Play button, then a reveal of the spelling. */
@@ -2993,7 +2940,6 @@ html {
   .flashcard,
   .typegame,
   .mcgame,
-  .mnemonicgame,
   .listengame {
     padding: 1.5rem;
     min-height: min(480px, 100%);
@@ -4665,7 +4611,6 @@ html {
   .flashcard,
   .typegame,
   .mcgame,
-  .mnemonicgame,
   .listengame {
     padding: 1rem;
     border-radius: 22px;
@@ -4726,7 +4671,6 @@ html {
 
   .typegame__action,
   .mg-feedback__continue,
-  .mnemonicgame__action,
   .listengame__action,
   .listengame__reveal-button,
   .synmatch__action {
@@ -4900,7 +4844,6 @@ html {
   .flashcard,
   .typegame,
   .mcgame,
-  .mnemonicgame,
   .listengame {
     height: auto;
     min-height: 420px;

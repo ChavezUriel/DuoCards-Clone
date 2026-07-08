@@ -655,12 +655,6 @@ function Flashcard({
               </h3>
             </div>
             {displayCard.example_en ? <p className="flashcard__example flashcard__example--answer">{displayCard.example_en}</p> : null}
-            {displayCard.mnemonic_en ? (
-              <p className="flashcard__mnemonic">
-                <span className="flashcard__mnemonic-label">Memory hook</span>
-                {displayCard.mnemonic_en}
-              </p>
-            ) : null}
             <button
               aria-label="Show flashcard metadata"
               className="info-button"

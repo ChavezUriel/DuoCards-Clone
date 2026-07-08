@@ -5,17 +5,9 @@ import ClozeType from './ClozeType';
 import MultipleChoice from './MultipleChoice';
 import ReverseMultipleChoice from './ReverseMultipleChoice';
 import WordBankCloze from './WordBankCloze';
-import MnemonicReveal from './MnemonicReveal';
 import Listening from './Listening';
 import { presentationIndex, shouldPlayPerCardGame } from '../minigameFrequency';
 import { locateAnswerInExample } from '../minigameText';
-
-// A card can back the Mnemonic reveal aid only when it actually carries a memory
-// hook; without one the aid has nothing to show and we fall through to Listening
-// (or classic). See docs/minigames.md §4 (#12).
-function hasMnemonic(card) {
-  return typeof card?.mnemonic_en === 'string' && card.mnemonic_en.trim().length > 0;
-}
 
 // Recall-from-definition needs an English definition to prompt with (§4 #2).
 function hasDefinition(card) {
@@ -95,15 +87,12 @@ export function selectModality(card, settings) {
   const lastResult = card?.last_result ?? null;
 
   // Slot — new card's very first exposure (times_presented === 0): Tier-C encoding
-  // aids only (§4 #11–#12, §6.1). Pure exposure / a different skill, so they NEVER
-  // grade — each resolves via skip, re-queuing the card so its first *graded* rep
+  // aid only (§4 #11, §6.1). Pure exposure / a different skill, so it NEVER
+  // grades — it resolves via skip, re-queuing the card so its first *graded* rep
   // lands on a later cycle (§3.4). No production or recognition game is offered here:
-  // encoding, not measurement. Deterministic preference (mnemonic when the card has a
-  // hook, else listening); otherwise today's classic graded swipe.
+  // encoding, not measurement. Listening when enabled; otherwise today's classic
+  // graded swipe.
   if (kind === 'new' && timesPresented === 0) {
-    if (games.mnemonic_reveal && hasMnemonic(card)) {
-      return 'mnemonic_reveal';
-    }
     if (games.listening) {
       return 'listening';
     }
@@ -264,12 +253,8 @@ function MinigameHost({
     return <ClozeType key={card.card_id} card={card} onResolve={onResolve} />;
   }
 
-  // Tier-C encoding aids on a new card's first exposure (§4 #11–#12). Both are pure
-  // exposure and resolve via skip only (onResolve({ skip: true })) — never a grade.
-  if (modality === 'mnemonic_reveal') {
-    return <MnemonicReveal key={card.card_id} card={card} onResolve={onResolve} />;
-  }
-
+  // Tier-C encoding aid on a new card's first exposure (§4 #11). Pure exposure —
+  // it resolves via skip only (onResolve({ skip: true })), never a grade.
   if (modality === 'listening') {
     return <Listening key={card.card_id} card={card} onResolve={onResolve} />;
   }

@@ -59,7 +59,6 @@ function scoreCardMatch(card, query) {
     ['definition', card.definition_en],
     ['collocations', (card.collocations ?? []).join(' ')],
     ['examples', [card.example_sentence, card.example_es, card.example_en].filter(Boolean).join(' ')],
-    ['memory hook', card.mnemonic_en],
   ];
   let secondaryScore = 0;
   let secondaryLabel = null;

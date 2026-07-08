@@ -43,7 +43,9 @@ function CardDetailsModal({
       example_sentence: nullableText(formValues.example_sentence),
       example_es: nullableText(formValues.example_es),
       example_en: nullableText(formValues.example_en),
-      mnemonic_en: nullableText(formValues.mnemonic_en),
+      // No longer shown or editable anywhere, but update_card nulls the column
+      // when the param is omitted — pass the stored value through untouched.
+      mnemonic_en: card.mnemonic_en ?? null,
       synonyms_en: splitMultiline(formValues.synonyms_en),
     });
 
@@ -206,14 +208,6 @@ function CardDetailsModal({
             )}
           </div>
 
-          <div>
-            <span>Memory hook</span>
-            {isEditing ? (
-              <textarea value={formValues.mnemonic_en} onChange={(event) => updateField('mnemonic_en', event.target.value)} rows={2} />
-            ) : (
-              <p>{card.mnemonic_en || 'Not set'}</p>
-            )}
-          </div>
         </div>
 
         {saveError ? <p className="details-modal__status details-modal__status--error">{saveError}</p> : null}
@@ -292,7 +286,6 @@ function buildFormValues(card) {
     example_sentence: card.example_sentence ?? '',
     example_es: card.example_es ?? '',
     example_en: card.example_en ?? '',
-    mnemonic_en: card.mnemonic_en ?? '',
   };
 }
 
