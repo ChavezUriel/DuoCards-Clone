@@ -359,16 +359,19 @@ export function undoSmartPracticeReview(sessionId) {
   return rpc('undo_smart_practice_review', { p_session_id: sessionId });
 }
 
-// Plausible wrong answers for a recognition minigame. Returns an array of sibling
-// answer strings from the same deck/section; the caller shuffles them together with
-// the real answer. `side` picks the language: 'en' (default, sibling english_text —
-// multiple choice / word-bank cloze) or 'es' (sibling spanish_text — reverse MC).
+// Plausible wrong answers for a recognition minigame. Returns an array of option
+// strings; the caller shuffles them together with the real answer. `side` picks
+// the flavor: 'en' (default, sibling english_text — multiple choice), 'es'
+// (sibling spanish_text — reverse MC), or 'cloze' (word-bank cloze — the card's
+// curated cloze_distractors_en, verified so only the real answer fits the blank,
+// falling back to sibling english_text; migration 0018).
 //
-// The 'es' side needs migration 0014's p_side parameter, which is live on the remote
-// (Phase 6, §4 #5). We still omit p_side on the 'en' path so the default resolves
-// against any older two-argument function too — and a remote that predates 0014
-// simply errors on the 'es' fetch, which resolveModality degrades away cleanly.
-// See docs/minigames.md §8.3, §4 #5.
+// The 'es' side needs migration 0014's p_side parameter and 'cloze' needs 0018,
+// both live paths degrade: pre-0018 servers normalize 'cloze' to 'en', and a
+// remote that predates 0014 simply errors on the 'es' fetch, which
+// resolveModality degrades away cleanly. We still omit p_side on the 'en' path
+// so the default resolves against any older two-argument function too.
+// See docs/minigames.md §8.3, §4 #5–#6.
 export function getMinigameDistractors(cardId, n = 3, side = 'en') {
   const args = { p_card_id: cardId, p_n: n };
   if (side && side !== 'en') {

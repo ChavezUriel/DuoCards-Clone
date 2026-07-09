@@ -20,8 +20,9 @@ import { loadDepthStat } from '../depthStat';
 const FIRST_IDLE_HINT_DELAY_MS = 10000;
 
 // Distractor cache key. A card can back an English recognition round (multiple
-// choice / word-bank cloze) or a Spanish one (reverse MC), so its distractors are
-// cached per (card, side) — never mixing the two languages. See docs/minigames.md §8.3.
+// choice: 'en'), a curated cloze round (word-bank cloze: 'cloze', migration 0018)
+// or a Spanish one (reverse MC: 'es'), so its distractors are cached per
+// (card, side) — never mixing the flavors. See docs/minigames.md §8.3.
 function distractorKey(cardId, side) {
   return `${cardId}:${side}`;
 }
@@ -255,8 +256,8 @@ function PracticePage() {
       return;
     }
     // Only recognition games need distractors; fetch the side the selected game wants
-    // ('en' for multiple choice / word-bank cloze, 'es' for reverse MC). Non-
-    // recognition modalities need no fetch.
+    // ('en' for multiple choice, 'cloze' for word-bank cloze, 'es' for reverse MC).
+    // Non-recognition modalities need no fetch.
     const side = recognitionSide(selectModality(card, practiceSettings));
     if (!side) {
       return;

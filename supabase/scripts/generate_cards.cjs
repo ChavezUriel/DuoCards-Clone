@@ -22,17 +22,19 @@
 //                   cards so an interrupted run can be resumed without losing
 //                   progress. Default 10; 0 disables checkpoint writes.
 //
-// Quality strategy: light model => many small focused prompts. Each card is
-// enriched with 3 separate sub-prompts (lexical / equivalents / examples), then
-// validated; only the failing sub-prompt is re-run during repair.
+// Quality strategy: light model => many small focused prompts. Cards go through
+// lib/enrich.cjs processCard(): deterministic gap-fill sub-prompts (lexical /
+// equivalents / examples / synonyms / cloze distractors) plus LLM-as-judge
+// audits (example theme fit + blank inferability; cloze solvability), with only
+// the failing sub-prompt re-run during repair. To bring EVERY deck up to the
+// current feature set in one go, use update_cards.cjs instead.
 
 const fs = require('fs');
 const path = require('path');
 const { chatJson, MODEL, BASE_URL } = require('./lib/ollama.cjs');
-const {
-  blueprintPrompt, wordSetPrompt, lexicalPrompt, equivalentsPrompt, examplesPrompt, mnemonicPrompt, synonymsPrompt, PROMPT_VERSIONS,
-} = require('./lib/prompts.cjs');
-const { validateCard, hasIssues, flatten } = require('./lib/validate.cjs');
+const { blueprintPrompt, wordSetPrompt, PROMPT_VERSIONS } = require('./lib/prompts.cjs');
+const { hasIssues, flatten } = require('./lib/validate.cjs');
+const { processCard, cardStatus } = require('./lib/enrich.cjs');
 const { optText, normList, normCard, pairKey } = require('./lib/cards.cjs');
 const SEED_DECKS = require('./lib/seed_decks.cjs');
 
@@ -93,6 +95,17 @@ function resolveDeck(slug) {
   return null;
 }
 
+// Deck context handed to the theme-aware prompts (examples / audits /
+// distractors). For `generate` the topic spec itself is richer (topic,
+// difficulty, learner_profile) and is used directly instead.
+function deckContextOf(deck) {
+  return {
+    slug: optText(deck.slug),
+    title: optText(deck.title) || optText(deck.slug),
+    description: optText(deck.description) || '',
+  };
+}
+
 // Upsert a single deck entry (by slug) into an array-shaped seed_data file.
 function upsertDeckFile(file, deckEntry) {
   let arr = [];
@@ -121,11 +134,19 @@ function toSeedCard(card) {
   out.main_translations_es = normList(card.main_translations_es);
   out.collocations = normList(card.collocations);
   out.synonyms_en = normList(card.synonyms_en);
+  // Example pairs (migration 0019); the legacy example_* fields mirror pair 0.
+  out.examples = (Array.isArray(card.examples) ? card.examples : [])
+    .filter((p) => p && p.es && p.en)
+    .map((p) => ({ es: p.es, en: p.en }));
   // example_sentence mirrors the English example (the column the app reads).
   if (optText(card.example_en)) out.example_sentence = card.example_en;
   if (optText(card.example_es)) out.example_es = card.example_es;
   if (optText(card.example_en)) out.example_en = card.example_en;
+  // Kept as data even though the app no longer shows mnemonics.
   if (optText(card.mnemonic_en)) out.mnemonic_en = card.mnemonic_en;
+  out.cloze_distractors_en = normList(card.cloze_distractors_en);
+  // LLM-audit bookkeeping (JSON only; the seed SQL compilers ignore it).
+  if (card._audits && Object.keys(card._audits).length) out._audits = card._audits;
   return out;
 }
 
@@ -175,52 +196,6 @@ async function generateWordSet(spec, sections, totalTarget) {
   return cards;
 }
 
-function applyLexical(card, resp) {
-  card.part_of_speech = optText(resp.part_of_speech);
-  card.definition_en = optText(resp.definition_en);
-}
-function applyEquivalents(card, resp) {
-  card.main_translations_es = normList(resp.main_translations_es).slice(0, 3);
-  card.collocations = normList(resp.collocations).slice(0, 4);
-}
-function applyExamples(card, resp) {
-  card.example_es = optText(resp.example_es);
-  card.example_en = optText(resp.example_en);
-}
-function applyMnemonic(card, resp) {
-  card.mnemonic_en = optText(resp.mnemonic_en);
-}
-function applySynonyms(card, resp) {
-  card.synonyms_en = normList(resp.synonyms_en).slice(0, 3);
-}
-
-// Enrich a single card with up to 4 focused sub-prompts + targeted repair.
-// Only the sub-prompts whose fields are missing/invalid run: fresh drafts get
-// the full pipeline, while already-enriched cards just fill the gaps (e.g. a
-// newly added mnemonic) without overwriting curated metadata.
-async function enrichCard(draft, maxRepairs) {
-  const card = { ...draft };
-
-  for (let attempt = 0; attempt <= maxRepairs; attempt++) {
-    const issues = validateCard(card);
-    if (!hasIssues(issues)) break;
-    // card-level issues (spanish/english) cannot be fixed by enrichment.
-    if (issues.card.length) break;
-    const hint = (arr) => (attempt === 0 ? undefined : arr);
-    if (issues.lexical.length) applyLexical(card, await runPrompt(lexicalPrompt(card, hint(issues.lexical))));
-    if (issues.equivalents.length) applyEquivalents(card, await runPrompt(equivalentsPrompt(card, hint(issues.equivalents))));
-    if (issues.examples.length) applyExamples(card, await runPrompt(examplesPrompt(card, hint(issues.examples))));
-    if (issues.mnemonic.length) applyMnemonic(card, await runPrompt(mnemonicPrompt(card, hint(issues.mnemonic))));
-    if (issues.synonyms.length) applySynonyms(card, await runPrompt(synonymsPrompt(card, hint(issues.synonyms))));
-  }
-
-  return { card, issues: validateCard(card) };
-}
-
-function runPrompt(p) {
-  return chatJson({ system: p.system, user: p.user, temperature: p.temperature });
-}
-
 // ---------------------------------------------------------------------------
 // commands
 // ---------------------------------------------------------------------------
@@ -243,7 +218,7 @@ async function cmdGenerate(flags) {
   log(`\nGenerating deck "${spec.slug}" (${MODEL} @ ${BASE_URL}), target ${totalTarget} card(s).`);
   const sections = await buildBlueprint(spec);
   const drafts = await generateWordSet(spec, sections, totalTarget);
-  log(`Drafted ${drafts.length} card(s). Enriching (3 sub-prompts each)...`);
+  log(`Drafted ${drafts.length} card(s). Enriching (focused sub-prompts + audits each)...`);
   if (writeCheckpoints) log(`Checkpointing to ${path.basename(outFile)} every ${checkpoint} card(s) — safe to Ctrl+C.`);
 
   // Re-seed from a previous interrupted run if the output file already has
@@ -286,7 +261,8 @@ async function cmdGenerate(flags) {
   for (let i = 0; i < todo.length; i++) {
     log(`  [${i + 1}/${todo.length}] ${todo[i].spanish_text} -> ${todo[i].english_text}`);
     const t0 = Date.now();
-    const { card, issues } = await enrichCard(todo[i], maxRepairs);
+    // The topic spec is the richest deck context (topic/difficulty/notes).
+    const { card, issues } = await processCard(todo[i], { deck: spec, maxRepairs, log });
     log(`    done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
     if (hasIssues(issues)) {
       rejected.push({ card, issues: flatten(issues) });
@@ -326,10 +302,6 @@ async function cmdGenerate(flags) {
   log('Next: node supabase/scripts/generate_seed.cjs  (compile seed.sql)');
 }
 
-function cardNeedsEnrichment(card) {
-  return hasIssues(validateCard(card));
-}
-
 async function cmdEnrich(flags) {
   if (!flags.slug) throw new Error('enrich requires --slug <slug>');
   const resolved = resolveDeck(flags.slug);
@@ -338,6 +310,7 @@ async function cmdEnrich(flags) {
     throw new Error(`Deck "${flags.slug}" is defined in lib/seed_decks.cjs (already enriched). Edit it there, or move it to seed_data to enrich.`);
   }
   const deck = resolved.deck;
+  const deckCtx = deckContextOf(deck);
   const title = optText(deck.title) || flags.slug;
   const rawCards = Array.isArray(deck.cards) ? deck.cards : [];
   const maxRepairs = flags['max-repairs'] !== undefined ? Number(flags['max-repairs']) : 2;
@@ -346,10 +319,12 @@ async function cmdEnrich(flags) {
   const checkpoint = ('checkpoint' in flags) ? Number(flags.checkpoint) : DEFAULT_CHECKPOINT;
   const writeCheckpoints = !flags.preview && checkpoint > 0;
 
-  // Normalize existing cards, decide which to (re)enrich.
+  // Normalize existing cards, decide which to (re)enrich. "Missing" includes
+  // stale/unpassed LLM audits, so --only-missing picks up cards whose content
+  // changed since their last audit.
   const working = rawCards.map((rc) => normCard(rc, title));
   let targets = working.map((c, idx) => ({ c, idx }));
-  if (onlyMissing) targets = targets.filter(({ c }) => cardNeedsEnrichment(c));
+  if (onlyMissing) targets = targets.filter(({ c }) => hasIssues(cardStatus(c, deckCtx)));
   if (limit) targets = targets.slice(0, limit);
 
   log(`\nEnriching deck "${flags.slug}" in ${path.basename(resolved.file)}: ${targets.length} of ${working.length} card(s) (${MODEL}).`);
@@ -361,7 +336,7 @@ async function cmdEnrich(flags) {
     const { c, idx } = targets[t];
     log(`  [${t + 1}/${targets.length}] ${c.spanish_text} -> ${c.english_text}`);
     const t0 = Date.now();
-    const { card, issues } = await enrichCard(c, maxRepairs);
+    const { card, issues } = await processCard(c, { deck: deckCtx, maxRepairs, log });
     log(`    done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
     working[idx] = card; // replace in place (keeps card order)
     if (hasIssues(issues)) rejected.push({ card, issues: flatten(issues) });
@@ -395,6 +370,7 @@ async function cmdReview(flags) {
   const resolved = resolveDeck(flags.slug);
   if (!resolved) throw new Error(`Deck not found: ${flags.slug}`);
   const deck = resolved.deck;
+  const deckCtx = deckContextOf(deck);
   const title = optText(deck.title) || flags.slug;
   const working = (Array.isArray(deck.cards) ? deck.cards : []).map((rc) => normCard(rc, title));
 
@@ -402,7 +378,7 @@ async function cmdReview(flags) {
   log(`\nReviewing deck "${flags.slug}" (${working.length} cards, source: ${resolved.source}).`);
   const failing = [];
   working.forEach((card, i) => {
-    const issues = validateCard(card);
+    const issues = cardStatus(card, deckCtx);
     if (hasIssues(issues)) {
       bad++;
       failing.push(i);
@@ -422,7 +398,7 @@ async function cmdReview(flags) {
     for (const i of failing) {
       log(`  ${working[i].spanish_text} -> ${working[i].english_text}`);
       const t0 = Date.now();
-      const { card } = await enrichCard(working[i], maxRepairs);
+      const { card } = await processCard(working[i], { deck: deckCtx, maxRepairs, log });
       log(`    done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
       working[i] = card;
     }
@@ -456,6 +432,7 @@ async function main() {
       log('  generate --spec <file> [--limit N] [--preview] [--out <file>] [--max-repairs N] [--checkpoint N]');
       log('  enrich   --slug <slug> [--only-missing] [--limit N] [--preview] [--max-repairs N] [--checkpoint N]');
       log('  review   --slug <slug> [--repair] [--max-repairs N]');
+      log('To sweep EVERY deck up to the current feature set: node supabase/scripts/update_cards.cjs');
       process.exit(command ? 1 : 0);
   }
 }

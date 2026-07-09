@@ -91,8 +91,11 @@ It only updates rows matched by `(deck slug, lower(spanish), lower(english))`
 and never inserts or deletes, so user review progress (`card_progress`,
 `practice_session_cards`) is untouched. Identity columns (`spanish_text`/
 `english_text`), `is_enabled`, and `generation_*` are left alone, and
-`mnemonic_en` only overwrites when the incoming card has one — pushing
-un-enriched seed data won't wipe existing mnemonics.
+`mnemonic_en`, `cloze_distractors_en`, and `examples` only overwrite when the
+incoming card has a value — pushing un-enriched seed data won't wipe existing
+mnemonics, curated cloze options, or example pair sets. Both compiled files
+reference the `cloze_distractors_en` and `examples` columns, so apply
+migrations `0018` + `0019` before loading them.
 
 For a batch of edits that also adds new cards or decks, run both in this order:
 
@@ -114,9 +117,26 @@ until deleted manually (which cascades to that card's `card_progress` and
 generates new decks and enriches existing ones using a local
 [Ollama](https://ollama.com) model (`gpt-oss:20b`). Because the model is light,
 each card is built with several small, focused prompts (draft → lexical →
-equivalents → examples) and validated, with only the failing sub-prompt re-run
-on repair. Output is written to `supabase/seed_data/*.json`, so the normal
-`generate_seed.cjs → seed.sql` flow applies it — no service key needed.
+equivalents → examples → synonyms → cloze distractors) and validated, with only
+the failing sub-prompt re-run on repair. Output is written to
+`supabase/seed_data/*.json`, so the normal `generate_seed.cjs → seed.sql` flow
+applies it — no service key needed.
+
+On top of the deterministic validators (`lib/validate.cjs`), two LLM-as-judge
+audits gate every card (`lib/enrich.cjs`):
+
+- **Example audit** — each of the card's 3+ example sentence pairs must fit the
+  deck's theme AND imply the answer when it is blanked out (no generic frames
+  like "I like ____"); every `example_en` must contain the answer verbatim so
+  the fill-in-the-blank games can blank it.
+- **Cloze solve audit** — a blind "examiner" prompt solves every blanked
+  sentence given the answer + the curated `cloze_distractors_en` options,
+  without knowing which is correct; options the examiner accepts are dropped or
+  regenerated, so **only the real answer fits the blank**.
+
+Audit passes are recorded per card under `_audits` in the seed JSON (with a
+content fingerprint), so re-runs skip everything that already passed and only
+spend model time where content or prompt versions changed.
 
 ```powershell
 # prerequisites: Ollama running locally + the model pulled
@@ -139,6 +159,42 @@ psql "<your Supabase connection string>" -f supabase/seed.sql
 Useful flags: `--preview` (print, don't write), `--limit N` (cap cards for cheap
 test runs), `--max-repairs N` (repair attempts per card). Override the endpoint
 or model with the `OLLAMA_BASE_URL` / `OLLAMA_MODEL` environment variables.
+
+### Updating every deck to the current feature set
+
+When a new card feature ships (a new field, a new audit, a new minigame
+requirement), run [`update_cards.cjs`](supabase/scripts/update_cards.cjs) — it
+walks **all** seed decks, reports which cards are missing which feature, and
+brings exactly those cards up to date through the same pipeline:
+
+```powershell
+# report per-deck/per-feature gaps — no model calls, no writes
+node supabase/scripts/update_cards.cjs --dry-run
+
+# update everything, then recompile seed.sql + seed_updates.sql
+node supabase/scripts/update_cards.cjs --compile
+
+# narrower runs
+node supabase/scripts/update_cards.cjs --decks travel,basics --limit 20
+node supabase/scripts/update_cards.cjs --features examples,cloze-options
+```
+
+Current feature registry: `fields` (lexical/equivalents/synonyms), `examples`
+(3+ blankable example pairs, migration `0019`), `cloze-options` (curated
+word-bank cloze distractors, migration `0018`), `example-audit`, and
+`cloze-audit`. To add a feature later: teach `lib/validate.cjs` (shape) and/or
+`lib/prompts.cjs` + `lib/enrich.cjs` (prompt/audit) about it, add one entry to
+the `FEATURES` registry in `update_cards.cjs`, then run the script and apply
+`supabase/seed_updates.sql`. Progress is checkpointed into the seed JSON every
+few cards, so an interrupted run resumes with no lost work.
+
+Pipeline tests (no Ollama / no database needed for the first; the second needs
+local PostgreSQL 18 binaries):
+
+```powershell
+node supabase/tests/pipeline/run_stub_tests.cjs      # enrichment/audit loop, stubbed model
+bash supabase/tests/minigame_distractors/run.sh      # migrations 0018/0019 on a throwaway cluster
+```
 
 ## Required Supabase dashboard configuration
 

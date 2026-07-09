@@ -70,6 +70,25 @@ export function presentationIndex(card, n) {
   return presentationHash(card) % n;
 }
 
+// A second stable index in [0, n), decorrelated from presentationIndex by a
+// salted pass component — used to pick WHICH example sentence a cloze game
+// blanks this presentation (cards carry several pairs since migration 0019),
+// independent of which game was picked. Same (card, pass) always maps to the
+// same sentence, so the blank can't flicker between renders; the next pass
+// rotates naturally.
+export function sentenceIndex(card, n) {
+  if (!n || n <= 1) {
+    return 0;
+  }
+  const id = Number(card?.card_id) || 0;
+  const pass = Number(card?.times_presented) || 0;
+  let x = (id * 2654435761 + (pass + 101) * 48271) | 0;
+  x ^= x << 13;
+  x ^= x >> 17;
+  x ^= x << 5;
+  return Math.abs(x) % n;
+}
+
 // Should an *eligible* card actually use its Phase 1/2 minigame this presentation?
 // Callers only ask once the card matches a game's own gate; this is the frequency
 // dose layered on top. 'none' -> never, 'all' -> always (Phase 0–2 behavior),

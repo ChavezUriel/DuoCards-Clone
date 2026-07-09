@@ -130,6 +130,40 @@ export function classifyGuess(guess, card) {
 // "don't" and "hold-up" stay single tokens.
 const WORD_RE = /\p{L}[\p{L}\p{M}'’-]*/gu;
 
+// Every sentence a card offers the cloze games: the primary example_en plus
+// the additional `examples` pairs (migration 0019), deduped by normalized
+// English text and filtered to the ones where the answer is actually
+// blankable. Each candidate carries its located span so callers never
+// re-derive it against a different sentence. Cards that predate 0019 simply
+// yield [primary] — exactly the old behavior.
+export function clozeCandidates(card) {
+  const pairs = [
+    { en: card?.example_en, es: card?.example_es },
+    ...(Array.isArray(card?.examples)
+      ? card.examples.map((p) => ({ en: p?.en, es: p?.es }))
+      : []),
+  ];
+  const out = [];
+  const seen = new Set();
+  for (const pair of pairs) {
+    const en = typeof pair.en === 'string' ? pair.en : '';
+    if (!en) {
+      continue;
+    }
+    const key = normalizeAnswer(en);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    const span = locateAnswerInExample(en, card?.answer_en);
+    if (!span) {
+      continue;
+    }
+    out.push({ en, es: typeof pair.es === 'string' ? pair.es : null, span });
+  }
+  return out;
+}
+
 // Find `answer` as a whole word (or whole multi-word run) inside `example`, matching
 // case/diacritic-insensitively at word boundaries, and return the { start, end } span
 // into the RAW example string so a cloze game can blank exactly that slice.
@@ -158,7 +192,13 @@ export function locateAnswerInExample(example, answer) {
     return null;
   }
 
-  const targetWords = target.split(' ');
+  // Tokenize the target the same way as the example, so punctuation in the
+  // answer ("Where is the station?") never blocks the match — the word
+  // sequence is what has to appear.
+  const targetWords = target.match(WORD_RE) ?? [];
+  if (targetWords.length === 0) {
+    return null;
+  }
   const span = targetWords.length;
 
   // Slide a window the width of the answer across the tokens; the first run whose

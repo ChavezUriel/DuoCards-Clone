@@ -6,8 +6,8 @@ import MultipleChoice from './MultipleChoice';
 import ReverseMultipleChoice from './ReverseMultipleChoice';
 import WordBankCloze from './WordBankCloze';
 import Listening from './Listening';
-import { presentationIndex, shouldPlayPerCardGame } from '../minigameFrequency';
-import { locateAnswerInExample } from '../minigameText';
+import { presentationIndex, sentenceIndex, shouldPlayPerCardGame } from '../minigameFrequency';
+import { clozeCandidates } from '../minigameText';
 
 // Recall-from-definition needs an English definition to prompt with (§4 #2).
 function hasDefinition(card) {
@@ -15,11 +15,12 @@ function hasDefinition(card) {
 }
 
 // The cloze games (§4 #3 free-type, #6 word-bank) can only run when the answer is
-// locatable as a whole word in the English example, so we can blank exactly it.
-// When it isn't, the game drops from the eligible set rather than render a broken
-// blank (docs/minigames.md Phase 5 cloze-robustness decision).
+// locatable as a whole word in at least one of the card's example sentences
+// (example_en + the `examples` pairs, migration 0019), so we can blank exactly it.
+// When no sentence qualifies, the game drops from the eligible set rather than
+// render a broken blank (docs/minigames.md Phase 5 cloze-robustness decision).
 function hasClozeSpan(card) {
-  return locateAnswerInExample(card?.example_en, card?.answer_en) !== null;
+  return clozeCandidates(card).length > 0;
 }
 
 // A recognition round needs the correct answer plus at least this many distractors
@@ -28,12 +29,19 @@ function hasClozeSpan(card) {
 export const MIN_MC_DISTRACTORS = 2;
 
 // Which distractor side a modality needs, or null when it needs none. Multiple
-// choice and word-bank cloze pick an English answer (sibling english_text); reverse
-// MC picks a Spanish prompt (sibling spanish_text). PracticePage keys its distractor
-// prefetch/cache on this so each recognition game gets the right side (§8.3, §4 #5).
+// choice picks an English answer (sibling english_text); reverse MC picks a
+// Spanish prompt (sibling spanish_text); word-bank cloze asks for the curated
+// 'cloze' side (migration 0018: per-card options verified so only the real
+// answer fits the blank, with sibling-English fallback — and pre-0018 servers
+// normalize 'cloze' to 'en', so it degrades to sibling behavior). PracticePage
+// keys its distractor prefetch/cache on this so each recognition game gets the
+// right side (§8.3, §4 #5–#6).
 export function recognitionSide(modality) {
-  if (modality === 'multiple_choice' || modality === 'word_bank_cloze') {
+  if (modality === 'multiple_choice') {
     return 'en';
+  }
+  if (modality === 'word_bank_cloze') {
+    return 'cloze';
   }
   if (modality === 'reverse_mc') {
     return 'es';
@@ -200,6 +208,14 @@ function MinigameHost({
   // component renders as a brief loading state.
   const distractors = distractorEntry?.status === 'ready' ? distractorEntry.distractors : null;
 
+  // Which of the card's blankable sentences this presentation blanks (§4 #3/#6).
+  // Deterministic per (card, pass) — like the modality pick — so the sentence
+  // never flickers between renders, and repeat passes rotate through the pairs.
+  const candidates = clozeCandidates(card);
+  const clozeExample = candidates.length
+    ? candidates[sentenceIndex(card, candidates.length)]
+    : null;
+
   // Recognition games (Tier B) — keyed by card + presentation so a re-queued card
   // (same card_id) remounts with fresh selection/reveal state. A win skips (never
   // grades); a clean wrong pick records a lapse (docs/minigames.md §4 #4–#6).
@@ -230,6 +246,7 @@ function MinigameHost({
       <WordBankCloze
         key={`${card.card_id}:${card.times_presented ?? 0}`}
         card={card}
+        clozeExample={clozeExample}
         distractors={distractors}
         onResolve={onResolve}
       />
@@ -250,7 +267,7 @@ function MinigameHost({
   }
 
   if (modality === 'cloze_free') {
-    return <ClozeType key={card.card_id} card={card} onResolve={onResolve} />;
+    return <ClozeType key={card.card_id} card={card} clozeExample={clozeExample} onResolve={onResolve} />;
   }
 
   // Tier-C encoding aid on a new card's first exposure (§4 #11). Pure exposure —

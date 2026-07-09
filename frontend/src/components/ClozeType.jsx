@@ -18,9 +18,11 @@ const FEEDBACK_MS = { known: 1100, almost: 2000, unknown: 2000 };
 // function word, classifyGuess 'almost') is NEUTRAL: amber feedback shows the exact
 // answer and the card advances via the skip RPC — never graded, recycled for a clean
 // rep (§4 near-miss aside). Selected only when the answer can be located as a whole
-// word in example_en (see selectModality); the located span is recomputed here to
-// render the blank.
-function ClozeType({ card, onResolve }) {
+// word in one of the card's example sentences (see selectModality); MinigameHost
+// picks WHICH sentence this presentation blanks (`clozeExample`, one of the
+// clozeCandidates — migration 0019 gives cards several) and passes it down with
+// its span. Falls back to the card's primary example when the prop is absent.
+function ClozeType({ card, clozeExample, onResolve }) {
   const [guess, setGuess] = useState('');
   // null while typing; 'known' | 'almost' | 'unknown' once submitted (drives the reveal).
   const [outcome, setOutcome] = useState(null);
@@ -31,13 +33,13 @@ function ClozeType({ card, onResolve }) {
   // Two-step hint ladder (shape, then Spanish); revealing refocuses the input.
   const hints = useHints(inputRef);
 
-  // The raw span of the answer inside the example, so the sentence can be split
-  // into "before ___ after". The gate guarantees a match; guard defensively.
+  // The raw span of the answer inside the chosen example, so the sentence can be
+  // split into "before ___ after". The gate guarantees a match; guard defensively.
+  const example = clozeExample?.en ?? card.example_en ?? '';
   const span = useMemo(
-    () => locateAnswerInExample(card.example_en, card.answer_en),
-    [card.example_en, card.answer_en],
+    () => clozeExample?.span ?? locateAnswerInExample(example, card.answer_en),
+    [clozeExample, example, card.answer_en],
   );
-  const example = card.example_en ?? '';
   const before = span ? example.slice(0, span.start) : '';
   const after = span ? example.slice(span.end) : '';
 

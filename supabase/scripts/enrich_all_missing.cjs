@@ -15,7 +15,8 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { optText, normCard } = require('./lib/cards.cjs');
-const { validateCard, hasIssues } = require('./lib/validate.cjs');
+const { hasIssues } = require('./lib/validate.cjs');
+const { cardStatus } = require('./lib/enrich.cjs');
 const SEED_DECKS = require('./lib/seed_decks.cjs');
 
 const DATA_DIR = path.resolve(__dirname, '../seed_data');
@@ -66,13 +67,17 @@ for (const d of SEED_DECKS) {
   decks.push({ slug, source: 'seed', title: d.title || slug, raw: d });
 }
 
+// "Missing" mirrors generate_cards.cjs enrich --only-missing: deterministic
+// field gaps PLUS stale/unpassed LLM audits (cardStatus), so a deck re-flags
+// whenever the feature set or audited content moves.
 function deckNeedsEnrich(deck) {
   const title = optText(deck.raw.title) || deck.slug;
+  const deckCtx = { slug: deck.slug, title, description: optText(deck.raw.description) || '' };
   const cards = Array.isArray(deck.raw.cards) ? deck.raw.cards : [];
   let missing = 0;
   cards.forEach((c) => {
     const card = normCard(c, title);
-    if (hasIssues(validateCard(card))) missing++;
+    if (hasIssues(cardStatus(card, deckCtx))) missing++;
   });
   return { missing, total: cards.length };
 }

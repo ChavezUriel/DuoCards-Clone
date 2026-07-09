@@ -73,15 +73,17 @@ for (const deck of decks.values()) {
     example_es: c.example_es,
     example_en: c.example_en,
     mnemonic_en: c.mnemonic_en,
+    cloze_distractors_en: c.cloze_distractors_en,
+    examples: c.examples,
   }));
 
-  sql += `insert into public.cards (deck_id, spanish_text, english_text, is_enabled, generation_phase, generation_metadata, section_name, part_of_speech, definition_en, main_translations_es, collocations, synonyms_en, example_sentence, example_es, example_en, mnemonic_en)\n`;
+  sql += `insert into public.cards (deck_id, spanish_text, english_text, is_enabled, generation_phase, generation_metadata, section_name, part_of_speech, definition_en, main_translations_es, collocations, synonyms_en, example_sentence, example_es, example_en, mnemonic_en, cloze_distractors_en, examples)\n`;
   sql += `select dk.id, x.spanish_text, x.english_text, true, 'refined', '{}'::jsonb, x.section_name, x.part_of_speech, x.definition_en,\n`;
-  sql += `       coalesce(x.main_translations_es, '[]'::jsonb), coalesce(x.collocations, '[]'::jsonb), coalesce(x.synonyms_en, '[]'::jsonb), x.example_sentence, x.example_es, x.example_en, x.mnemonic_en\n`;
+  sql += `       coalesce(x.main_translations_es, '[]'::jsonb), coalesce(x.collocations, '[]'::jsonb), coalesce(x.synonyms_en, '[]'::jsonb), x.example_sentence, x.example_es, x.example_en, x.mnemonic_en, coalesce(x.cloze_distractors_en, '[]'::jsonb), coalesce(x.examples, '[]'::jsonb)\n`;
   sql += `from (select id from public.decks where slug = ${sq(deck.slug)}) dk\n`;
   sql += `cross join jsonb_to_recordset(${jsonLit(cardsJson)}::jsonb) as x(\n`;
   sql += `  spanish_text text, english_text text, section_name text, part_of_speech text, definition_en text,\n`;
-  sql += `  main_translations_es jsonb, collocations jsonb, synonyms_en jsonb, example_sentence text, example_es text, example_en text, mnemonic_en text\n`;
+  sql += `  main_translations_es jsonb, collocations jsonb, synonyms_en jsonb, example_sentence text, example_es text, example_en text, mnemonic_en text, cloze_distractors_en jsonb, examples jsonb\n`;
   sql += `)\n`;
   sql += `where not exists (\n`;
   sql += `  select 1 from public.cards c2\n`;

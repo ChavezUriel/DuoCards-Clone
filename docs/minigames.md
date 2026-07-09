@@ -248,9 +248,20 @@ Each minigame is a **self‑contained component** with a uniform props contract 
 MC/word‑bank need plausible wrong options. Preferred: a small RPC
 
 ```sql
-public.get_minigame_distractors(p_card_id bigint, p_n int default 3) returns jsonb
--- returns N sibling answers from the same deck/section (and, when possible, same part_of_speech)
+public.get_minigame_distractors(p_card_id bigint, p_n int default 3, p_side text default 'en') returns jsonb
+-- 'en'    (MC):            N sibling answers from the same deck/section (and, when possible, same part_of_speech)
+-- 'es'    (reverse MC):    sibling spanish_text prompts (0014)
+-- 'cloze' (word‑bank):     the card's CURATED cloze_distractors_en (0018) — options
+--                          generated against the card's specific example sentences and
+--                          verified by a blind LLM solve‑check so ONLY the real answer
+--                          fits any blank; read through base_card_id for user copies
+--                          (while english_text matches), sibling-'en' fallback when
+--                          fewer than 2 curated options survive filtering.
 ```
+
+Sibling answers share the deck's theme, so for the word‑bank cloze they can accidentally ALSO fit the blank ("I ate an ____" + siblings apple/orange/banana) — that is what the curated 0018 set fixes. The generation pipeline (`supabase/scripts/lib/enrich.cjs`, swept by `update_cards.cjs`) writes and audits the options; the RPC only serves them.
+
+Since 0019 every card also carries `examples` — 3+ blankable sentence pairs (each `en` contains the answer verbatim). The cloze games pick which sentence to blank deterministically per presentation (`sentenceIndex`, decorrelated from the game pick), so repeat passes vary the sentence; one curated distractor set serves all of a card's sentences (the solve‑check verifies each one).
 
 Alternative: enrich `current_card` with precomputed distractors (heavier snapshot). Recommend the on‑demand RPC, prefetched for the next card to hide latency.
 
@@ -361,7 +372,8 @@ To analyze engagement without touching FSRS, a `minigame_plays` table (`user_id`
 | Change | Needed for | Size |
 |---|---|---|
 | Add `times_presented`, `last_result` to `current_card` in `_practice_session_snapshot` | Phase 2+ | 1 line |
-| `get_minigame_distractors(card_id, n)` RPC | Tier B games | small |
+| `get_minigame_distractors(card_id, n, side)` RPC (`'cloze'` curated side: 0018) | Tier B games | small |
+| `cards.cloze_distractors_en` + `cards.examples` (+ card‑JSON read‑through) | word‑bank cloze quality, sentence variety (0018/0019) | small |
 | `skip_smart_practice_card(session_id, card_id)` RPC | Tier‑B‑in‑session wins | small |
 | (optional) Hard(2) grade in `_apply_card_progress` + relax CHECKs | future richer scheme | medium |
 

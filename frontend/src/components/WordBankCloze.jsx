@@ -2,22 +2,24 @@ import { useMemo } from 'react';
 import MultipleChoice from './MultipleChoice';
 import { locateAnswerInExample } from '../minigameText';
 
-// Tier-B recognition game (docs/minigames.md §4 #6): blank the answer out of the
-// English example sentence and have the learner pick the missing word from a bank of
-// tiles (the real answer + sibling English distractors). Because the word is chosen
-// from options, a win could come from elimination, so — like every Tier-B game — a
-// win never counts (skip) and only a clean wrong pick records a lapse. It reuses
-// MultipleChoice's tile/keyboard engine, swapping the prompt for the cloze sentence.
+// Tier-B recognition game (docs/minigames.md §4 #6): blank the answer out of an
+// English example sentence and have the learner pick the missing word from a bank
+// of tiles (the real answer + curated cloze distractors, sibling English answers
+// as fallback — migration 0018). Because the word is chosen from options, a win
+// could come from elimination, so — like every Tier-B game — a win never counts
+// (skip) and only a clean wrong pick records a lapse. It reuses MultipleChoice's
+// tile/keyboard engine, swapping the prompt for the cloze sentence.
 //
-// Selected only when the answer is locatable in example_en and English distractors
-// are available (see selectModality/resolveModality); the span is recomputed here to
-// render the blank.
-function WordBankCloze({ card, distractors, onResolve }) {
+// Selected only when the answer is locatable in one of the card's example
+// sentences and distractors are available (see selectModality/resolveModality);
+// MinigameHost picks WHICH sentence this presentation blanks (`clozeExample`,
+// migration 0019) and passes it down with its span.
+function WordBankCloze({ card, clozeExample, distractors, onResolve }) {
+  const example = clozeExample?.en ?? card.example_en ?? '';
   const span = useMemo(
-    () => locateAnswerInExample(card.example_en, card.answer_en),
-    [card.example_en, card.answer_en],
+    () => clozeExample?.span ?? locateAnswerInExample(example, card.answer_en),
+    [clozeExample, example, card.answer_en],
   );
-  const example = card.example_en ?? '';
   const before = span ? example.slice(0, span.start) : '';
   const after = span ? example.slice(span.end) : '';
 
