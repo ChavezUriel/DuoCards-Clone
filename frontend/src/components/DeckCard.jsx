@@ -39,7 +39,6 @@ function DeckCard({
   /* ── Home variant (Heron design) ────────────────────────────── */
   if (variant === 'home') {
     const pct = percentage(deck.completion_ratio);
-    const dueLabel = deck.unknown_cards > 0 ? `${deck.unknown_cards} due` : 'Fresh';
 
     return (
       <article
@@ -59,7 +58,6 @@ function DeckCard({
         <div className="h-deck-card__top">
           <div className="h-deck-card__title">{deck.title}</div>
           <div className="h-deck-card__top-actions">
-            <div className="h-deck-card__due">{dueLabel}</div>
             <button
               className="deck-card__explore-button"
               type="button"

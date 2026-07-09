@@ -213,10 +213,10 @@ html {
   flex-shrink: 0;
 }
 
-/* Top-right cluster on a home deck card: due pill + explore button. The
-   explore button lives in normal flow (not absolutely positioned) so it can
-   never cover the due pill, and it stays visible at every viewport — it is
-   the only path from home into the personal copy's deck explorer. */
+/* Top-right cluster on a home deck card. The explore button lives in
+   normal flow (not absolutely positioned) and stays visible at every
+   viewport — it is the only path from home into the personal copy's deck
+   explorer. */
 .h-deck-card__top-actions {
   display: flex;
   align-items: center;
@@ -3686,10 +3686,6 @@ html {
   border-color: rgba(34, 42, 45, 0.07);
 }
 
-.h-deck-card--inactive .h-deck-card__due {
-  opacity: 0.5;
-}
-
 .h-deck-card--pending {
   opacity: 0.7;
   pointer-events: none;
@@ -3707,17 +3703,6 @@ html {
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.2;
-}
-
-.h-deck-card__due {
-  font-family: var(--mono-font);
-  font-size: 10px;
-  padding: 5px 9px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .h-deck-card__bottom {
