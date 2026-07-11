@@ -9,8 +9,10 @@
 //   node supabase/scripts/enrich_all_missing.cjs --dry-run            # just list, don't run
 //   node supabase/scripts/enrich_all_missing.cjs --max-repairs 3     # forwarded
 //
-// The underlying CLI reads the model from the OLLAMA_MODEL env var (see
-// lib/ollama.cjs), so this script sets it from --model before spawning.
+// The underlying CLI reads the model / provider from the OLLAMA_MODEL /
+// OLLAMA_PROVIDER / OLLAMA_API_KEY / OLLAMA_BASE_URL env vars (see
+// lib/ollama.cjs), so this script forwards --model / --provider / --api-key /
+// --base-url into those env vars before spawning.
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
@@ -84,6 +86,9 @@ function deckNeedsEnrich(deck) {
 
 const flags = parseArgs(process.argv.slice(2));
 const model = optText(flags.model);
+const provider = optText(flags.provider);
+const apiKey = optText(flags['api-key']);
+const baseUrl = optText(flags['base-url']);
 const dryRun = !!flags['dry-run'];
 const extraArgs = ['enrich', '--only-missing'];
 if (flags['max-repairs'] !== undefined) {
@@ -92,6 +97,9 @@ if (flags['max-repairs'] !== undefined) {
 
 const env = { ...process.env };
 if (model) env.OLLAMA_MODEL = model;
+if (provider) env.OLLAMA_PROVIDER = provider;
+if (apiKey) env.OLLAMA_API_KEY = apiKey;
+if (baseUrl) env.OLLAMA_BASE_URL = baseUrl;
 
 const targets = decks
   .map((d) => ({ ...d, ...deckNeedsEnrich(d) }))
@@ -110,7 +118,7 @@ if (!targets.length) {
   process.exit(0);
 }
 
-console.log(`Enriching ${targets.length} deck(s)${model ? ` with model ${model}` : ''}:`);
+console.log(`Enriching ${targets.length} deck(s)${model ? ` with model ${model}` : ''}${provider ? ` [provider ${provider}]` : ''}:`);
 for (const t of targets) {
   console.log(`  - ${t.slug} (${t.missing}/${t.total} card(s) need work)`);
 }

@@ -21,7 +21,10 @@
 //   --limit N          Process at most N cards in total this run (smoke tests).
 //   --max-repairs N    Per-card repair attempts per audit (default 2).
 //   --checkpoint N     Flush a deck's file every N processed cards (default 10).
-//   --model NAME       Ollama model override (sets OLLAMA_MODEL).
+//   --model NAME       Model override (sets OLLAMA_MODEL; default depends on provider).
+//   --provider NAME    LLM provider: ollama (default) | go (OpenCode Go) | gemini.
+//   --api-key KEY      Cloud provider API key (sets OLLAMA_API_KEY; prefer env).
+//   --base-url URL     Provider base URL override (sets OLLAMA_BASE_URL).
 //   --compile          After updating, run generate_seed.cjs + generate_update.cjs.
 //
 // Adding a NEW card feature later:
@@ -35,7 +38,8 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 // Parse flags BEFORE requiring the Ollama-backed modules: lib/ollama.cjs reads
-// OLLAMA_MODEL at require time, so --model must be in the env first.
+// OLLAMA_MODEL / OLLAMA_PROVIDER / OLLAMA_BASE_URL / OLLAMA_API_KEY at require
+// time, so these flags must be in the env first.
 function parseArgs(argv) {
   const flags = {};
   for (let i = 0; i < argv.length; i++) {
@@ -56,11 +60,20 @@ const flags = parseArgs(process.argv.slice(2));
 if (typeof flags.model === 'string' && flags.model.trim()) {
   process.env.OLLAMA_MODEL = flags.model.trim();
 }
+if (typeof flags.provider === 'string' && flags.provider.trim()) {
+  process.env.OLLAMA_PROVIDER = flags.provider.trim();
+}
+if (typeof flags['api-key'] === 'string' && flags['api-key'].trim()) {
+  process.env.OLLAMA_API_KEY = flags['api-key'].trim();
+}
+if (typeof flags['base-url'] === 'string' && flags['base-url'].trim()) {
+  process.env.OLLAMA_BASE_URL = flags['base-url'].trim();
+}
 
 const { optText, normCard, normList } = require('./lib/cards.cjs');
 const { validateCard } = require('./lib/validate.cjs');
 const { processCard, cardStatus } = require('./lib/enrich.cjs');
-const { MODEL, BASE_URL } = require('./lib/ollama.cjs');
+const { MODEL, BASE_URL, PROVIDER } = require('./lib/ollama.cjs');
 const SEED_DECKS = require('./lib/seed_decks.cjs');
 
 const DATA_DIR = path.resolve(__dirname, '../seed_data');
@@ -207,7 +220,7 @@ async function main() {
     }
   }
 
-  log(`Card feature updater — ${selected.length}/${FEATURES.length} feature(s), ${targetDecks.length} deck(s)${dryRun ? ' [dry-run]' : ` (${MODEL} @ ${BASE_URL})`}.`);
+  log(`Card feature updater — ${selected.length}/${FEATURES.length} feature(s), ${targetDecks.length} deck(s)${dryRun ? ' [dry-run]' : ` (${PROVIDER}: ${MODEL} @ ${BASE_URL})`}.`);
   for (const f of selected) log(`  * ${f.id}: ${f.title}`);
 
   // ---- report + selection ----
@@ -262,25 +275,38 @@ async function main() {
       sinceFlush = 0;
     };
 
+    const advance = () => {
+      processedTotal++;
+      processedHere++;
+      sinceFlush++;
+      if (checkpoint > 0 && sinceFlush >= checkpoint) {
+        flush();
+        log(`    checkpoint: wrote ${ref.slug} to ${path.basename(ref.file)} — safe to Ctrl+C and re-run.`);
+      }
+    };
+
     for (const idx of targets) {
       if (processedTotal >= limit) break;
       const c = working[idx];
       log(`  [${processedHere + 1}/${targets.length}] ${c.spanish_text} -> ${c.english_text}`);
       const t0 = Date.now();
-      const { card, issues } = await processCard(c, { deck: deckCtx, maxRepairs, log, ...gates });
+      let result;
+      try {
+        result = await processCard(c, { deck: deckCtx, maxRepairs, log, ...gates });
+      } catch (err) {
+        if (!/chat failed after \d+ attempt\(s\):.*did not return valid JSON/.test(err.message)) throw err;
+        log(`    ✗ failed attempt (model returned no JSON): ${err.message.split('\n')[0]}`);
+        stillFailing++;
+        advance();
+        continue;
+      }
       log(`    done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
-      working[idx] = card;
-      processedTotal++;
-      processedHere++;
-      sinceFlush++;
-      const remaining = selected.flatMap((f) => f.reasons(card, deckCtx));
+      working[idx] = result.card;
+      advance();
+      const remaining = selected.flatMap((f) => f.reasons(result.card, deckCtx));
       if (remaining.length) {
         stillFailing++;
         log(`    ✗ still failing: ${remaining.join('; ')}`);
-      }
-      if (checkpoint > 0 && sinceFlush >= checkpoint) {
-        flush();
-        log(`    checkpoint: wrote ${ref.slug} to ${path.basename(ref.file)} — safe to Ctrl+C and re-run.`);
       }
     }
     if (sinceFlush > 0 || processedHere > 0) flush();

@@ -18,6 +18,10 @@
 //   --repair         (review) Re-run failing sub-prompts and rewrite the deck.
 //   --max-repairs N  Repair attempts per card (default 2).
 //   --out <file>     (generate) Output file (default: deck_expansions_generated.json).
+//   --model NAME     Model override (default depends on provider).
+//   --provider NAME  LLM provider: ollama (default) | go (OpenCode Go) | gemini.
+//   --api-key KEY    Cloud provider API key (or set OPENCODE_GO_API_KEY/GEMINI_API_KEY).
+//   --base-url URL   Provider base URL override.
 //   --checkpoint N   (enrich/generate) Persist the deck file every N enriched
 //                   cards so an interrupted run can be resumed without losing
 //                   progress. Default 10; 0 disables checkpoint writes.
@@ -31,7 +35,21 @@
 
 const fs = require('fs');
 const path = require('path');
-const { chatJson, MODEL, BASE_URL } = require('./lib/ollama.cjs');
+
+// Set provider env BEFORE requiring lib/ollama.cjs (it reads them at require
+// time). Done with a tiny argv scan here; full flag parsing happens in main().
+(function preParse() {
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--provider') { process.env.OLLAMA_PROVIDER = argv[++i]; }
+    else if (a === '--api-key') { process.env.OLLAMA_API_KEY = argv[++i]; }
+    else if (a === '--base-url') { process.env.OLLAMA_BASE_URL = argv[++i]; }
+    else if (a === '--model') { process.env.OLLAMA_MODEL = argv[++i]; }
+  }
+})();
+
+const { chatJson, MODEL, BASE_URL, PROVIDER } = require('./lib/ollama.cjs');
 const { blueprintPrompt, wordSetPrompt, PROMPT_VERSIONS } = require('./lib/prompts.cjs');
 const { hasIssues, flatten } = require('./lib/validate.cjs');
 const { processCard, cardStatus } = require('./lib/enrich.cjs');
@@ -215,7 +233,7 @@ async function cmdGenerate(flags) {
     ? (path.isAbsolute(flags.out) ? flags.out : path.resolve(process.cwd(), flags.out))
     : GENERATED_FILE;
 
-  log(`\nGenerating deck "${spec.slug}" (${MODEL} @ ${BASE_URL}), target ${totalTarget} card(s).`);
+  log(`\nGenerating deck "${spec.slug}" (${PROVIDER}: ${MODEL} @ ${BASE_URL}), target ${totalTarget} card(s).`);
   const sections = await buildBlueprint(spec);
   const drafts = await generateWordSet(spec, sections, totalTarget);
   log(`Drafted ${drafts.length} card(s). Enriching (focused sub-prompts + audits each)...`);
@@ -327,7 +345,7 @@ async function cmdEnrich(flags) {
   if (onlyMissing) targets = targets.filter(({ c }) => hasIssues(cardStatus(c, deckCtx)));
   if (limit) targets = targets.slice(0, limit);
 
-  log(`\nEnriching deck "${flags.slug}" in ${path.basename(resolved.file)}: ${targets.length} of ${working.length} card(s) (${MODEL}).`);
+  log(`\nEnriching deck "${flags.slug}" in ${path.basename(resolved.file)}: ${targets.length} of ${working.length} card(s) (${PROVIDER}: ${MODEL}).`);
   if (writeCheckpoints) log(`Checkpointing to disk every ${checkpoint} card(s) — safe to Ctrl+C and re-run with --only-missing.`);
 
   const rejected = [];
