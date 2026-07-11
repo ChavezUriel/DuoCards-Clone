@@ -10,12 +10,13 @@ import MultipleChoice from './MultipleChoice';
 // can't be fetched, selectModality/resolveModality degrade this card to another
 // modality, so this component always renders with a usable tile set (or the shared
 // loading state while the fetch is in flight).
-function ReverseMultipleChoice({ card, distractors, onResolve }) {
+function ReverseMultipleChoice({ card, distractors, onResolve, onOpenDetails }) {
   return (
     <MultipleChoice
       card={card}
       distractors={distractors}
       onResolve={onResolve}
+      onOpenDetails={onOpenDetails}
       answer={card.prompt_es}
       answerLabel="Spanish"
       label="Choose the Spanish translation"

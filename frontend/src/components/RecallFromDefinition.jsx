@@ -19,7 +19,7 @@ const FEEDBACK_MS = { known: 1100, almost: 2000, unknown: 2000 };
 // NEUTRAL: amber feedback shows the exact answer and the card advances via the skip
 // RPC — never graded, recycled for a clean rep (§4 near-miss aside). Selected only
 // when the card carries a definition (see selectModality).
-function RecallFromDefinition({ card, onResolve }) {
+function RecallFromDefinition({ card, onResolve, onOpenDetails }) {
   const [guess, setGuess] = useState('');
   // null while typing; 'known' | 'almost' | 'unknown' once submitted (drives the reveal).
   const [outcome, setOutcome] = useState(null);
@@ -159,6 +159,17 @@ function RecallFromDefinition({ card, onResolve }) {
           )}
         </form>
       </div>
+
+      {isRevealed && onOpenDetails ? (
+        <button
+          aria-label="Show flashcard metadata"
+          className="info-button"
+          type="button"
+          onClick={onOpenDetails}
+        >
+          i
+        </button>
+      ) : null}
     </section>
   );
 }

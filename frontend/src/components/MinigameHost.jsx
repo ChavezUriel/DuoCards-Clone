@@ -226,6 +226,7 @@ function MinigameHost({
         card={card}
         distractors={distractors}
         onResolve={onResolve}
+        onOpenDetails={onOpenDetails}
       />
     );
   }
@@ -237,6 +238,7 @@ function MinigameHost({
         card={card}
         distractors={distractors}
         onResolve={onResolve}
+        onOpenDetails={onOpenDetails}
       />
     );
   }
@@ -249,6 +251,7 @@ function MinigameHost({
         clozeExample={clozeExample}
         distractors={distractors}
         onResolve={onResolve}
+        onOpenDetails={onOpenDetails}
       />
     );
   }
@@ -259,21 +262,21 @@ function MinigameHost({
   // wrong -> unknown, near miss -> neutral skip). Safe on a review card's first
   // pass (§3.3).
   if (modality === 'type_translation') {
-    return <TypeTranslation key={card.card_id} card={card} onResolve={onResolve} />;
+    return <TypeTranslation key={card.card_id} card={card} onResolve={onResolve} onOpenDetails={onOpenDetails} />;
   }
 
   if (modality === 'recall_from_definition') {
-    return <RecallFromDefinition key={card.card_id} card={card} onResolve={onResolve} />;
+    return <RecallFromDefinition key={card.card_id} card={card} onResolve={onResolve} onOpenDetails={onOpenDetails} />;
   }
 
   if (modality === 'cloze_free') {
-    return <ClozeType key={card.card_id} card={card} clozeExample={clozeExample} onResolve={onResolve} />;
+    return <ClozeType key={card.card_id} card={card} clozeExample={clozeExample} onResolve={onResolve} onOpenDetails={onOpenDetails} />;
   }
 
   // Tier-C encoding aid on a new card's first exposure (§4 #11). Pure exposure —
   // it resolves via skip only (onResolve({ skip: true })), never a grade.
   if (modality === 'listening') {
-    return <Listening key={card.card_id} card={card} onResolve={onResolve} />;
+    return <Listening key={card.card_id} card={card} onResolve={onResolve} onOpenDetails={onOpenDetails} />;
   }
 
   if (modality === 'classic') {

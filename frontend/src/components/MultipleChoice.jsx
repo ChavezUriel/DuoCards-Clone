@@ -36,6 +36,7 @@ function MultipleChoice({
   card,
   distractors,
   onResolve,
+  onOpenDetails,
   // The correct option string (defaults to the English answer for the es→en round).
   answer = card.answer_en,
   label = 'Choose the translation',
@@ -205,6 +206,17 @@ function MultipleChoice({
           </MinigameFeedback>
         ) : null}
       </div>
+
+      {isRevealed && onOpenDetails ? (
+        <button
+          aria-label="Show flashcard metadata"
+          className="info-button"
+          type="button"
+          onClick={onOpenDetails}
+        >
+          i
+        </button>
+      ) : null}
     </section>
   );
 }

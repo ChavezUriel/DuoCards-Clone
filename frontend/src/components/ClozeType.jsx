@@ -22,7 +22,7 @@ const FEEDBACK_MS = { known: 1100, almost: 2000, unknown: 2000 };
 // picks WHICH sentence this presentation blanks (`clozeExample`, one of the
 // clozeCandidates — migration 0019 gives cards several) and passes it down with
 // its span. Falls back to the card's primary example when the prop is absent.
-function ClozeType({ card, clozeExample, onResolve }) {
+function ClozeType({ card, clozeExample, onResolve, onOpenDetails }) {
   const [guess, setGuess] = useState('');
   // null while typing; 'known' | 'almost' | 'unknown' once submitted (drives the reveal).
   const [outcome, setOutcome] = useState(null);
@@ -182,6 +182,17 @@ function ClozeType({ card, clozeExample, onResolve }) {
           )}
         </form>
       </div>
+
+      {isRevealed && onOpenDetails ? (
+        <button
+          aria-label="Show flashcard metadata"
+          className="info-button"
+          type="button"
+          onClick={onOpenDetails}
+        >
+          i
+        </button>
+      ) : null}
     </section>
   );
 }

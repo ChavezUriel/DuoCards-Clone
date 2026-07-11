@@ -12,7 +12,7 @@ import { cancelSpeech, canUseSpeechSynthesis, speak } from '../speech';
 // Audio does NOT autoplay on mount (browsers block it and it's jarring); the Play
 // button is focused instead, and the flow still completes with speech unavailable —
 // reveal + Continue never depend on audio.
-function Listening({ card, onResolve }) {
+function Listening({ card, onResolve, onOpenDetails }) {
   const [isRevealed, setIsRevealed] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const playRef = useRef(null);
@@ -160,6 +160,17 @@ function Listening({ card, onResolve }) {
           </div>
         )}
       </div>
+
+      {isRevealed && onOpenDetails ? (
+        <button
+          aria-label="Show flashcard metadata"
+          className="info-button"
+          type="button"
+          onClick={onOpenDetails}
+        >
+          i
+        </button>
+      ) : null}
     </section>
   );
 }
