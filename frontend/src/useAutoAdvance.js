@@ -75,6 +75,10 @@ export function useAutoAdvance({ stoppable = true } = {}) {
       ) {
         return;
       }
+      if (event.key === 'Enter') {
+        advance();
+        return;
+      }
       stop();
     }
     function handlePointerDown() {
@@ -86,7 +90,7 @@ export function useAutoAdvance({ stoppable = true } = {}) {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('pointerdown', handlePointerDown);
     };
-  }, [stoppable, phase, stop]);
+  }, [stoppable, phase, stop, advance]);
 
   // Never leave a timer running if the game unmounts mid-countdown (card advanced,
   // session ended, learner navigated away).
