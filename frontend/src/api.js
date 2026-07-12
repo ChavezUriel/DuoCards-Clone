@@ -405,3 +405,12 @@ export async function logMinigamePlay(cardId, game, outcome, counted = false) {
 export function skipSmartPracticeCard(sessionId, cardId) {
   return rpc('skip_smart_practice_card', { p_session_id: sessionId, p_card_id: cardId });
 }
+
+// Hide the current smart-practice card from the deck (is_enabled = false) and drop
+// only it from the running session, then advance. Unlike updateCardVisibility this
+// leaves the rest of the deck's queued cards in place. Returns a fresh session
+// snapshot (same shape as skipSmartPracticeCard). Backs the "Hide card" action in
+// the practice card-details modal.
+export function hideSmartPracticeCard(sessionId, cardId) {
+  return rpc('hide_smart_practice_card', { p_session_id: sessionId, p_card_id: cardId });
+}

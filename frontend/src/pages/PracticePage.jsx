@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   getMinigameDistractors,
+  hideSmartPracticeCard,
   logMinigamePlay,
   skipSmartPracticeCard,
   startSmartPracticeSession,
@@ -524,6 +525,30 @@ function PracticePage() {
     }
   }
 
+  // Hide the current card from the deck and advance. Reached through the "Hide
+  // card" button in the details modal (the "i" overlay every modality shows once
+  // the answer is revealed). The RPC drops only this card from the running session
+  // and returns the next-card snapshot, so — like a skip — there is no grade,
+  // feedback toast, or undo to manage; we just swap in the new session.
+  async function handleHideCard() {
+    if (!session?.current_card || isSubmitting) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const response = await hideSmartPracticeCard(session.summary.session_id, session.current_card.card_id);
+      setSession(response);
+      setIsAnswerVisible(false);
+      setIsDetailsVisible(false);
+    } catch (hideError) {
+      setError(hideError.message);
+      setStatus('error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function handleSaveCard(values) {
     if (!session?.current_card) {
       return null;
@@ -669,10 +694,14 @@ function PracticePage() {
 
         {!isInterstitialActive && session.current_card && isDetailsVisible ? (
           <CardDetailsModal
-            card={session.current_card}
-            isPending={isSavingCard}
+            // A card only reaches practice while enabled, but the snapshot omits
+            // the flag (unlike the deck preview) — default it so the modal's
+            // "Hide card" toggle renders.
+            card={{ ...session.current_card, is_enabled: session.current_card.is_enabled ?? true }}
+            isPending={isSavingCard || isSubmitting}
             onClose={() => setIsDetailsVisible(false)}
             onSave={handleSaveCard}
+            onToggle={handleHideCard}
           />
         ) : null}
       </div>
