@@ -16,6 +16,7 @@ import { loadPracticeSettings } from '../practiceSettings';
 import { chooseInterstitialGame, isInterstitialPlacementEnabled } from '../minigameFrequency';
 import { loadRecentCards, mergeRecentCards, saveRecentCards } from '../recentCards';
 import { loadDepthStat } from '../depthStat';
+import { useKeyboardInset } from '../useKeyboardInset';
 
 const FIRST_IDLE_HINT_DELAY_MS = 10000;
 
@@ -75,6 +76,10 @@ function feedbackMessage(feedback) {
 }
 
 function PracticePage() {
+  // Keep the locked review shell above the soft keyboard while a text-input
+  // minigame is being played (esp. iOS Safari, which overlays the keyboard).
+  useKeyboardInset();
+
   const [session, setSession] = useState(null);
   // Read once at mount, same as the session start below; MinigameHost uses these
   // to decide each card's answer modality (Phase 0: always the classic flashcard).

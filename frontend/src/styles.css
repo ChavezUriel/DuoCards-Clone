@@ -97,9 +97,12 @@ html {
   height: 100vh;
   max-height: 100vh;
   min-height: 100vh;
-  height: 100dvh;
-  max-height: 100dvh;
-  min-height: 100dvh;
+  /* Subtract the soft-keyboard inset (0 unless useKeyboardInset detects one) so the
+     locked shell shrinks to the space above the keyboard and the active minigame's
+     input/prompt/actions stay on-screen instead of hidden behind it. */
+  height: calc(100dvh - var(--kb-inset, 0px));
+  max-height: calc(100dvh - var(--kb-inset, 0px));
+  min-height: calc(100dvh - var(--kb-inset, 0px));
   padding: 0.5rem 0;
   overflow: hidden;
   /* Column flex so the page content gets exactly the space left under the
@@ -4804,6 +4807,49 @@ html {
   }
 }
 
+/* Soft keyboard open (tracked by useKeyboardInset → data-kb-open on <html>). The
+   review shell has already shrunk to the space above the keyboard via --kb-inset;
+   now compact the text-input minigames so the prompt, the input and the Check/Skip
+   action all stay in that space instead of the prompt scrolling out behind the
+   keyboard. Only the typing games + word scramble ever focus an input, so nothing
+   else can set the flag — these rules never touch the recognition/tile games.
+   (The session bar / interstitial banner are deliberately kept: hiding them would
+   drop the panel out of its 1fr grid row into the auto row and collapse it.) */
+:root[data-kb-open] .typegame,
+:root[data-kb-open] .scramblegame {
+  gap: 0.55rem;
+  padding: 0.9rem 1rem;
+}
+
+/* Pin the content to the top so the prompt never centres itself out of view; the
+   input follows directly beneath it. */
+:root[data-kb-open] .typegame__body {
+  justify-content: flex-start;
+  gap: 0.5rem;
+}
+
+/* The section pill and the redundant Spanish example go first — the prompt carries
+   the task on its own. */
+:root[data-kb-open] .typegame__meta-row,
+:root[data-kb-open] .typegame__example {
+  display: none;
+}
+
+:root[data-kb-open] .typegame__prompt {
+  font-size: clamp(1.3rem, 6vw, 1.8rem);
+}
+
+/* Definitions and cloze sentences stay (they ARE the prompt here) but tighten up. */
+:root[data-kb-open] .recallgame__definition,
+:root[data-kb-open] .clozegame__sentence {
+  font-size: clamp(1.15rem, 4vw, 1.45rem);
+  line-height: 1.3;
+}
+
+:root[data-kb-open] .typegame__form {
+  margin-top: 0.15rem;
+}
+
 /* Short viewports (landscape phones): a locked 200px card is worse than
    scrolling, so hand the page back to the scroller. */
 @media (max-height: 480px) {
@@ -4827,11 +4873,22 @@ html {
   }
 
   .flashcard,
-  .typegame,
   .mcgame,
   .listengame {
     height: auto;
     min-height: 420px;
+  }
+
+  /* Text games size to content here (this is also the Android soft-keyboard path,
+     where the resized viewport can drop under 480px): top-align so the prompt leads
+     and the input follows, then let the page scroll to whatever's below. */
+  .typegame {
+    height: auto;
+    min-height: 0;
+  }
+
+  .typegame__body {
+    justify-content: flex-start;
   }
 
   .matchgame,
