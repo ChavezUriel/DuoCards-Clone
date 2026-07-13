@@ -11,3 +11,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </React.StrictMode>,
 );
+
+// Register the service worker so the app is installable and works offline.
+// Dev (vite) serves modules that must not be cached, so only register in prod.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* SW registration is best-effort; the app still works without it. */
+    });
+  });
+}

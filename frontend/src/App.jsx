@@ -13,6 +13,7 @@ import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SettingsPage from './pages/SettingsPage';
+import InstallButton from './components/InstallButton';
 
 function PrivateRoute({ children, session }) {
   if (!session) {
@@ -67,6 +68,7 @@ function App() {
     if (session) {
       headerContent = (
         <nav className="app-header__links" aria-label="Account">
+          <InstallButton />
           {location.pathname === '/settings' ? (
             <Link to="/" className="back-link">Home</Link>
           ) : (

@@ -4027,6 +4027,91 @@ html {
   gap: 1.1rem;
 }
 
+/* "Get the app" install CTA — a small accent pill sitting left of Settings. */
+.install-button-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.install-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 160ms ease, transform 160ms ease, color 160ms ease;
+}
+
+.install-button:hover,
+.install-button:focus-visible {
+  background: var(--accent);
+  color: var(--accent-ink);
+  transform: translateY(-1px);
+}
+
+.install-button__icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* iOS "Add to Home Screen" walkthrough popover. */
+.install-help {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  z-index: 40;
+  width: min(20rem, calc(100vw - 2rem));
+  padding: 0.9rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+
+.install-help__title {
+  margin: 0 0 0.55rem;
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.install-help__steps {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.install-help__steps strong {
+  color: var(--ink);
+}
+
+.install-help__steps svg {
+  vertical-align: -0.25em;
+  color: var(--accent);
+}
+
+/* On narrow screens the header gets tight — drop the label, keep the icon. */
+@media (max-width: 480px) {
+  .install-button span {
+    display: none;
+  }
+  .install-button {
+    padding: 0.4rem;
+  }
+}
+
 .st-page {
   width: min(100%, 960px);
   margin: 0 auto;
