@@ -71,7 +71,7 @@ function withRecognitionGamesDisabled(settings) {
 // enabled + field-eligible ones is a DETERMINISTIC pick tied to the card
 // (card_id + times_presented, via presentationIndex) — mirroring the Phase 3/4
 // determinism so the modality never flickers between renders and never stacks a
-// second randomizer on top of interleaving_intensity (§6.3).
+// second randomizer on top of the session's auto-chosen shape (§6.3).
 export function selectModality(card, settings) {
   const minigames = settings?.minigames;
 

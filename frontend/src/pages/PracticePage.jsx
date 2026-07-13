@@ -54,6 +54,15 @@ function modeLabel(mode) {
   return 'Review Stack';
 }
 
+// The auto-chosen shape of a mixed session (see the Auto ruleset in
+// start_smart_practice_session); null for single-kind sessions.
+function sessionShapeLabel(shape) {
+  if (shape === 'front_loaded') return 'warm-up';
+  if (shape === 'spread') return 'spread';
+  if (shape === 'interleaved') return 'interleaved';
+  return null;
+}
+
 function feedbackMessage(feedback) {
   if (!feedback) {
     return '';
@@ -638,7 +647,9 @@ function PracticePage() {
               ) : (
                 <span>{summary.remaining_cards} left</span>
               )}
-              <span>{summary.interleaving_intensity}</span>
+              {sessionShapeLabel(summary.session_shape) ? (
+                <span>{sessionShapeLabel(summary.session_shape)}</span>
+              ) : null}
             </div>
           </div>
         </div>

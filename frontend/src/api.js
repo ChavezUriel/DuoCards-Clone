@@ -335,7 +335,6 @@ export function startSmartPracticeSession(settings = {}) {
   return rpc('start_smart_practice_session', {
     p_new_block_size: settings.new_block_size ?? 7,
     p_review_batch_size: settings.review_batch_size ?? 30,
-    p_interleaving_intensity: settings.interleaving_intensity ?? 'medium',
     p_focus_mode: settings.focus_mode ?? 'auto',
   });
 }

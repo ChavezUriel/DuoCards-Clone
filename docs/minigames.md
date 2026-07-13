@@ -40,16 +40,16 @@ References are `file:line` into the current codebase.
 Every review funnels through a **binary** result. `handleReview('known'|'unknown')` ([frontend/src/pages/PracticePage.jsx:202](../frontend/src/pages/PracticePage.jsx)) → `submit_smart_practice_review` → `_apply_card_progress` ([supabase/migrations/0006_fsrs_scheduling.sql:157](../supabase/migrations/0006_fsrs_scheduling.sql)), which **hardcodes the FSRS rating** `known → Good(3)`, `unknown → Again(1)` (line 210). That single grade drives `stability`, `difficulty`, `due_at`, `lapses`, and the **2‑streak that trips `initial_mastered_at`** (lines 198–200). There is no Hard/Easy middle grade.
 
 ### 2.3 The session skeleton (there are no fixed "rounds")
-A session is **one continuous FIFO queue**, built by `start_smart_practice_session` ([supabase/migrations/0011_fresh_session_on_start.sql](../supabase/migrations/0011_fresh_session_on_start.sql)) and recycled by `submit_smart_practice_review` ([supabase/migrations/0012_review_undo.sql:255](../supabase/migrations/0012_review_undo.sql)):
+A session is **one continuous FIFO queue**, built by `start_smart_practice_session` ([supabase/migrations/0021_smart_session_shape.sql](../supabase/migrations/0021_smart_session_shape.sql)) and recycled by `submit_smart_practice_review` ([supabase/migrations/0012_review_undo.sql:255](../supabase/migrations/0012_review_undo.sql)):
 
 - **New cards** (`card_kind='new'`) **cycle to the back of the queue until a 2‑in‑a‑row `known` streak**, then graduate out of the session.
 - **Review cards** (`card_kind='review'`) are due cards: **one clean `known` and they leave**; a miss re‑queues them (effectively relearning).
-- Mode is `new_material` / `review` / `mixed`; `interleaving_intensity` (`low`/`medium`/`high`) controls how new cards are spread through reviews.
+- Mode is `new_material` / `review` / `mixed`; for a `mixed` session the builder auto-derives a `session_shape` (`front_loaded` / `spread` / `interleaved`) from the learner's card status — how new cards are spread through reviews is a rule, not a user knob (see [supabase/migrations/0021_smart_session_shape.sql](../supabase/migrations/0021_smart_session_shape.sql)).
 
 ### 2.4 What the frontend already receives
 `_practice_session_snapshot` ([supabase/migrations/0012_review_undo.sql:188](../supabase/migrations/0012_review_undo.sql)) returns:
 
-- `summary`: `mode`, `remaining_new`, `remaining_review`, `remaining_cards`, `completed_cards`, `total_cards`, `interleaving_intensity`, `can_undo`.
+- `summary`: `mode`, `remaining_new`, `remaining_review`, `remaining_cards`, `completed_cards`, `total_cards`, `session_shape`, `can_undo`.
 - `current_card`: the full card JSON **plus `card_kind`** (merged at line 230).
 - `submit_smart_practice_review` additionally returns `review_feedback`: `result`, `state`, `interval_days`, `due_at`, `repeats_in_session`.
 
@@ -171,7 +171,7 @@ If we later want recognition wins to count as a **downgraded positive** (instead
 
 ### 6.3 Dosing rules
 - **Insert at boundaries, not per card** — format‑switching has a cognitive cost; ~1 interstitial per phase transition, or a games‑ratio like 1‑in‑5.
-- **Respect `interleaving_intensity`** — don't add a second randomizer on top; tie game choice deterministically to `card_kind` + `times_presented`.
+- **Respect the session's auto-chosen `session_shape`** — don't add a second randomizer on top; tie game choice deterministically to `card_kind` + `times_presented`.
 - **Personalize by struggle** — high in‑session `times_presented` / FSRS `lapses` → more scaffolds; well‑known cards → fast swipe.
 - **Front‑load support, fade it** — more games early in a word's life and early in a session.
 

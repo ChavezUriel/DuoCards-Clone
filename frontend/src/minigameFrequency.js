@@ -45,7 +45,7 @@ export function frequencyPolicy(frequency) {
 // Stable pseudo-random hash for one card presentation. Deterministic in
 // (card_id, times_presented) so any choice derived from it never flips between
 // renders, and so the dose doesn't stack a second randomizer on top of
-// interleaving_intensity (§6.3) — the same card+pass always resolves the same way.
+// the session's auto-chosen shape (§6.3) — the same card+pass always resolves the same way.
 function presentationHash(card) {
   const id = Number(card?.card_id) || 0;
   const pass = Number(card?.times_presented) || 0;

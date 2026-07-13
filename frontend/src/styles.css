@@ -3486,32 +3486,30 @@ html {
   outline-offset: 2px;
 }
 
-/* Overrides for primary elements (dark theme containers) */
-.h-mode-card--primary .h-seg__btn {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.10);
+/* Auto card: read-only descriptor of the auto-chosen session shape */
+.h-plan {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.h-plan__tag {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
   color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
-.h-mode-card--primary .h-seg__btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.h-mode-card--primary .h-seg__btn--active {
-  background: var(--accent-ink);
-  border-color: var(--accent-ink);
-  color: var(--accent);
-}
-
-.h-mode-card--primary .h-seg__btn--active:hover {
-  background: var(--accent-ink);
-  border-color: var(--accent-ink);
-  color: var(--accent);
-  opacity: 0.9;
-}
-
-.h-mode-card--primary .h-seg__btn:focus-visible {
-  outline-color: var(--accent-ink);
+.h-plan__blurb {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: inherit;
+  opacity: 0.82;
 }
 
 .h-stepper {

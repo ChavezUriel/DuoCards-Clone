@@ -1,7 +1,6 @@
 export const DEFAULT_PRACTICE_SETTINGS = {
   new_block_size: 7,
   review_batch_size: 30,
-  interleaving_intensity: 'medium',
   focus_mode: 'auto',
   minigames: {
     enabled: true,

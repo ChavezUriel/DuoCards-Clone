@@ -10,11 +10,89 @@ import { normalizeSearchText, scoreFieldMatch } from '../textSearch';
 const NEW_BLOCK_SIZE_RANGE = { min: 5, max: 12, step: 1 };
 const REVIEW_BATCH_SIZE_RANGE = { min: 10, max: 50, step: 5 };
 
-const INTERLEAVING_LEVELS = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Med' },
-  { value: 'high', label: 'High' },
-];
+// Mastered cards below this count = a "novice base": Auto front-loads new
+// material as a block before reviews instead of interleaving, because early
+// interleaving overloads learners without an established base (cognitive-load /
+// "undesirable difficulty" research). Keep in sync with the backend ruleset in
+// supabase/migrations/0021_smart_session_shape.sql.
+const LEARNED_BASE_THRESHOLD = 30;
+
+// Mirror of the backend Auto ruleset (start_smart_practice_session): decide,
+// from the learner's card status, what session Auto will build and how it will
+// be shaped. Returns null while the due summary is still loading.
+function planRecommendedSession(dueSummary) {
+  if (!dueSummary) {
+    return null;
+  }
+  const newAvailable = dueSummary.new_available ?? 0;
+  const dueNow = dueSummary.due_now ?? 0;
+  const learnedTotal = dueSummary.learned_total ?? 0;
+
+  let mode;
+  if (newAvailable > 0 && dueNow > 0) mode = 'mixed';
+  else if (dueNow > 0) mode = 'review';
+  else if (newAvailable > 0) mode = 'new_material';
+  else if (learnedTotal > 0) mode = 'review';
+  else mode = 'empty';
+
+  let shape = null;
+  if (mode === 'mixed') {
+    if (learnedTotal < LEARNED_BASE_THRESHOLD) shape = 'front_loaded';
+    else if (dueNow > newAvailable * 2) shape = 'spread';
+    else shape = 'interleaved';
+  }
+  return { mode, shape };
+}
+
+// Human-readable label + one-line rationale for the recommended session, shown
+// read-only on the Auto card so the ruleset's choice is visible.
+function describeRecommendedSession(plan) {
+  if (!plan) return null;
+  switch (plan.shape) {
+    case 'front_loaded':
+      return { tag: 'Warm-up', blurb: 'New cards in a block first, then reviews — gentler while your base is still small.' };
+    case 'spread':
+      return { tag: 'Spread', blurb: 'New cards woven evenly through a heavier review load.' };
+    case 'interleaved':
+      return { tag: 'Interleaved', blurb: 'New cards and reviews fully mixed to sharpen recall.' };
+    default:
+      break;
+  }
+  switch (plan.mode) {
+    case 'review':
+      return { tag: 'Review', blurb: 'Clearing the cards due back today.' };
+    case 'new_material':
+      return { tag: 'New', blurb: "Fresh cards you haven't met yet." };
+    default:
+      return { tag: 'Auto', blurb: 'Add or study cards to build a session.' };
+  }
+}
+
+// Honest, mode-aware "N new · M review · ~T min" line for the Smart session
+// card. Counts mirror what the builder actually queues: up to new_block_size
+// new cards and up to review_batch_size mastered cards, capped by what's
+// available. Returns null until the due summary has loaded.
+function recommendedSessionMeta(plan, dueSummary, settings) {
+  if (!plan || !dueSummary) {
+    return null;
+  }
+  const newAvailable = dueSummary.new_available ?? 0;
+  const learnedTotal = dueSummary.learned_total ?? 0;
+  const modeHasNew = plan.mode === 'mixed' || plan.mode === 'new_material';
+  const modeHasReview = plan.mode === 'mixed' || plan.mode === 'review';
+  const newCount = modeHasNew ? Math.min(newAvailable, settings.new_block_size) : 0;
+  const reviewCount = modeHasReview ? Math.min(learnedTotal, settings.review_batch_size) : 0;
+  const totalCards = newCount + reviewCount;
+  if (totalCards === 0) {
+    return 'Nothing to practice right now';
+  }
+
+  const parts = [];
+  if (newCount > 0) parts.push(`${newCount} new`);
+  if (reviewCount > 0) parts.push(`${reviewCount} review`);
+  parts.push(`~${Math.max(1, Math.ceil(totalCards / 2))} min`);
+  return parts.join(' · ');
+}
 
 function formatNextDue(nextDueAt) {
   if (!nextDueAt) {
@@ -286,9 +364,11 @@ function HomePage() {
     );
   }
 
-  const sessionCards = settings.new_block_size + settings.review_batch_size;
   const dueNow = dueSummary?.due_now ?? 0;
   const nextDueLabel = dueNow === 0 && dueSummary?.next_due_at ? formatNextDue(dueSummary.next_due_at) : null;
+  const recommendedPlan = planRecommendedSession(dueSummary);
+  const recommendedSession = describeRecommendedSession(recommendedPlan);
+  const recommendedMeta = recommendedSessionMeta(recommendedPlan, dueSummary, settings);
 
   return (
     <>
@@ -305,28 +385,21 @@ function HomePage() {
               <span className="h-action-arrow">→</span>
             </div>
             <div>
-              <div className="h-mode-card__title">Play Auto</div>
+              <div className="h-mode-card__title">Smart session</div>
               <div className="h-mode-card__meta">
-                {sessionCards} cards · ~{Math.ceil(sessionCards / 2)} min · new + review
+                {recommendedMeta ?? 'Your recommended mix'}
               </div>
             </div>
           </Link>
-          <div className="h-mode-card__setting">
-            <span className="h-mode-card__setting-label">Interleaving</span>
-            <div className="h-seg" role="group" aria-label="Interleaving intensity">
-              {INTERLEAVING_LEVELS.map(({ value, label }) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={`h-seg__btn${settings.interleaving_intensity === value ? ' h-seg__btn--active' : ''}`}
-                  aria-pressed={settings.interleaving_intensity === value}
-                  onClick={() => updateSettings({ interleaving_intensity: value })}
-                >
-                  {label}
-                </button>
-              ))}
+          {recommendedSession ? (
+            <div className="h-mode-card__setting">
+              <span className="h-mode-card__setting-label">Session plan</span>
+              <div className="h-plan">
+                <span className="h-plan__tag">{recommendedSession.tag}</span>
+                <span className="h-plan__blurb">{recommendedSession.blurb}</span>
+              </div>
             </div>
-          </div>
+          ) : null}
         </article>
 
         <article className="h-mode-card">

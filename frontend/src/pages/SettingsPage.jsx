@@ -444,7 +444,7 @@ function MinigamesSection() {
   }
 
   // Persist the whole practice-settings blob so the other practice settings
-  // (block size, interleaving, …) survive alongside the minigame changes.
+  // (block sizes, focus mode, …) survive alongside the minigame changes.
   function persistMinigames(nextMinigames) {
     setSettings((current) => {
       const nextSettings = { ...current, minigames: nextMinigames };
