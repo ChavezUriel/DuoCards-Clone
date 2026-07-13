@@ -67,12 +67,21 @@ Tables `deck_change_proposals` (+ status open/approved/rejected/withdrawn) and
 `payload`, `base_snapshot`, `source_card_id`). RLS: readable by proposer and
 deck maintainer; all writes via SECURITY DEFINER RPCs.
 
-- `get_deck_outgoing_changes(deck_id)` — cards **I edited** (`hash(u) ≠
-  stored`) that still differ from the live market card; each flagged
-  `already_proposed` when sitting in one of my open proposals.
+- `get_deck_outgoing_changes(deck_id)` — the three ways my copy diverges from
+  the market, each row tagged with a `kind` and flagged `already_proposed` when
+  it sits in one of my open proposals (0022):
+  - `edit` — an **enabled** card whose content differs (`hash(u) ≠ stored` and
+    `content(u) ≠ content(b)`);
+  - `add` — an **enabled** card with no market counterpart (`base_card_id IS
+    NULL`), i.e. a personal addition;
+  - `remove` — a card I **hid** in my copy (`is_enabled = false`) whose market
+    original is still live, i.e. a proposed deletion.
 - `create_deck_change_proposal(market_deck_id, message, user_card_ids)` — the
   server derives every item from the caller's real cards (payload can't be
-  forged). A card without a market counterpart becomes an `add_card` item.
+  forged), keying the item type off each card's state: hidden + linked →
+  `remove_card`, unlinked → `add_card`, otherwise `edit_card`. Because
+  additions and removals are both addressed by the proposer's own card id,
+  the RPC keeps its `user_card_ids` signature.
 - `list_deck_proposals()` → `{ to_review, mine }` with per-item
   `current_base` + `is_stale` (market card changed since proposal).
 - `resolve_deck_change_proposal(id, 'approve'|'reject', note)` — maintainer
@@ -85,7 +94,11 @@ deck maintainer; all writes via SECURITY DEFINER RPCs.
 - The proposer's copy needs no sync after approval: content matches the new
   market state, and the fast-forward re-baselines the hash.
 
-UI: "Propose to market (N)" in the deck explorer opens `ProposeChangesModal`;
+UI: "Propose to market (N)" in the deck explorer opens `ProposeChangesModal`,
+which groups the candidates into **Edited cards** / **New cards** / **Card
+removals** (removals start unchecked, being destructive for every subscriber).
+A linked personal copy also shows a **View market version** button that opens
+the market deck's explorer (`/decks/{base_deck_id}/words`).
 `/market/proposals` (`ProposalsPage`) has **To review** / **My proposals**
 tabs, per-field diffs, approve/reject with an optional note, withdraw, and a
 "Decks you maintain" section with email-based ownership transfer.

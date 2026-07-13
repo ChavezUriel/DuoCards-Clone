@@ -2,7 +2,71 @@ import { useEffect, useState } from 'react';
 import { createDeckChangeProposal, fetchDeckOutgoingChanges } from '../api';
 import { cardTitle, diffCardContent } from '../cardDiff';
 
-// Propose my local card edits back to the market deck ("pull request").
+// One proposable change. Edits show a field-level diff; additions and removals
+// only need their title plus a chip naming the kind.
+function ProposeChangeRow({ change, checked, onToggle }) {
+  const kind = change.kind ?? 'edit';
+  const cardId = change.user_card.card_id;
+  const diff = kind === 'edit' ? diffCardContent(change.base_card, change.user_card) : [];
+
+  return (
+    <li className="sync-row">
+      <label className="sync-check">
+        <input type="checkbox" checked={checked} onChange={() => onToggle(cardId)} />
+        <span className="sync-row__title">
+          {kind === 'add' ? <span className="sync-chip sync-chip--add">New card</span> : null}
+          {kind === 'remove' ? <span className="sync-chip sync-chip--warn">Remove</span> : null}
+          {cardTitle(change.user_card)}
+          {change.already_proposed ? (
+            <span className="sync-chip">Already in an open proposal</span>
+          ) : null}
+        </span>
+      </label>
+      {diff.length > 0 ? (
+        <ul className="sync-diff">
+          {diff.map((row) => (
+            <li key={row.key}>
+              <span className="sync-diff__label">{row.label}</span>
+              <span className="sync-diff__values">
+                <del>{row.from || '—'}</del>
+                <span aria-hidden="true" className="sync-diff__arrow">→</span>
+                <ins>{row.to || '—'}</ins>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
+
+function ProposeSection({ title, hint, changes, selectedIds, onToggle }) {
+  if (changes.length === 0) {
+    return null;
+  }
+  return (
+    <section className="sync-section">
+      <div className="sync-section__head">
+        <span className="sync-section__title">{title}</span>
+        <span className="sync-section__count">{changes.length}</span>
+      </div>
+      {hint ? <p className="sync-section__hint">{hint}</p> : null}
+      <ul className="sync-section__list">
+        {changes.map((change) => (
+          <ProposeChangeRow
+            key={change.user_card.card_id}
+            change={change}
+            checked={selectedIds.has(change.user_card.card_id)}
+            onToggle={onToggle}
+          />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// Propose my local card edits, additions, and removals back to the market deck
+// ("pull request").
 function ProposeChangesModal({ deckId, onClose, onSubmitted }) {
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -20,10 +84,12 @@ function ProposeChangesModal({ deckId, onClose, onSubmitted }) {
         const next = await fetchDeckOutgoingChanges(deckId);
         if (!cancelled) {
           setOutgoing(next);
-          // Cards already sitting in one of my open proposals start unchecked.
+          // Edits and additions are safe to pre-select; removals are
+          // destructive for every subscriber, so they start unchecked. Cards
+          // already sitting in one of my open proposals start unchecked too.
           setSelectedIds(new Set(
             (next.changes ?? [])
-              .filter((change) => !change.already_proposed)
+              .filter((change) => !change.already_proposed && (change.kind ?? 'edit') !== 'remove')
               .map((change) => change.user_card.card_id),
           ));
           setStatus('ready');
@@ -65,6 +131,9 @@ function ProposeChangesModal({ deckId, onClose, onSubmitted }) {
   }
 
   const changes = outgoing?.linked ? outgoing.changes : [];
+  const editChanges = changes.filter((change) => (change.kind ?? 'edit') === 'edit');
+  const addChanges = changes.filter((change) => change.kind === 'add');
+  const removeChanges = changes.filter((change) => change.kind === 'remove');
 
   return (
     <div className="details-modal" role="dialog" aria-modal="true" aria-label="Propose changes to market deck">
@@ -103,51 +172,38 @@ function ProposeChangesModal({ deckId, onClose, onSubmitted }) {
           changes.length === 0 ? (
             <div className="sync-modal__done">
               <p>Your cards match the market deck — nothing to propose.</p>
-              <p className="sync-modal__done-note">Edit cards in your copy first, then propose the improvements here.</p>
+              <p className="sync-modal__done-note">Edit, add, or hide cards in your copy first, then propose the changes here.</p>
             </div>
           ) : (
             <>
               <div className="sync-modal__body">
                 {error ? <p className="sync-modal__status sync-modal__status--error">{error}</p> : null}
                 <p className="sync-section__hint">
-                  Your edits below differ from the market version. Selected cards are bundled into one
-                  proposal for the deck maintainer to review.
+                  These are the ways your copy differs from the market. Selected changes are bundled
+                  into one proposal for the deck maintainer to review.
                 </p>
-                <ul className="sync-section__list">
-                  {changes.map((change) => {
-                    const cardId = change.user_card.card_id;
-                    const diff = diffCardContent(change.base_card, change.user_card);
-                    return (
-                      <li key={cardId} className="sync-row">
-                        <label className="sync-check">
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(cardId)}
-                            onChange={() => toggleCard(cardId)}
-                          />
-                          <span className="sync-row__title">
-                            {cardTitle(change.user_card)}
-                            {change.already_proposed ? (
-                              <span className="sync-chip">Already in an open proposal</span>
-                            ) : null}
-                          </span>
-                        </label>
-                        <ul className="sync-diff">
-                          {diff.map((row) => (
-                            <li key={row.key}>
-                              <span className="sync-diff__label">{row.label}</span>
-                              <span className="sync-diff__values">
-                                <del>{row.from || '—'}</del>
-                                <span aria-hidden="true" className="sync-diff__arrow">→</span>
-                                <ins>{row.to || '—'}</ins>
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </li>
-                    );
-                  })}
-                </ul>
+
+                <ProposeSection
+                  title="Edited cards"
+                  changes={editChanges}
+                  selectedIds={selectedIds}
+                  onToggle={toggleCard}
+                />
+                <ProposeSection
+                  title="New cards"
+                  hint="Cards you added that the market deck does not have yet."
+                  changes={addChanges}
+                  selectedIds={selectedIds}
+                  onToggle={toggleCard}
+                />
+                <ProposeSection
+                  title="Card removals"
+                  hint="Cards you hid in your copy. Approving a removal hides them for every subscriber of the market deck."
+                  changes={removeChanges}
+                  selectedIds={selectedIds}
+                  onToggle={toggleCard}
+                />
+
                 <label className="sync-modal__message">
                   <span>Message for the maintainer (optional)</span>
                   <textarea

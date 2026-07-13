@@ -351,6 +351,15 @@ function DeckWordsPage() {
         </Link>
         <div className="deck-preview-page__toolbar-actions">
           {isLinked ? (
+            <Link
+              className="button button--secondary"
+              to={`/decks/${preview.base_deck_id}/words`}
+              state={{ from: 'market' }}
+            >
+              View market version
+            </Link>
+          ) : null}
+          {isLinked ? (
             <button
               className={`button button--secondary ${updatesAvailable > 0 ? 'deck-preview__sync-button--pending' : ''}`}
               type="button"
