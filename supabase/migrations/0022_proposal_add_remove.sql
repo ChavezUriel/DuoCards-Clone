@@ -16,6 +16,10 @@
 -- Nothing about the wire shape of a proposal item changes; only which items get
 -- generated. All three functions are replaced in place (create or replace keeps
 -- their existing grants).
+--
+-- get_deck_preview additionally gains `user_copy_deck_id`: when the caller is
+-- viewing a market deck, this is their linked personal copy (if any) — the
+-- mirror of `base_deck_id`, so the explorer can cross-link both directions.
 
 -- ---------------------------------------------------------------------------
 -- 1. Outgoing changes now returns a unified `changes` array whose rows carry a
@@ -244,6 +248,7 @@ declare
     v_updates int := 0;
     v_outgoing int := 0;
     v_open_proposals int := 0;
+    v_user_copy_deck_id bigint := null;
 begin
     if v_uid is null then raise exception 'Not authenticated' using errcode = '28000'; end if;
 
@@ -287,6 +292,16 @@ begin
         where pr.market_deck_id = v_deck.id and pr.status = 'open' and pr.proposer_id <> v_uid;
     end if;
 
+    -- When viewing a market deck, surface my linked personal copy (if any) so
+    -- the explorer can offer a jump to it — the mirror of base_deck_id.
+    if v_is_market then
+        select id into v_user_copy_deck_id
+        from public.decks
+        where user_id = v_uid and base_deck_id = v_deck.id
+        order by id
+        limit 1;
+    end if;
+
     select coalesce(jsonb_agg(public._preview_card_json(s.id) order by s.section_name asc, s.id asc), '[]'::jsonb)
     into v_cards
     from (
@@ -309,6 +324,7 @@ begin
         'can_edit', coalesce(v_deck.user_id = v_uid, false) or v_is_owner,
         'base_deck_id', v_deck.base_deck_id,
         'base_deck_available', v_base_available,
+        'user_copy_deck_id', v_user_copy_deck_id,
         'updates_available', v_updates,
         'outgoing_changes', v_outgoing,
         'open_proposals', v_open_proposals

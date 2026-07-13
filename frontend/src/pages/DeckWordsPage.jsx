@@ -359,6 +359,14 @@ function DeckWordsPage() {
               View market version
             </Link>
           ) : null}
+          {isMarket && preview.user_copy_deck_id ? (
+            <Link
+              className="button button--secondary"
+              to={`/decks/${preview.user_copy_deck_id}/words`}
+            >
+              View my copy
+            </Link>
+          ) : null}
           {isLinked ? (
             <button
               className={`button button--secondary ${updatesAvailable > 0 ? 'deck-preview__sync-button--pending' : ''}`}

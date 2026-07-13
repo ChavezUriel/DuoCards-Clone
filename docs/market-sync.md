@@ -97,8 +97,9 @@ deck maintainer; all writes via SECURITY DEFINER RPCs.
 UI: "Propose to market (N)" in the deck explorer opens `ProposeChangesModal`,
 which groups the candidates into **Edited cards** / **New cards** / **Card
 removals** (removals start unchecked, being destructive for every subscriber).
-A linked personal copy also shows a **View market version** button that opens
-the market deck's explorer (`/decks/{base_deck_id}/words`).
+A linked personal copy shows a **View market version** button
+(`/decks/{base_deck_id}/words`), and a market deck shows the reciprocal **View
+my copy** button (`/decks/{user_copy_deck_id}/words`) when the viewer has one.
 `/market/proposals` (`ProposalsPage`) has **To review** / **My proposals**
 tabs, per-field diffs, approve/reject with an optional note, withdraw, and a
 "Decks you maintain" section with email-based ownership transfer.
@@ -114,8 +115,10 @@ tabs, per-field diffs, approve/reject with an optional note, withdraw, and a
   `coalesce(...)` guards: a NULL comparison must not skip the raise).
 - `get_market_decks` returns `owner_id/owner_name/is_owner/open_proposals/
   my_open_proposals`; `get_deck_preview` returns `is_market/is_owner/can_edit/
-  base_deck_id/base_deck_available/updates_available/outgoing_changes/
-  open_proposals` — the explorer hides edit controls when `can_edit` is false.
+  base_deck_id/base_deck_available/user_copy_deck_id/updates_available/
+  outgoing_changes/open_proposals` — the explorer hides edit controls when
+  `can_edit` is false, and `user_copy_deck_id` links a market deck back to the
+  viewer's personal copy.
 
 ## 5. Backfill decisions (one-time, in 0017)
 
