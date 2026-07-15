@@ -237,6 +237,14 @@ export function updateCardVisibility(cardId, isEnabled) {
   return rpc('update_card_visibility', { p_card_id: cardId, p_is_enabled: isEnabled });
 }
 
+// Flip a whole batch of cards at once, for the deck explorer's "Hide/Show all"
+// menu. The caller passes the exact ids to act on — the menu scopes them to the
+// rows the current search and filter leave on screen. All-or-nothing: one
+// unauthorized id rejects the batch.
+export function updateCardsVisibility(cardIds, isEnabled) {
+  return rpc('update_cards_visibility', { p_card_ids: cardIds, p_is_enabled: isEnabled });
+}
+
 export function updateCard(cardId, payload) {
   return rpc('update_card', {
     p_card_id: cardId,

@@ -735,27 +735,36 @@ html {
   text-align: center;
 }
 
+/* Two columns so the whole card fits the panel without a scrollbar. */
 .flashcard-details {
   display: grid;
-  gap: 0.85rem;
-  margin-top: 1rem;
-  max-height: min(52vh, 420px);
-  padding-right: 0.35rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 1.1rem;
+  margin-top: 0.75rem;
+  /* Fills the panel; `overflow: auto` is a safety net for extreme content,
+     not the expected state — the grid is sized to fit. */
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
 }
 
-.flashcard-details div {
-  padding-top: 0.8rem;
+.flashcard-details__field {
+  min-width: 0;
+  padding-top: 0.5rem;
   border-top: 1px solid var(--line);
+}
+
+.flashcard-details__field--wide {
+  grid-column: 1 / -1;
 }
 
 .flashcard-details span {
   display: block;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.25rem;
   font-family: var(--mono-font);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  font-size: 0.62rem;
   color: var(--muted);
 }
 
@@ -763,10 +772,12 @@ html {
 .flashcard-details ul {
   margin: 0;
   color: var(--ink);
+  font-size: 0.85rem;
+  line-height: 1.35;
 }
 
 .flashcard-details ul {
-  padding-left: 1.2rem;
+  padding-left: 1.1rem;
 }
 
 .flashcard__reveal {
@@ -2253,9 +2264,11 @@ html {
 .details-modal__panel {
   position: relative;
   z-index: 1;
-  width: min(560px, 100%);
-  max-height: min(78vh, 720px);
-  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  width: min(780px, 100%);
+  max-height: min(88vh, 780px);
+  padding: 1.25rem 1.5rem;
   border: 1px solid var(--line);
   border-radius: 24px;
   background: var(--surface);
@@ -2270,6 +2283,7 @@ html {
 .details-modal__header h3 {
   margin: 0;
   font-family: var(--head-font);
+  font-size: 1.2rem;
   font-weight: 400;
 }
 
@@ -2531,6 +2545,188 @@ html {
   white-space: nowrap;
 }
 
+/* -- Deck explorer: bulk visibility buttons ------------------------- */
+/* Sit level with the visibility filter's segmented buttons, and read as
+   actions (outlined) rather than as another view toggle. */
+.deck-bulk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.deck-bulk__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.deck-bulk__btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.deck-bulk__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.deck-bulk__btn:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.deck-bulk__btn svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex-shrink: 0;
+}
+
+/* -- Deck explorer: deck-actions overflow menu ---------------------- */
+.deck-menu {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.deck-menu__trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  width: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+/* Text form: the deck-actions trigger in the top toolbar. */
+.deck-menu__trigger--text {
+  width: auto;
+  gap: 0.35rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--line);
+}
+
+.deck-menu__chevron {
+  width: 0.9rem;
+  height: 0.9rem;
+  transition: transform 160ms ease;
+}
+
+.deck-menu__trigger--open .deck-menu__chevron {
+  transform: rotate(180deg);
+}
+
+/* Survives the toolbar collapsing: says "there is something in here" without
+   spelling out counts that only make sense per action. */
+.deck-menu__dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.deck-menu__trigger:hover,
+.deck-menu__trigger--open {
+  background: var(--surface-2);
+}
+
+.deck-menu__trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.deck-menu__trigger svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.deck-menu__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 15rem;
+  padding: 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 18px 32px -18px rgba(34, 42, 45, 0.55);
+}
+
+.deck-menu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.6rem;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.deck-menu__item:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.deck-menu__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.deck-menu__item:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Per-action counts stay inside the menu — they are the detail the trigger's
+   dot deliberately does not try to summarise. */
+.deck-menu__count {
+  flex-shrink: 0;
+  min-width: 1.35rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--mono-font);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
 /* -- Deck explorer: records table ----------------------------------- */
 /* The shell owns the border; the scroller inside it keeps the whole card
    list reachable without pagination while the page itself stays put. */
@@ -2663,9 +2859,11 @@ html {
   opacity: 0.55;
 }
 
-.deck-table__cell--actions {
+.deck-table__cell--actions,
+.deck-table__col--actions {
   width: 1%;
   white-space: nowrap;
+  text-align: right;
 }
 
 .deck-table__actions {
@@ -2673,6 +2871,64 @@ html {
   justify-content: flex-end;
   align-items: center;
   gap: 0.35rem;
+}
+
+.deck-table__switch {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem;
+  margin: -0.3rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.deck-table__switch:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.deck-table__switch-track {
+  position: relative;
+  display: block;
+  width: 2.1rem;
+  height: 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.deck-table__switch-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0.15rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: var(--muted);
+  transform: translate(0, -50%);
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+
+.deck-table__switch[aria-checked='true'] .deck-table__switch-track {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.deck-table__switch[aria-checked='true'] .deck-table__switch-thumb {
+  background: var(--surface);
+  transform: translate(0.9rem, -50%);
+}
+
+.deck-table__switch:hover:not(:disabled) .deck-table__switch-track {
+  border-color: var(--accent);
+}
+
+.deck-table__switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .deck-table__state-chip,
@@ -2734,40 +2990,6 @@ html {
   }
 }
 
-.deck-preview__icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.95rem;
-  height: 1.95rem;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--accent);
-  cursor: pointer;
-  transition: transform 160ms ease, background-color 160ms ease, opacity 160ms ease;
-}
-
-.deck-preview__icon-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: var(--accent-soft);
-}
-
-.deck-preview__icon-button:disabled {
-  cursor: wait;
-  opacity: 0.55;
-}
-
-.deck-preview__icon-button svg {
-  width: 0.95rem;
-  height: 0.95rem;
-}
-
-.deck-preview__icon-button--muted {
-  color: var(--muted);
-}
-
 .deck-preview__status--error {
   color: var(--danger);
 }
@@ -2796,18 +3018,33 @@ html {
 
 .flashcard-details input,
 .flashcard-details textarea {
+  display: block;
   width: 100%;
-  padding: 0.7rem 0.8rem;
+  padding: 0.4rem 0.6rem;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--bg);
   color: var(--ink);
-  font: inherit;
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.35;
 }
 
 .flashcard-details textarea {
   resize: vertical;
-  min-height: 84px;
+  min-height: 0;
+}
+
+/* Where supported, let each textarea take exactly the height its content needs
+   instead of the `rows` estimate — narrow columns wrap differently than the
+   default guess. The cap keeps one long field from pushing the panel past the
+   viewport; `rows` remains the fallback elsewhere. */
+@supports (field-sizing: content) {
+  .flashcard-details textarea {
+    field-sizing: content;
+    min-height: 2.4rem;
+    max-height: 5.5rem;
+  }
 }
 
 @media (max-width: 860px) {
@@ -4792,6 +5029,10 @@ html {
     padding: 1.15rem;
   }
 
+  .flashcard-details {
+    column-gap: 0.7rem;
+  }
+
   .details-modal__actions {
     flex-wrap: wrap;
     gap: 0.5rem;
@@ -4811,14 +5052,9 @@ html {
     min-height: 44px;
   }
 
-  .deck-preview__icon-button {
-    width: 2.4rem;
-    height: 2.4rem;
-  }
-
-  .deck-preview__icon-button svg {
-    width: 1.05rem;
-    height: 1.05rem;
+  .deck-table__switch {
+    padding: 0.7rem 0.5rem;
+    margin: -0.7rem -0.5rem;
   }
 
   /* ---- Auth split: compact brand panel, form above the fold ---- */
@@ -4888,6 +5124,12 @@ html {
   .hangmangame__keyboard {
     grid-template-columns: repeat(7, minmax(0, 1fr));
   }
+
+  /* Below ~400px a second column leaves each field too narrow to read or type
+     in; fall back to one column and let the sheet scroll. */
+  .flashcard-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Soft keyboard open (tracked by useKeyboardInset → data-kb-open on <html>). The
@@ -4931,6 +5173,70 @@ html {
 
 :root[data-kb-open] .typegame__form {
   margin-top: 0.15rem;
+}
+
+/* Laptop-height screens (~768px tall and down): the card modal is sized to fit
+   a tall viewport, so tighten type and spacing rather than let the panel clamp
+   and reintroduce the scrollbar this layout exists to remove. */
+@media (max-height: 820px) {
+  .details-modal__panel {
+    max-height: min(92vh, 780px);
+    padding: 1rem 1.25rem;
+  }
+
+  .details-modal__header h3 {
+    font-size: 1.05rem;
+  }
+
+  .flashcard-details {
+    margin-top: 0.5rem;
+    row-gap: 0.35rem;
+  }
+
+  .flashcard-details__field {
+    padding-top: 0.35rem;
+  }
+
+  .flashcard-details span {
+    margin-bottom: 0.15rem;
+    font-size: 0.58rem;
+  }
+
+  .flashcard-details p,
+  .flashcard-details ul,
+  .flashcard-details input,
+  .flashcard-details textarea {
+    font-size: 0.8rem;
+    line-height: 1.3;
+  }
+
+  .flashcard-details input,
+  .flashcard-details textarea {
+    padding: 0.3rem 0.5rem;
+  }
+
+  .details-modal__actions {
+    margin-top: 0.6rem;
+  }
+}
+
+/* Second tier for very short windows (~600px of viewport). */
+@media (max-height: 700px) {
+  .details-modal__panel {
+    max-height: min(94vh, 780px);
+  }
+
+  .flashcard-details {
+    row-gap: 0.25rem;
+  }
+
+  .flashcard-details__field {
+    padding-top: 0.3rem;
+  }
+
+  .flashcard-details span {
+    font-size: 0.55rem;
+  }
 }
 
 /* Short viewports (landscape phones): a locked 200px card is worse than
@@ -5043,12 +5349,6 @@ html {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
-}
-
-.deck-preview__sync-button--pending {
-  border-color: var(--accent);
-  color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .deck-preview__maintainer {

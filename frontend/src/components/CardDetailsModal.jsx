@@ -91,53 +91,47 @@ function CardDetailsModal({
         </div>
 
         <div className="flashcard-details">
-          <div>
-            <span>Spanish prompt</span>
+          <Field label="Spanish prompt">
             {isEditing ? (
               <input value={formValues.prompt_es} onChange={(event) => updateField('prompt_es', event.target.value)} />
             ) : (
               <p>{card.prompt_es}</p>
             )}
-          </div>
+          </Field>
 
-          <div>
-            <span>English answer</span>
+          <Field label="English answer">
             {isEditing ? (
               <input value={formValues.answer_en} onChange={(event) => updateField('answer_en', event.target.value)} />
             ) : (
               <p>{card.answer_en}</p>
             )}
-          </div>
+          </Field>
 
-          <div>
-            <span>Section</span>
+          <Field label="Section">
             {isEditing ? (
               <input value={formValues.section_name} onChange={(event) => updateField('section_name', event.target.value)} />
             ) : (
               <p>{card.section_name || 'Unassigned'}</p>
             )}
-          </div>
+          </Field>
 
-          <div>
-            <span>Part of speech</span>
+          <Field label="Part of speech">
             {isEditing ? (
               <input value={formValues.part_of_speech} onChange={(event) => updateField('part_of_speech', event.target.value)} />
             ) : (
               <p>{card.part_of_speech || 'Not set'}</p>
             )}
-          </div>
+          </Field>
 
-          <div>
-            <span>Definition in English</span>
+          <Field label="Definition in English" wide>
             {isEditing ? (
-              <textarea value={formValues.definition_en} onChange={(event) => updateField('definition_en', event.target.value)} rows={3} />
+              <textarea value={formValues.definition_en} onChange={(event) => updateField('definition_en', event.target.value)} rows={2} />
             ) : (
               <p>{card.definition_en || 'Not set'}</p>
             )}
-          </div>
+          </Field>
 
-          <div>
-            <span>Main translations</span>
+          <Field label="Main translations">
             {isEditing ? (
               <textarea value={formValues.main_translations_es} onChange={(event) => updateField('main_translations_es', event.target.value)} rows={3} />
             ) : card.main_translations_es?.length ? (
@@ -149,10 +143,9 @@ function CardDetailsModal({
             ) : (
               <p>Not set</p>
             )}
-          </div>
+          </Field>
 
-          <div>
-            <span>Collocations</span>
+          <Field label="Collocations">
             {isEditing ? (
               <textarea value={formValues.collocations} onChange={(event) => updateField('collocations', event.target.value)} rows={3} />
             ) : card.collocations?.length ? (
@@ -164,10 +157,9 @@ function CardDetailsModal({
             ) : (
               <p>Not set</p>
             )}
-          </div>
+          </Field>
 
-          <div>
-            <span>Synonyms (English)</span>
+          <Field label="Synonyms (English)">
             {isEditing ? (
               <textarea value={formValues.synonyms_en} onChange={(event) => updateField('synonyms_en', event.target.value)} rows={3} />
             ) : card.synonyms_en?.length ? (
@@ -179,35 +171,31 @@ function CardDetailsModal({
             ) : (
               <p>Not set</p>
             )}
-          </div>
+          </Field>
 
-          <div>
-            <span>Example sentence</span>
+          <Field label="Example sentence">
             {isEditing ? (
-              <textarea value={formValues.example_sentence} onChange={(event) => updateField('example_sentence', event.target.value)} rows={3} />
+              <textarea value={formValues.example_sentence} onChange={(event) => updateField('example_sentence', event.target.value)} rows={2} />
             ) : (
               <p>{card.example_sentence || 'Not set'}</p>
             )}
-          </div>
+          </Field>
 
-          <div>
-            <span>Example in Spanish</span>
+          <Field label="Example in Spanish">
             {isEditing ? (
               <textarea value={formValues.example_es} onChange={(event) => updateField('example_es', event.target.value)} rows={2} />
             ) : (
               <p>{card.example_es || 'Not set'}</p>
             )}
-          </div>
+          </Field>
 
-          <div>
-            <span>Example in English</span>
+          <Field label="Example in English">
             {isEditing ? (
               <textarea value={formValues.example_en} onChange={(event) => updateField('example_en', event.target.value)} rows={2} />
             ) : (
               <p>{card.example_en || 'Not set'}</p>
             )}
-          </div>
-
+          </Field>
         </div>
 
         {saveError ? <p className="details-modal__status details-modal__status--error">{saveError}</p> : null}
@@ -269,6 +257,15 @@ function CardDetailsModal({
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function Field({ label, wide = false, children }) {
+  return (
+    <div className={wide ? 'flashcard-details__field flashcard-details__field--wide' : 'flashcard-details__field'}>
+      <span>{label}</span>
+      {children}
     </div>
   );
 }
