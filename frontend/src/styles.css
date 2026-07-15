@@ -2531,6 +2531,139 @@ html {
   white-space: nowrap;
 }
 
+/* -- Deck explorer: deck-actions overflow menu ---------------------- */
+.deck-menu {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.deck-menu__trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  width: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+/* Text form: the deck-actions trigger in the top toolbar. */
+.deck-menu__trigger--text {
+  width: auto;
+  gap: 0.35rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--line);
+}
+
+.deck-menu__chevron {
+  width: 0.9rem;
+  height: 0.9rem;
+  transition: transform 160ms ease;
+}
+
+.deck-menu__trigger--open .deck-menu__chevron {
+  transform: rotate(180deg);
+}
+
+/* Survives the toolbar collapsing: says "there is something in here" without
+   spelling out counts that only make sense per action. */
+.deck-menu__dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.deck-menu__trigger:hover,
+.deck-menu__trigger--open {
+  background: var(--surface-2);
+}
+
+.deck-menu__trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.deck-menu__trigger svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.deck-menu__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 15rem;
+  padding: 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 18px 32px -18px rgba(34, 42, 45, 0.55);
+}
+
+.deck-menu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.6rem;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.deck-menu__item:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.deck-menu__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.deck-menu__item:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Per-action counts stay inside the menu — they are the detail the trigger's
+   dot deliberately does not try to summarise. */
+.deck-menu__count {
+  flex-shrink: 0;
+  min-width: 1.35rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--mono-font);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
 /* -- Deck explorer: records table ----------------------------------- */
 /* The shell owns the border; the scroller inside it keeps the whole card
    list reachable without pagination while the page itself stays put. */
@@ -2663,9 +2796,11 @@ html {
   opacity: 0.55;
 }
 
-.deck-table__cell--actions {
+.deck-table__cell--actions,
+.deck-table__col--actions {
   width: 1%;
   white-space: nowrap;
+  text-align: right;
 }
 
 .deck-table__actions {
@@ -2673,6 +2808,64 @@ html {
   justify-content: flex-end;
   align-items: center;
   gap: 0.35rem;
+}
+
+.deck-table__switch {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem;
+  margin: -0.3rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.deck-table__switch:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.deck-table__switch-track {
+  position: relative;
+  display: block;
+  width: 2.1rem;
+  height: 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.deck-table__switch-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0.15rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: var(--muted);
+  transform: translate(0, -50%);
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+
+.deck-table__switch[aria-checked='true'] .deck-table__switch-track {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.deck-table__switch[aria-checked='true'] .deck-table__switch-thumb {
+  background: var(--surface);
+  transform: translate(0.9rem, -50%);
+}
+
+.deck-table__switch:hover:not(:disabled) .deck-table__switch-track {
+  border-color: var(--accent);
+}
+
+.deck-table__switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .deck-table__state-chip,
@@ -2732,40 +2925,6 @@ html {
   .deck-table__cell--pos {
     display: none;
   }
-}
-
-.deck-preview__icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.95rem;
-  height: 1.95rem;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--accent);
-  cursor: pointer;
-  transition: transform 160ms ease, background-color 160ms ease, opacity 160ms ease;
-}
-
-.deck-preview__icon-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: var(--accent-soft);
-}
-
-.deck-preview__icon-button:disabled {
-  cursor: wait;
-  opacity: 0.55;
-}
-
-.deck-preview__icon-button svg {
-  width: 0.95rem;
-  height: 0.95rem;
-}
-
-.deck-preview__icon-button--muted {
-  color: var(--muted);
 }
 
 .deck-preview__status--error {
@@ -4811,14 +4970,9 @@ html {
     min-height: 44px;
   }
 
-  .deck-preview__icon-button {
-    width: 2.4rem;
-    height: 2.4rem;
-  }
-
-  .deck-preview__icon-button svg {
-    width: 1.05rem;
-    height: 1.05rem;
+  .deck-table__switch {
+    padding: 0.7rem 0.5rem;
+    margin: -0.7rem -0.5rem;
   }
 
   /* ---- Auth split: compact brand panel, form above the fold ---- */
@@ -5043,12 +5197,6 @@ html {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
-}
-
-.deck-preview__sync-button--pending {
-  border-color: var(--accent);
-  color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .deck-preview__maintainer {

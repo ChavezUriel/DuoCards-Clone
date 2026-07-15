@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useLocation } from 'react-router-dom';
-import { claimMarketDeck, fetchDeckPreview, updateCard, updateCardVisibility } from '../api';
+import { claimMarketDeck, fetchDeckPreview, updateCard, updateCardVisibility, updateCardsVisibility } from '../api';
 import CardDetailsModal from '../components/CardDetailsModal';
 import DeckSyncModal from '../components/DeckSyncModal';
 import ProposeChangesModal from '../components/ProposeChangesModal';
@@ -33,6 +33,133 @@ function BackIcon() {
     <svg aria-hidden="true" className="back-link__icon" viewBox="0 0 24 24">
       <path d="M15 6 9 12l6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+function EllipsisIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="5" cy="12" r="1.7" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.7" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.7" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg className="deck-menu__chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// The bulk actions still obey the table's search and filter even though they now
+// live in the deck menu, far from the controls that scope them. The label is the
+// only thing carrying that scope, so it spells out the reach: "Hide all 120
+// cards" on a clean table, "Hide 12 matching cards" once a query narrows it.
+function bulkActionLabel(verb, count, isFiltered) {
+  const noun = `card${count === 1 ? '' : 's'}`;
+  return isFiltered ? `${verb} ${count} matching ${noun}` : `${verb} all ${count} ${noun}`;
+}
+
+// Dismiss-on-outside-click menu holding the deck-level toolbar actions. Not a
+// modal: it never traps focus. Items are links or buttons, each optionally
+// carrying a count chip; `hasPending` dots the trigger so a deck needing
+// attention still says so while collapsed.
+function OverflowMenu({ label, items, triggerText = null, hasPending = false }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+  const triggerRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    function handlePointerDown(event) {
+      if (!containerRef.current?.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+
+    // Escape returns focus to the trigger; an outside click leaves focus wherever
+    // the pointer put it.
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  // A deck with nothing to act on (a plain personal deck) gets no trigger at all
+  // rather than a menu that opens onto emptiness.
+  if (!items.length) {
+    return null;
+  }
+
+  return (
+    <div className="deck-menu" ref={containerRef}>
+      <button
+        ref={triggerRef}
+        className={`deck-menu__trigger${triggerText ? ' deck-menu__trigger--text' : ''}${isOpen ? ' deck-menu__trigger--open' : ''}`}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        aria-label={triggerText ? undefined : label}
+        title={triggerText ? undefined : label}
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        {triggerText ? <span>{triggerText}</span> : <EllipsisIcon />}
+        {triggerText ? <ChevronIcon /> : null}
+        {hasPending ? <span className="deck-menu__dot" /> : null}
+        {hasPending ? <span className="sr-only">(needs attention)</span> : null}
+      </button>
+      {isOpen ? (
+        <div className="deck-menu__list" role="menu">
+          {items.map((item) => {
+            const body = (
+              <>
+                <span className="deck-menu__item-label">{item.label}</span>
+                {item.count > 0 ? <span className="deck-menu__count">{item.count}</span> : null}
+              </>
+            );
+
+            return item.to ? (
+              <Link
+                key={item.key}
+                className="deck-menu__item"
+                role="menuitem"
+                to={item.to}
+                state={item.state}
+                onClick={() => setIsOpen(false)}
+              >
+                {body}
+              </Link>
+            ) : (
+              <button
+                key={item.key}
+                className="deck-menu__item"
+                type="button"
+                role="menuitem"
+                disabled={item.isDisabled}
+                onClick={() => { setIsOpen(false); item.onSelect(); }}
+              >
+                {body}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -135,10 +262,11 @@ function DeckWordsPage() {
   const [error, setError] = useState('');
   const [pendingCardIds, setPendingCardIds] = useState([]);
   const [actionError, setActionError] = useState('');
-  const [detailsModalState, setDetailsModalState] = useState(null);
+  const [detailsCardId, setDetailsCardId] = useState(null);
   const [activeSyncModal, setActiveSyncModal] = useState(null); // 'sync' | 'propose' | null
   const [previewRefreshToken, setPreviewRefreshToken] = useState(0);
   const [isClaimPending, setIsClaimPending] = useState(false);
+  const [isBulkPending, setIsBulkPending] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sort, setSort] = useState({ key: null, dir: 1 });
@@ -260,9 +388,89 @@ function DeckWordsPage() {
   const hiddenCount = preview.cards.filter((card) => !card.is_enabled).length;
   const isFiltered = Boolean(normalizedQuery) || statusFilter !== 'all';
 
-  const detailsCard = detailsModalState
-    ? preview.cards.find((card) => card.card_id === detailsModalState.cardId) ?? null
+  // How many of the rows currently on screen each bulk action would actually
+  // change — drives whether the menu item is worth offering.
+  const hideableCount = tableRows.filter((row) => row.card.is_enabled).length;
+  const showableCount = tableRows.length - hideableCount;
+
+  const detailsCard = detailsCardId
+    ? preview.cards.find((card) => card.card_id === detailsCardId) ?? null
     : null;
+
+  // Deck-level actions, collapsed into one menu. Which ones exist depends on the
+  // deck's relationship to the market, so the list is assembled rather than a
+  // fixed set of conditionally-rendered buttons.
+  const openProposals = preview.open_proposals ?? 0;
+  const deckActions = [];
+
+  if (isLinked) {
+    deckActions.push({
+      key: 'market-version',
+      label: 'View market version',
+      to: `/decks/${preview.base_deck_id}/words`,
+      state: { from: 'market' },
+    });
+  }
+  if (isMarket && preview.user_copy_deck_id) {
+    deckActions.push({
+      key: 'my-copy',
+      label: 'View my copy',
+      to: `/decks/${preview.user_copy_deck_id}/words`,
+    });
+  }
+  if (isLinked) {
+    deckActions.push({
+      key: 'sync',
+      label: 'Market updates',
+      count: updatesAvailable,
+      onSelect: () => setActiveSyncModal('sync'),
+    });
+  }
+  if (isLinked && outgoingChanges > 0) {
+    deckActions.push({
+      key: 'propose',
+      label: 'Propose to market',
+      count: outgoingChanges,
+      onSelect: () => setActiveSyncModal('propose'),
+    });
+  }
+  if (isMarket && preview.is_owner) {
+    deckActions.push({
+      key: 'proposals',
+      label: 'Proposals',
+      count: openProposals,
+      to: '/market/proposals',
+    });
+  }
+  if (isClaimable) {
+    deckActions.push({
+      key: 'claim',
+      label: isClaimPending ? 'Claiming…' : 'Become maintainer',
+      isDisabled: isClaimPending,
+      onSelect: handleClaimDeck,
+    });
+  }
+  // Kept last: the market items above are about the deck as a whole, these two
+  // reach only as far as the rows the table is currently showing. An empty deck
+  // has nothing to hide, and a read-only one nothing to change.
+  if (canEdit && totalCards > 0) {
+    deckActions.push({
+      key: 'bulk-hide',
+      label: bulkActionLabel('Hide', tableRows.length, isFiltered),
+      isDisabled: isBulkPending || hideableCount === 0,
+      onSelect: () => handleBulkVisibility(false),
+    });
+    deckActions.push({
+      key: 'bulk-show',
+      label: bulkActionLabel('Show', tableRows.length, isFiltered),
+      isDisabled: isBulkPending || showableCount === 0,
+      onSelect: () => handleBulkVisibility(true),
+    });
+  }
+
+  // Collapsing the toolbar would otherwise hide the counts that made you open the
+  // deck; a dot on the trigger keeps "something needs you in here" visible.
+  const hasPendingDeckWork = updatesAvailable > 0 || outgoingChanges > 0 || openProposals > 0;
 
   function handleSort(key) {
     setSort((current) => {
@@ -296,6 +504,45 @@ function DeckWordsPage() {
       setActionError(requestError.message);
     } finally {
       setPendingCardIds((current) => current.filter((pendingCardId) => pendingCardId !== cardId));
+    }
+  }
+
+  // Bulk hide/show, scoped to the rows the current search and filter leave on
+  // screen. Cards already in the target state are left out of the request so the
+  // server's updated_count stays an honest delta.
+  async function handleBulkVisibility(isEnabled) {
+    const cardIds = tableRows
+      .filter((row) => row.card.is_enabled !== isEnabled)
+      .map((row) => row.card.card_id);
+
+    if (!cardIds.length) {
+      return;
+    }
+
+    setActionError('');
+    setIsBulkPending(true);
+
+    try {
+      await updateCardsVisibility(cardIds, isEnabled);
+      const changedIds = new Set(cardIds);
+      setPreview((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          cards: current.cards.map((card) => (
+            changedIds.has(card.card_id)
+              ? { ...card, is_enabled: isEnabled }
+              : card
+          )),
+        };
+      });
+    } catch (requestError) {
+      setActionError(requestError.message);
+    } finally {
+      setIsBulkPending(false);
     }
   }
 
@@ -350,52 +597,7 @@ function DeckWordsPage() {
           <span>{backLabel}</span>
         </Link>
         <div className="deck-preview-page__toolbar-actions">
-          {isLinked ? (
-            <Link
-              className="button button--secondary"
-              to={`/decks/${preview.base_deck_id}/words`}
-              state={{ from: 'market' }}
-            >
-              View market version
-            </Link>
-          ) : null}
-          {isMarket && preview.user_copy_deck_id ? (
-            <Link
-              className="button button--secondary"
-              to={`/decks/${preview.user_copy_deck_id}/words`}
-            >
-              View my copy
-            </Link>
-          ) : null}
-          {isLinked ? (
-            <button
-              className={`button button--secondary ${updatesAvailable > 0 ? 'deck-preview__sync-button--pending' : ''}`}
-              type="button"
-              onClick={() => setActiveSyncModal('sync')}
-            >
-              Market updates{updatesAvailable > 0 ? ` (${updatesAvailable})` : ''}
-            </button>
-          ) : null}
-          {isLinked && outgoingChanges > 0 ? (
-            <button className="button button--secondary" type="button" onClick={() => setActiveSyncModal('propose')}>
-              Propose to market ({outgoingChanges})
-            </button>
-          ) : null}
-          {isMarket && preview.is_owner ? (
-            <Link className="button button--secondary" to="/market/proposals">
-              Proposals{(preview.open_proposals ?? 0) > 0 ? ` (${preview.open_proposals})` : ''}
-            </Link>
-          ) : null}
-          {isClaimable ? (
-            <button
-              className="button button--secondary"
-              type="button"
-              disabled={isClaimPending}
-              onClick={handleClaimDeck}
-            >
-              {isClaimPending ? 'Claiming…' : 'Become maintainer'}
-            </button>
-          ) : null}
+          <OverflowMenu label="Deck actions" triggerText="Deck actions" hasPending={hasPendingDeckWork} items={deckActions} />
         </div>
       </div>
 
@@ -489,9 +691,7 @@ function DeckWordsPage() {
                       <SortableHeader label="English" sortKey="translation" sort={sort} onSort={handleSort} className="deck-table__col--translation" />
                       <SortableHeader label="Section" sortKey="section" sort={sort} onSort={handleSort} className="deck-table__col--section" />
                       <th className="deck-table__col--pos">Part of speech</th>
-                      <th className="deck-table__col--actions">
-                        <span className="sr-only">Actions</span>
-                      </th>
+                      {canEdit ? <th className="deck-table__col--actions">Visible</th> : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -503,8 +703,7 @@ function DeckWordsPage() {
                         isPending={pendingCardIds.includes(card.card_id)}
                         matchedIn={matchedIn}
                         highlightQuery={normalizedQuery}
-                        onEdit={() => setDetailsModalState({ cardId: card.card_id, startInEditMode: true })}
-                        onOpenDetails={() => setDetailsModalState({ cardId: card.card_id, startInEditMode: false })}
+                        onOpenDetails={() => setDetailsCardId(card.card_id)}
                         onToggle={() => handleToggleCard(card.card_id, !card.is_enabled)}
                       />
                     ))}
@@ -537,8 +736,7 @@ function DeckWordsPage() {
         <CardDetailsModal
           card={detailsCard}
           isPending={pendingCardIds.includes(detailsCard.card_id)}
-          startInEditMode={detailsModalState?.startInEditMode ?? false}
-          onClose={() => setDetailsModalState(null)}
+          onClose={() => setDetailsCardId(null)}
           onSave={canEdit ? (values) => handleSaveCard(detailsCard.card_id, values) : undefined}
           onToggle={canEdit ? () => handleToggleCard(detailsCard.card_id, !detailsCard.is_enabled) : undefined}
         />
@@ -563,8 +761,7 @@ function DeckWordsPage() {
   );
 }
 
-function DeckWordRow({ card, canEdit = true, isPending, matchedIn, highlightQuery, onToggle, onEdit, onOpenDetails }) {
-  const toggleLabel = card.is_enabled ? `Hide card ${card.prompt_es}` : `Show card ${card.prompt_es}`;
+function DeckWordRow({ card, canEdit = true, isPending, matchedIn, highlightQuery, onToggle, onOpenDetails }) {
   const toggleTitle = card.is_enabled ? 'Hide card from deck' : 'Show card in deck again';
 
   return (
@@ -588,61 +785,26 @@ function DeckWordRow({ card, canEdit = true, isPending, matchedIn, highlightQuer
       <td className="deck-table__cell deck-table__cell--pos">
         {card.part_of_speech || <span className="deck-table__placeholder">—</span>}
       </td>
-      <td className="deck-table__cell deck-table__cell--actions">
-        <div className="deck-table__actions">
-          {canEdit ? (
+      {canEdit ? (
+        <td className="deck-table__cell deck-table__cell--actions">
+          <div className="deck-table__actions">
             <button
-              className="deck-preview__icon-button"
+              className="deck-table__switch"
               type="button"
-              aria-label={toggleLabel}
+              role="switch"
+              aria-checked={card.is_enabled}
+              aria-label={`Card ${card.prompt_es} visible in deck`}
               title={toggleTitle}
               onClick={(event) => { event.stopPropagation(); onToggle(); }}
               disabled={isPending}
             >
-              {card.is_enabled ? (
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
-                  <path d="M15.0007 12C15.0007 13.6569 13.6576 15 12.0007 15C10.3439 15 9.00073 13.6569 9.00073 12C9.00073 10.3431 10.3439 9 12.0007 9C13.6576 9 15.0007 10.3431 15.0007 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M12.0012 5C7.52354 5 3.73326 7.94288 2.45898 12C3.73324 16.0571 7.52354 19 12.0012 19C16.4788 19 20.2691 16.0571 21.5434 12C20.2691 7.94291 16.4788 5 12.0012 5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
-                  <path d="M2.99902 3L20.999 21M9.8433 9.91364C9.32066 10.4536 8.99902 11.1892 8.99902 12C8.99902 13.6569 10.3422 15 11.999 15C12.8215 15 13.5667 14.669 14.1086 14.133M6.49902 6.64715C4.59972 7.90034 3.15305 9.78394 2.45703 12C3.73128 16.0571 7.52159 19 11.9992 19C13.9881 19 15.8414 18.4194 17.3988 17.4184M10.999 5.04939C11.328 5.01673 11.6617 5 11.9992 5C16.4769 5 20.2672 7.94291 21.5414 12C21.2607 12.894 20.8577 13.7338 20.3522 14.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
+              <span className="deck-table__switch-track" aria-hidden="true">
+                <span className="deck-table__switch-thumb" />
+              </span>
             </button>
-          ) : null}
-
-          {canEdit ? (
-            <button
-              className="deck-preview__icon-button deck-preview__icon-button--muted"
-              type="button"
-              aria-label={`Edit card ${card.prompt_es}`}
-              title="Edit card"
-              onClick={(event) => { event.stopPropagation(); onEdit(); }}
-              disabled={isPending}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M4 20h4.2L19 9.2a1.5 1.5 0 0 0 0-2.1l-2.1-2.1a1.5 1.5 0 0 0-2.1 0L4 15.8V20Z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M13.5 6.5l4 4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          ) : null}
-
-          <button
-            className="deck-preview__icon-button deck-preview__icon-button--muted"
-            type="button"
-            aria-label={`Show details for ${card.prompt_es}`}
-            title="Show card details"
-            onClick={(event) => { event.stopPropagation(); onOpenDetails(); }}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <circle cx="5" cy="12" r="1.7" fill="currentColor" />
-              <circle cx="12" cy="12" r="1.7" fill="currentColor" />
-              <circle cx="19" cy="12" r="1.7" fill="currentColor" />
-            </svg>
-          </button>
-        </div>
-      </td>
+          </div>
+        </td>
+      ) : null}
     </tr>
   );
 }
