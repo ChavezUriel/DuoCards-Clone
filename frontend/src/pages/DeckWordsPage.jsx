@@ -36,23 +36,6 @@ function BackIcon() {
   );
 }
 
-function EyeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
-      <path d="M15.0007 12C15.0007 13.6569 13.6576 15 12.0007 15C10.3439 15 9.00073 13.6569 9.00073 12C9.00073 10.3431 10.3439 9 12.0007 9C13.6576 9 15.0007 10.3431 15.0007 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M12.0012 5C7.52354 5 3.73326 7.94288 2.45898 12C3.73324 16.0571 7.52354 19 12.0012 19C16.4788 19 20.2691 16.0571 21.5434 12C20.2691 7.94291 16.4788 5 12.0012 5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function EyeOffIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
-      <path d="M2.99902 3L20.999 21M9.8433 9.91364C9.32066 10.4536 8.99902 11.1892 8.99902 12C8.99902 13.6569 10.3422 15 11.999 15C12.8215 15 13.5667 14.669 14.1086 14.133M6.49902 6.64715C4.59972 7.90034 3.15305 9.78394 2.45703 12C3.73128 16.0571 7.52159 19 11.9992 19C13.9881 19 15.8414 18.4194 17.3988 17.4184M10.999 5.04939C11.328 5.01673 11.6617 5 11.9992 5C16.4769 5 20.2672 7.94291 21.5414 12C21.2607 12.894 20.8577 13.7338 20.3522 14.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 function EllipsisIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -71,17 +54,13 @@ function ChevronIcon() {
   );
 }
 
-// The bulk buttons sit right next to the filter and obey it, so their accessible
-// name has to say what they will actually hit: "Hide all 120 cards" on a clean
-// table, "Hide 12 matching cards" once a query narrows it. The visible text is
-// kept short by bulkButtonText — the count readout beside it carries the number.
+// The bulk actions still obey the table's search and filter even though they now
+// live in the deck menu, far from the controls that scope them. The label is the
+// only thing carrying that scope, so it spells out the reach: "Hide all 120
+// cards" on a clean table, "Hide 12 matching cards" once a query narrows it.
 function bulkActionLabel(verb, count, isFiltered) {
   const noun = `card${count === 1 ? '' : 's'}`;
   return isFiltered ? `${verb} ${count} matching ${noun}` : `${verb} all ${count} ${noun}`;
-}
-
-function bulkButtonText(verb, isFiltered) {
-  return isFiltered ? `${verb} matching` : `${verb} all`;
 }
 
 // Dismiss-on-outside-click menu holding the deck-level toolbar actions. Not a
@@ -471,6 +450,23 @@ function DeckWordsPage() {
       onSelect: handleClaimDeck,
     });
   }
+  // Kept last: the market items above are about the deck as a whole, these two
+  // reach only as far as the rows the table is currently showing. An empty deck
+  // has nothing to hide, and a read-only one nothing to change.
+  if (canEdit && totalCards > 0) {
+    deckActions.push({
+      key: 'bulk-hide',
+      label: bulkActionLabel('Hide', tableRows.length, isFiltered),
+      isDisabled: isBulkPending || hideableCount === 0,
+      onSelect: () => handleBulkVisibility(false),
+    });
+    deckActions.push({
+      key: 'bulk-show',
+      label: bulkActionLabel('Show', tableRows.length, isFiltered),
+      isDisabled: isBulkPending || showableCount === 0,
+      onSelect: () => handleBulkVisibility(true),
+    });
+  }
 
   // Collapsing the toolbar would otherwise hide the counts that made you open the
   // deck; a dot on the trigger keeps "something needs you in here" visible.
@@ -678,37 +674,6 @@ function DeckWordsPage() {
                 </button>
               ))}
             </div>
-
-            {canEdit ? (
-              <div className="deck-bulk" role="group" aria-label="Change visibility in bulk">
-                <button
-                  className="deck-bulk__btn"
-                  type="button"
-                  disabled={isBulkPending || hideableCount === 0}
-                  aria-label={bulkActionLabel('Hide', tableRows.length, isFiltered)}
-                  title={hideableCount === 0
-                    ? 'Every card here is already hidden'
-                    : bulkActionLabel('Hide', tableRows.length, isFiltered)}
-                  onClick={() => handleBulkVisibility(false)}
-                >
-                  <EyeOffIcon />
-                  <span>{bulkButtonText('Hide', isFiltered)}</span>
-                </button>
-                <button
-                  className="deck-bulk__btn"
-                  type="button"
-                  disabled={isBulkPending || showableCount === 0}
-                  aria-label={bulkActionLabel('Show', tableRows.length, isFiltered)}
-                  title={showableCount === 0
-                    ? 'Every card here is already visible'
-                    : bulkActionLabel('Show', tableRows.length, isFiltered)}
-                  onClick={() => handleBulkVisibility(true)}
-                >
-                  <EyeIcon />
-                  <span>{bulkButtonText('Show', isFiltered)}</span>
-                </button>
-              </div>
-            ) : null}
 
             <p className="deck-table-controls__count" role="status">
               {isFiltered ? `${tableRows.length} of ${totalCards} cards` : `${totalCards} card${totalCards === 1 ? '' : 's'}`}
