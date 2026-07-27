@@ -81,6 +81,11 @@ function Listening({ card, onResolve, onOpenDetails }) {
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
         return;
       }
+      // The metadata modal opens on top of this aid while it stays mounted, so a
+      // focused field there owns every printable key — "R" must type an "r".
+      if (isTypingTarget(event.target)) {
+        return;
+      }
       if ((event.key === 'r' || event.key === 'R') && hasSpeech) {
         event.preventDefault();
         play();
@@ -172,6 +177,18 @@ function Listening({ card, onResolve, onOpenDetails }) {
         </button>
       ) : null}
     </section>
+  );
+}
+
+function isTypingTarget(target) {
+  if (!target || typeof target.tagName !== 'string') {
+    return false;
+  }
+  return (
+    target.isContentEditable ||
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT'
   );
 }
 
