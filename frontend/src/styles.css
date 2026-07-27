@@ -2134,19 +2134,30 @@ html {
   color: var(--muted);
 }
 
-/* Post-review scheduling feedback ("Next review in 4 days").
-   Overlaid so it never shifts the review-stage grid rows. */
 .review-stage {
   position: relative;
 }
 
+/* Post-review scheduling feedback ("Next review in 4 days"). The slot is a real
+   grid row between the session bar and the card, so the pill can never sit on
+   top of either; it keeps its height while empty, so showing the message does
+   not shift the stage mid-exit-animation. */
+.review-stage:has(.practice-feedback-slot) {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.practice-feedback-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* One pill tall, whether or not a pill is showing. */
+  min-height: 1.75rem;
+}
+
 .practice-feedback-toast {
-  position: absolute;
-  top: 3.6rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 6;
-  padding: 0.45rem 1rem;
+  margin: 0;
+  max-width: 100%;
+  padding: 0.3rem 0.85rem;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--surface);
@@ -2155,9 +2166,8 @@ html {
   font-size: 0.72rem;
   letter-spacing: 0.06em;
   white-space: nowrap;
-  max-width: calc(100% - 0.5rem);
-  pointer-events: none;
-  box-shadow: 0 10px 22px rgba(34, 42, 45, 0.08);
+  overflow: hidden;
+  text-overflow: ellipsis;
   animation: practice-feedback-in 180ms ease-out;
 }
 
@@ -2176,11 +2186,11 @@ html {
 @keyframes practice-feedback-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-4px);
+    transform: translateY(-3px);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
   }
 }
 
@@ -4966,10 +4976,16 @@ html {
     flex: 1 1 auto;
   }
 
+  /* Keep the pill on one line at phone widths (a wrap would grow the slot and
+     shift the card): tighter type instead of a second line. */
+  .practice-feedback-slot {
+    min-height: 1.55rem;
+  }
+
   .practice-feedback-toast {
-    top: 3.1rem;
-    white-space: normal;
-    text-align: center;
+    padding: 0.24rem 0.7rem;
+    font-size: 0.66rem;
+    letter-spacing: 0.03em;
   }
 
   /* ---- Minigames: full-width primary actions, roomier tiles ---- */

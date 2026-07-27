@@ -63,13 +63,15 @@ function sessionShapeLabel(shape) {
   return null;
 }
 
+// Kept to ~31 characters so the pill stays on one line at phone widths — see
+// .practice-feedback-slot, which reserves exactly one line of height.
 function feedbackMessage(feedback) {
   if (!feedback) {
     return '';
   }
 
   if (feedback.repeats_in_session) {
-    return feedback.result === 'known' ? 'Almost there — one more pass this session.' : 'No problem — it comes back this session.';
+    return feedback.result === 'known' ? 'Almost there — one more pass.' : 'No problem — it comes back soon.';
   }
 
   const days = feedback.interval_days;
@@ -80,7 +82,7 @@ function feedbackMessage(feedback) {
     return 'Next review tomorrow.';
   }
   if (days >= 60) {
-    return `Locked in — next review in ${Math.round(days / 30)} months.`;
+    return `Locked in — review in ${Math.round(days / 30)} months.`;
   }
   return `Next review in ${days} days.`;
 }
@@ -654,15 +656,15 @@ function PracticePage() {
           </div>
         </div>
 
-        {reviewFeedback ? (
-          <div
-            className={`practice-feedback-toast practice-feedback-toast--${reviewFeedback.result}`}
-            role="status"
-            aria-live="polite"
-          >
-            {feedbackMessage(reviewFeedback)}
-          </div>
-        ) : null}
+        {/* Always mounted so the pill has a reserved row (never covering the
+            card) and the live region exists before the message lands. */}
+        <div className="practice-feedback-slot" role="status" aria-live="polite">
+          {reviewFeedback ? (
+            <p className={`practice-feedback-toast practice-feedback-toast--${reviewFeedback.result}`}>
+              {feedbackMessage(reviewFeedback)}
+            </p>
+          ) : null}
+        </div>
 
         {activeInterstitial ? (
           <InterstitialHost
