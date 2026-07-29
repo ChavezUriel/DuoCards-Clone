@@ -14,6 +14,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SettingsPage from './pages/SettingsPage';
 import InstallButton from './components/InstallButton';
+import { useKeyboardInset } from './useKeyboardInset';
 
 function PrivateRoute({ children, session }) {
   if (!session) {
@@ -26,6 +27,10 @@ function App() {
   const location = useLocation();
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);
+
+  // App-level so every keyboard-facing surface gets the flags, not just smart
+  // practice: the card-details sheet is editable on the per-deck review screen too.
+  useKeyboardInset();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
