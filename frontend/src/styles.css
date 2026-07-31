@@ -5157,17 +5157,24 @@ html {
    OVERLAY, so dvh (and every height media query) still reports the full screen.
    Hence the attributes — the hook measures the real space and CSS reacts.
 
-   The tiers give things up in order of what they cost the learner, and the prompt's
-   type size goes LAST — it is the thing being recalled, not decoration.
+   NOTHING IS HIDDEN. An earlier revision reclaimed space by dropping the session
+   counters, the section pill, the label and the Spanish example; it was tested and
+   rejected — losing the information is worse than a tighter layout. Every element on
+   the card at rest is still on the card with the keyboard up. The space comes out of
+   type sizes, margins, padding and the button layout instead, and the prompt's own
+   size goes LAST since it is the thing being recalled.
 
-   Tier 1 (data-kb-open) spends only chrome: shell padding, stage gaps, the session
-   counters, the empty feedback row, the section pill and the "Type the translation"
-   label the input's own placeholder already states. ~90px on a 400px screen, with
-   every word of content and every type size untouched.
+   The one exception isn't information: `.practice-feedback-slot` is an EMPTY row
+   reserved so a landing message can't shift the card, and while typing there is no
+   message to reserve for.
 
-   Tier 2 (data-kb-tight, under ~460px usable) puts the input and its action on ONE
-   row (~60px, and the familiar phone pattern), drops the secondary Spanish example,
-   and only then eases the type down a step.
+   Tier 1 (data-kb-open): margins, padding and gaps — shell, stage, card, the label's
+   trailing margin, the session summary's type. ~70px on a 400px screen with every
+   content type size untouched.
+
+   Tier 2 (data-kb-tight, under ~460px usable): the input and its action share ONE row
+   (~60px, and the familiar phone pattern), then every type size eases down a step —
+   pill, label, example, prompt, definition, sentence, hint.
 
    Only the typing games and word scramble focus an input, so nothing else can
    raise the flags; the recognition/tile games are untouched either way.
@@ -5185,12 +5192,25 @@ html {
   gap: 0.4rem;
 }
 
-/* Progress counts are reference, not part of the task in hand — they come back the
-   moment the keyboard goes down. The Home / Undo pills stay at full size: they're the
-   only way out mid-card, and shrinking them would trade a finger-sized target for a
-   few pixels the layout no longer needs. */
+/* The session counters keep every number, in smaller type. The Home / Undo pills next
+   to them stay at full size — they set the row's height anyway, and shrinking them
+   would trade a finger-sized target for pixels the layout doesn't need. */
 :root[data-kb-open] .practice-session-summary {
-  display: none;
+  gap: 0.2rem;
+}
+
+:root[data-kb-open] .practice-session-summary__mode {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+}
+
+:root[data-kb-open] .practice-session-summary__stats {
+  gap: 0.3rem;
+}
+
+:root[data-kb-open] .practice-session-summary__stats span {
+  padding: 0.1rem 0.4rem;
+  font-size: 0.64rem;
 }
 
 /* The feedback pill's reserved row exists so a landing message can't shift the card;
@@ -5248,11 +5268,10 @@ html {
   overflow: visible;
 }
 
-/* The section pill (chrome) and the label the input's own placeholder already states.
-   Content — prompt, definition, cloze sentence, example — all stays. */
-:root[data-kb-open] .typegame__meta-row,
+/* The label keeps its words and loses its trailing margin — the body's flex gap
+   already separates it from the prompt, so the 0.75rem below it was doubling up. */
 :root[data-kb-open] .typegame .flashcard__label {
-  display: none;
+  margin-bottom: 0;
 }
 
 :root[data-kb-open] .typegame__form {
@@ -5268,11 +5287,36 @@ html {
   padding: 0.7rem 0.8rem;
 }
 
-/* The Spanish example restates the prompt in context: welcome when it's free, the
-   first thing to go when it isn't. (Recall's definition and the cloze sentence are
-   NOT dropped at any tier — they're the question itself.) */
+/* Five stacked children here (pill, label, prompt, example, form), so the gap is worth
+   four times what it looks like. */
+:root[data-kb-tight] .typegame__body {
+  gap: 0.4rem;
+}
+
+/* Everything below is a size, never a visibility: the whole card is still readable,
+   just set a step smaller. Ordered outside-in — the supporting type gives up the most,
+   the prompt the least. */
+
+/* Section / part-of-speech pills: same words, less pill around them. */
+:root[data-kb-tight] .typegame__meta-row {
+  gap: 0.3rem;
+}
+
+:root[data-kb-tight] .typegame__meta-row .flashcard__meta-pill {
+  padding: 0.12rem 0.5rem;
+  font-size: 0.62rem;
+}
+
+:root[data-kb-tight] .typegame .flashcard__label {
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+}
+
+/* The Spanish example restates the prompt in context — supporting text, so it takes
+   the biggest step down and the tightest leading. */
 :root[data-kb-tight] .typegame__example {
-  display: none;
+  font-size: 0.78rem;
+  line-height: 1.3;
 }
 
 /* Down a step, not down to fine print: the prompt is still the largest thing on the

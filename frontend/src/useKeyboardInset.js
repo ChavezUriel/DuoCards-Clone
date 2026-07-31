@@ -26,10 +26,11 @@ import { useEffect } from 'react';
 // on-screen keyboard is far taller than this).
 const KEYBOARD_THRESHOLD_PX = 140;
 
-// Below this much usable height the games switch to their tight tier: input and action
-// share a row, the secondary Spanish example goes, and the type eases down a step.
-// Sized off the tallest tier-1 layout — recall from definition, which needs ~360px for a
-// three-line definition, hint, input and action — plus headroom for longer content.
+// Below this much usable height the games switch to their tight tier: the input and its
+// action share a row, and every type size eases down a step. Nothing is ever hidden —
+// see the styles.css keyboard block for why. Sized off the tallest tier-1 layout, recall
+// from definition (~300px of content: two pills, label, three-line definition, hint,
+// input, action), plus headroom for longer definitions.
 const TIGHT_AVAIL_PX = 460;
 
 // A width change this large is a rotation (or a real window resize), not a reflow, and
