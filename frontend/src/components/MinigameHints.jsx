@@ -28,19 +28,52 @@ export function useHints(inputRef) {
   return { level, reveal };
 }
 
+// Lightbulb glyph for the hint trigger. Inline (no icon dependency) and aria-hidden:
+// the button's accessible name comes from its label / aria-label, never the drawing.
+function LightbulbIcon() {
+  return (
+    <svg
+      className="typegame__hint-icon"
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M12 3a6 6 0 0 0-3.6 10.8c.5.4.9 1 1 1.6l.1.6h5l.1-.6c.1-.6.5-1.2 1-1.6A6 6 0 0 0 12 3Z" />
+      <path d="M9.5 19h5" />
+      <path d="M10.5 21.5h3" />
+    </svg>
+  );
+}
+
 // The hint trigger. `type="button"` keeps it out of the form's implicit submission,
 // so Enter in the input still submits the guess. Once both hints are spent it stays
 // mounted but disabled — the layout doesn't jump and the tab order stays put.
+//
+// The icon is always drawn; the written label rides alongside it and is the thing the
+// keyboard-up layout drops (styles.css), where the button shrinks to a square sitting
+// beside the input. `aria-label` carries the same words in every layout, so the icon-only
+// form is never a mystery to a screen reader, and `title` gives sighted users the tooltip.
 export function HintButton({ level, onReveal }) {
   const exhausted = level >= MAX_HINT_LEVEL;
+  const label = exhausted ? 'No more hints' : NEXT_HINT_LABEL[level];
   return (
     <button
       type="button"
       className="button typegame__hint-btn"
       onClick={onReveal}
       disabled={exhausted}
+      aria-label={label}
+      title={label}
     >
-      {exhausted ? 'No more hints' : NEXT_HINT_LABEL[level]}
+      <LightbulbIcon />
+      <span className="typegame__hint-btn-label">{label}</span>
     </button>
   );
 }
