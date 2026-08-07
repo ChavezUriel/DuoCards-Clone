@@ -13,7 +13,10 @@ import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SettingsPage from './pages/SettingsPage';
+import AiDeckBuilderPage from './pages/AiDeckBuilderPage';
+import DeckRunPage from './pages/DeckRunPage';
 import InstallButton from './components/InstallButton';
+import AiRunIndicator from './components/AiRunIndicator';
 import { useKeyboardInset } from './useKeyboardInset';
 
 function PrivateRoute({ children, session }) {
@@ -54,8 +57,10 @@ function App() {
   };
 
   // Deck explorer shares the focused chrome (no header links) but must scroll
-  // freely on small screens, so it gets its own shell modifier below.
-  const isDeckRoute = location.pathname.startsWith('/decks/');
+  // freely on small screens, so it gets its own shell modifier below. Matched
+  // exactly: the AI builder's /decks/new and /decks/runs/* are ordinary pages
+  // and keep the normal header.
+  const isDeckRoute = /^\/decks\/\d+\/words$/.test(location.pathname);
   const isFocusedRoute =
     location.pathname.startsWith('/review/') ||
     location.pathname === '/practice' ||
@@ -73,6 +78,7 @@ function App() {
     if (session) {
       headerContent = (
         <nav className="app-header__links" aria-label="Account">
+          <AiRunIndicator />
           <InstallButton />
           {location.pathname === '/settings' ? (
             <Link to="/" className="back-link">Home</Link>
@@ -112,6 +118,8 @@ function App() {
           <Route path="/" element={<PrivateRoute session={session}><HomePage /></PrivateRoute>} />
           <Route path="/market" element={<PrivateRoute session={session}><MarketPage /></PrivateRoute>} />
           <Route path="/market/proposals" element={<PrivateRoute session={session}><ProposalsPage /></PrivateRoute>} />
+          <Route path="/decks/new" element={<PrivateRoute session={session}><AiDeckBuilderPage /></PrivateRoute>} />
+          <Route path="/decks/runs/:jobId" element={<PrivateRoute session={session}><DeckRunPage /></PrivateRoute>} />
           <Route path="/decks/:deckId/words" element={<PrivateRoute session={session}><DeckWordsPage /></PrivateRoute>} />
           <Route path="/practice" element={<PrivateRoute session={session}><PracticePage /></PrivateRoute>} />
           <Route path="/review/:deckId" element={<PrivateRoute session={session}><ReviewPage /></PrivateRoute>} />

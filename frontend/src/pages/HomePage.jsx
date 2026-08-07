@@ -358,8 +358,11 @@ function HomePage() {
     return (
       <div className="h-empty-panel panel">
         <h2>No decks on home</h2>
-        <p>Open the deck market and add decks to bring them back here.</p>
-        <Link className="button button--primary" to="/market">Open market</Link>
+        <p>Add a deck from the market, or have AI build one around exactly what you need to learn.</p>
+        <div className="action-row">
+          <Link className="button button--primary" to="/market">Open market</Link>
+          <Link className="button button--secondary" to="/decks/new">Build one with AI</Link>
+        </div>
       </div>
     );
   }
@@ -481,6 +484,8 @@ function HomePage() {
               </button>
               <span aria-hidden="true">·</span>
               <Link to="/market" className="h-decks__text-action">Open market</Link>
+              <span aria-hidden="true">·</span>
+              <Link to="/decks/new" className="h-decks__text-action">Create with AI</Link>
             </div>
           </div>
 

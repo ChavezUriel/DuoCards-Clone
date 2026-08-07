@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import {
   deleteAccount,
@@ -23,6 +23,8 @@ import {
 } from '../notifications';
 import { loadPracticeSettings, savePracticeSettings } from '../practiceSettings';
 import { loadDepthStat, resetDepthStat } from '../depthStat';
+import AiProviderPanel from '../components/AiProviderPanel';
+import { loadBuilderPrefs, saveBuilderPrefs } from '../ai/keyStore';
 
 // OAuth failures (e.g. Google linking) come back appended to the redirect URL.
 function readOAuthErrorFromUrl() {
@@ -563,6 +565,38 @@ function MinigamesSection() {
   );
 }
 
+// Provider keys live here as well as in the builder — both edit the same store,
+// so a key added on either screen is available on the other.
+function AiSection() {
+  const [prefs, setPrefs] = useState(() => loadBuilderPrefs());
+
+  return (
+    <section className="panel st-section" aria-labelledby="st-ai-title">
+      <div>
+        <h2 className="st-section__title" id="st-ai-title">AI deck builder</h2>
+        <p className="st-section__hint">
+          Generate your own decks with your own provider account. Keys are kept in this browser —
+          never uploaded, never shared with other devices — and requests are billed by the provider,
+          not by this app.
+        </p>
+      </div>
+
+      <AiProviderPanel
+        providerId={prefs.providerId}
+        onProviderChange={(providerId) => {
+          const next = { ...prefs, providerId };
+          setPrefs(next);
+          saveBuilderPrefs(next);
+        }}
+      />
+
+      <div className="st-actions">
+        <Link className="button button--primary st-button--compact" to="/decks/new">Build a deck</Link>
+      </div>
+    </section>
+  );
+}
+
 function DataSection() {
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
@@ -744,6 +778,12 @@ const SECTION_ICONS = {
       <path d="M5 15v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3" />
     </svg>
   ),
+  ai: (
+    <svg {...ICON_PROPS}>
+      <path d="M12 3.5 13.7 8l4.5 1.7-4.5 1.7L12 15.9l-1.7-4.5L5.8 9.7 10.3 8z" />
+      <path d="M17.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
+    </svg>
+  ),
   danger: (
     <svg {...ICON_PROPS}>
       <path d="M12 4.5 3.5 19a1 1 0 0 0 .9 1.5h15.2a1 1 0 0 0 .9-1.5z" />
@@ -759,6 +799,7 @@ const SECTIONS = [
   { id: 'security', label: 'Sign-in & security' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'minigames', label: 'Minigames' },
+  { id: 'ai', label: 'AI deck builder' },
   { id: 'data', label: 'Your data' },
   { id: 'danger', label: 'Danger zone', danger: true },
 ];
@@ -844,6 +885,8 @@ function SettingsPage() {
         return <NotificationsSection />;
       case 'minigames':
         return <MinigamesSection />;
+      case 'ai':
+        return <AiSection />;
       case 'data':
         return <DataSection />;
       case 'danger':

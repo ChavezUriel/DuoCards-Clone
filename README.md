@@ -111,6 +111,21 @@ until deleted manually (which cascades to that card's `card_progress` and
 `practice_session_cards` rows, so verify before deleting). Renaming a card's
 `spanish_text`/`english_text` is effectively a remove + add.
 
+## Building a deck with AI, inside the app
+
+Learners can generate their **own** decks from `/decks/new` using their own
+provider key (OpenCode Zen, OpenAI, Claude, or Gemini). They describe the deck,
+review a specification as a form or as YAML, start the run, and watch it card by
+card on `/decks/runs/:id` before saving it to their decks.
+
+It runs the same three-stage pipeline as the CLI below (blueprint → word sets →
+per-card enrichment with the example and cloze audits), ported to the browser in
+[`frontend/src/ai/`](frontend/src/ai). Keys stay in the user's browser; no
+migration and no service key are needed, because the deck and its cards are
+written under the existing per-user RLS policies.
+
+Full write-up: [docs/ai-deck-builder.md](docs/ai-deck-builder.md).
+
 ## Generating & enriching decks with AI (Ollama)
 
 [`supabase/scripts/generate_cards.cjs`](supabase/scripts/generate_cards.cjs)
