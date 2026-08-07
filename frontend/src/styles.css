@@ -1789,6 +1789,10 @@ html {
    in DOM order, so it's exactly one Tab from the input; pressing it reveals the next
    hint step and hands focus straight back to the input. ---- */
 .typegame__hint-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
   min-height: 34px;
   padding: 0.35rem 1rem;
   font-size: 0.85rem;
@@ -1801,6 +1805,12 @@ html {
 .typegame__hint-btn:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* The lightbulb never scales with the surrounding type — it is the one part of the
+   button that survives into the icon-only keyboard layout, so it keeps a fixed size. */
+.typegame__hint-icon {
+  flex: 0 0 auto;
 }
 
 /* The answer's shape: one underscore per character; a small gap separates letters so
@@ -5157,24 +5167,27 @@ html {
    OVERLAY, so dvh (and every height media query) still reports the full screen.
    Hence the attributes — the hook measures the real space and CSS reacts.
 
-   NOTHING IS HIDDEN. An earlier revision reclaimed space by dropping the session
-   counters, the section pill, the label and the Spanish example; it was tested and
-   rejected — losing the information is worse than a tighter layout. Every element on
-   the card at rest is still on the card with the keyboard up. The space comes out of
-   type sizes, margins, padding and the button layout instead, and the prompt's own
-   size goes LAST since it is the thing being recalled.
+   NOTHING IS HIDDEN, AND NOTHING IS RESIZED. An earlier revision reclaimed space by
+   dropping the session counters, the section pill, the label and the Spanish example;
+   it was tested and rejected — losing the information is worse than a tighter layout.
+   A later one shrank the card's type a step in the tight tier; that was rejected too,
+   because the card visibly re-typesets itself the moment the keyboard slides in, and
+   the vertical space it bought was never actually needed — the card is not what runs
+   out of room. Every element on the card at rest is still on the card, AT THE SAME
+   SIZE, with the keyboard up. The space comes out of margins, padding, gaps and the
+   button layout only.
 
    The one exception isn't information: `.practice-feedback-slot` is an EMPTY row
    reserved so a landing message can't shift the card, and while typing there is no
    message to reserve for.
 
    Tier 1 (data-kb-open): margins, padding and gaps — shell, stage, card, the label's
-   trailing margin, the session summary's type. ~70px on a 400px screen with every
-   content type size untouched.
+   trailing margin, the session summary's type (chrome, not card content). Plus the
+   form's two-row shape: input with the hint's lightbulb beside it, then the full-width
+   Check/Skip action under the pair, where a thumb can reach it.
 
-   Tier 2 (data-kb-tight, under ~460px usable): the input and its action share ONE row
-   (~60px, and the familiar phone pattern), then every type size eases down a step —
-   pill, label, example, prompt, definition, sentence, hint.
+   Tier 2 (data-kb-tight, under ~460px usable): the same layout with the card's own
+   gaps and padding pulled in another step. No type sizes here — see above.
 
    Only the typing games and word scramble focus an input, so nothing else can
    raise the flags; the recognition/tile games are untouched either way.
@@ -5279,6 +5292,58 @@ html {
   gap: 0.55rem;
 }
 
+/* Two rows while typing: the input with the hint's lightbulb button beside it, then the
+   Check/Skip action full-width beneath. The action is the thing pressed on every card,
+   so it gets the wide, thumb-reachable row; the hint is occasional and collapses to a
+   square icon next to the input rather than a thin full-width strip nobody can hit.
+   Only while typing — on reveal the action is replaced by the full-width feedback
+   block, and :has(.typegame__action) keeps this off it. */
+:root[data-kb-open] .typegame__form:has(.typegame__action) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /* Stretch, not centre: it's what makes the lightbulb exactly as tall as the input
+     without either of them hard-coding a height the other has to be kept in sync with. */
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+/* Second track only when a hint exists (recall-from-definition, cloze). Type-translation
+   has none, and an always-present empty track would still charge the column gap and
+   leave the input mysteriously short of the card's edge. */
+:root[data-kb-open] .typegame__form:has(.typegame__hint-btn) {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+/* Keeps its at-rest height (.st-input's 3rem) — only its width is now shared. */
+:root[data-kb-open] .typegame__form:has(.typegame__action) .typegame__input {
+  grid-column: 1;
+  width: auto;
+}
+
+/* Square, icon-only, as tall as the input beside it (the row stretches it). The dashes
+   go solid at this size — a dashed border on a 48px box reads as noise, not as a hint. */
+:root[data-kb-open] .typegame__form:has(.typegame__action) .typegame__hint-btn {
+  grid-column: 2;
+  width: 3rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border-style: solid;
+  border-radius: 14px;
+}
+
+/* The words live on in aria-label/title, so nothing is lost to a screen reader or to a
+   long press — only the horizontal room the label was eating next to the input. */
+:root[data-kb-open] .typegame__form:has(.typegame__action) .typegame__hint-btn-label {
+  display: none;
+}
+
+:root[data-kb-open] .typegame__form:has(.typegame__action) .typegame__action {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
+
 /* ---- Tier 2: keyboard up and under ~460px left ---- */
 
 :root[data-kb-tight] .typegame,
@@ -5293,84 +5358,20 @@ html {
   gap: 0.4rem;
 }
 
-/* Everything below is a size, never a visibility: the whole card is still readable,
-   just set a step smaller. Ordered outside-in — the supporting type gives up the most,
-   the prompt the least. */
+/* Spacing only, all the way down. The card's type — pill, label, prompt, example,
+   definition, cloze sentence, hint — is deliberately IDENTICAL to its no-keyboard size:
+   the two views differ in whitespace, not in typography, so focusing the input never
+   re-typesets the card under the learner's eyes. */
 
-/* Section / part-of-speech pills: same words, less pill around them. */
+/* Section / part-of-speech pills: same pills, sitting closer together. */
 :root[data-kb-tight] .typegame__meta-row {
   gap: 0.3rem;
 }
 
-:root[data-kb-tight] .typegame__meta-row .flashcard__meta-pill {
-  padding: 0.12rem 0.5rem;
-  font-size: 0.62rem;
-}
-
-:root[data-kb-tight] .typegame .flashcard__label {
-  font-size: 0.6rem;
-  letter-spacing: 0.12em;
-}
-
-/* The Spanish example restates the prompt in context — supporting text, so it takes
-   the biggest step down and the tightest leading. */
-:root[data-kb-tight] .typegame__example {
-  font-size: 0.78rem;
-  line-height: 1.3;
-}
-
-/* Down a step, not down to fine print: the prompt is still the largest thing on the
-   card, and the definition / cloze sentence stay at reading size. */
-:root[data-kb-tight] .typegame__prompt {
-  font-size: clamp(1.5rem, 7vw, 2rem);
-}
-
-:root[data-kb-tight] .recallgame__definition,
-:root[data-kb-tight] .clozegame__sentence {
-  font-size: clamp(1.1rem, 4.4vw, 1.5rem);
-  line-height: 1.3;
-}
-
-:root[data-kb-tight] .typegame__hint-line {
-  font-size: clamp(1.05rem, 3.6vw, 1.3rem);
-}
-
-:root[data-kb-tight] .typegame__hint-word {
-  font-size: 1.05rem;
-}
-
-/* Input and action share a row — the single biggest saving available, and the
-   familiar phone pattern (type, then the button right there). Only while typing:
-   on reveal the action is replaced by the full-width feedback block, and
-   :has(.typegame__action) keeps the row layout from ever applying to it. */
+/* The form keeps the tier-1 two-row shape (input + lightbulb, then the action); only
+   the gap between the rows tightens. */
 :root[data-kb-tight] .typegame__form:has(.typegame__action) {
-  flex-flow: row wrap;
-  align-items: center;
-  gap: 0.4rem 0.5rem;
-}
-
-:root[data-kb-tight] .typegame__form:has(.typegame__action) .typegame__input {
-  flex: 1 1 8rem;
-  width: auto;
-  min-height: 2.75rem;
-  /* Stays at 16px: anything smaller and iOS zooms the page on focus. */
-  font-size: 1rem;
-}
-
-:root[data-kb-tight] .typegame__form:has(.typegame__action) .typegame__action {
-  flex: 0 0 auto;
-  width: auto;
-  min-width: 0;
-  padding: 0.5rem 1.1rem;
-}
-
-/* Full-width basis so the hint drops to its own line under the pair, staying one
-   Tab from the input without competing for row width. */
-:root[data-kb-tight] .typegame__form:has(.typegame__action) .typegame__hint-btn {
-  order: 1;
-  flex: 1 1 100%;
-  padding: 0.2rem 0.7rem;
-  font-size: 0.78rem;
+  gap: 0.4rem;
 }
 
 /* ---- Card details sheet, keyboard up (either review screen) ----
